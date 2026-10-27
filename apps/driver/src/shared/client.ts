@@ -14,9 +14,15 @@ import type {
 import { io } from "socket.io-client";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  // Fastify rejects a POST with a JSON content type and an empty body;
+  // normalize bodyless commands to "{}".
+  const normalized: RequestInit =
+    init && init.method === "POST" && init.body === undefined
+      ? { ...init, body: "{}" }
+      : init ?? {};
   const res = await fetch(path, {
-    ...init,
-    headers: { "content-type": "application/json", ...init?.headers },
+    ...normalized,
+    headers: { "content-type": "application/json", ...normalized.headers },
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { uiMessage?: string } | null;

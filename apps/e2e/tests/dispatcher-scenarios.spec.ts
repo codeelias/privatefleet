@@ -17,6 +17,13 @@ test("Morning Rush: assign J-208 via click flow with impact preview", async ({ p
   await resetScenario("morning-rush");
   await openDispatcher(page);
 
+  // Regression guard: the scenario buttons themselves must work through
+  // the UI (bodyless POST commands once 500'd - docs rehearsal review).
+  await page.getByRole("button", { name: "Proof of Service" }).click();
+  await expect(page.getByRole("button", { name: "Proof of Service" })).toBeEnabled();
+  await page.getByRole("button", { name: "Morning Rush" }).click();
+  await expect(page.getByRole("button", { name: "Morning Rush" })).toBeEnabled();
+
   const trayHeader = page.getByText("Unassigned jobs - drag onto a driver or select");
   await expect(trayHeader).toBeVisible();
 

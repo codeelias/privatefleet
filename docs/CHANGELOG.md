@@ -9,6 +9,12 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.14 - bodyless POST fix (the rehearsal red toast) (2026-10-27)
+- Root cause of the red error toast finally isolated: every bodyless POST (scenario reset, Publish, Acknowledge, Resolve) sent `Content-Type: application/json` with an empty body, which Fastify rejects (FST_ERR_CTP_EMPTY_JSON_BODY) - surfaced as the 500 "Something went wrong on our side" message. The web and driver clients now normalize bodyless POSTs to `{}`.
+- Regression guard added: the Morning Rush E2E now drives the scenario buttons through the real UI path (the previous tests bypassed it via direct fetch helpers - the gap that let this through).
+- Favicon 404 silenced with a data-URI icon in both apps.
+- E2E 3/3; pushes remain paused (owner directive); local commits only.
+
 ### v1.13 - rehearsal review fixes (2026-10-27)
 - The prospect said yes; the rehearsal surfaced three review items, all fixed:
   1. Error toast: scenario resets now guard against double-fires, retry once automatically, and surface transient hiccups as an amber notice instead of a red server-blame banner; the stale background API that held port 4000 during the rehearsal was killed (their `pnpm dev` now boots cleanly).
