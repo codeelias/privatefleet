@@ -1,0 +1,50 @@
+/**
+ * Design tokens from the Figma design system (docs/figma/design-extract.md
+ * section 2) mapped to Tailwind v4 theme variables.
+ * Command / Background #0F172A, Surface #1E293B, Raised #263449,
+ * Border #334155, Primary #4F8CFF, Success #10B981, Warning #F59E0B,
+ * Danger #EF4444, Text #F8FAFC / #94A3B8.
+ */
+@import "tailwindcss";
+
+@theme {
+  --color-command-bg: #0f172a;
+  --color-command-surface: #1e293b;
+  --color-command-raised: #263449;
+  --color-command-border: #334155;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-brand-primary: #4f8cff;
+  --color-status-success: #10b981;
+  --color-status-warning: #f59e0b;
+  --color-status-danger: #ef4444;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius-command: 12px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-command-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Ghost pins never imply a fresh GPS fix (docs/09.7). */
+.stale-ghost {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

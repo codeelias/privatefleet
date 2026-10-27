@@ -1,0 +1,22 @@
+{
+  "name": "@privatefleet/contracts",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && echo \"contracts: types OK\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@privatefleet/eslint-config": "workspace:*",
+    "@privatefleet/tsconfig": "workspace:*",
+    "typescript": "^5.7.2"
+  }
+}
