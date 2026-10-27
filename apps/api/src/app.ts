@@ -31,6 +31,10 @@ const ERROR_MAP: Record<string, { status: number; uiMessage: string }> = {
     status: 409,
     uiMessage: "That driver has no vehicle assigned. Ask dispatch to fix the roster.",
   },
+  OPTIMIZATION_RUN_NOT_FOUND: {
+    status: 404,
+    uiMessage: "That optimisation proposal is gone. Run a new optimisation and try again.",
+  },
 };
 
 export function buildApp(config: AppConfig): {

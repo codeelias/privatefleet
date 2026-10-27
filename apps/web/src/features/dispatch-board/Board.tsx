@@ -110,6 +110,15 @@ export function DispatchBoard({ state }: { state: FleetState }) {
         </div>
       </div>
 
+      {state.publishedPlan && (
+        <div className="rounded-lg border border-status-success/40 bg-status-success/10 px-4 py-2 text-sm text-text-primary">
+          Published plan: {state.publishedPlan.driverName} -{" "}
+          {state.publishedPlan.proposal.stops.length} stops (-
+          {state.publishedPlan.savedMinutes} min, -{state.publishedPlan.savedMiles} mi) -
+          simulated result
+        </div>
+      )}
+
       <div className="grid grid-cols-[200px_1fr] gap-2">
         <div>
           <div className="h-6 text-[10px] font-bold uppercase tracking-widest text-text-secondary">

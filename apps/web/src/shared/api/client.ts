@@ -7,6 +7,7 @@ import type {
   AssignResponse,
   AssignmentPreview,
   FleetState,
+  OptimizationProposal,
   ScenarioName,
   ScenariosList,
 } from "@privatefleet/contracts";
@@ -39,5 +40,14 @@ export const api = {
       method: "POST",
       headers: { "idempotency-key": idempotencyKey },
       body: JSON.stringify({ jobId, driverId }),
+    }),
+  runOptimization: (driverId: string) =>
+    request<OptimizationProposal>("/v1/optimization/run", {
+      method: "POST",
+      body: JSON.stringify({ driverId }),
+    }),
+  approvePlan: (runId: string) =>
+    request<OptimizationProposal>(`/v1/optimization/${runId}/approve`, {
+      method: "POST",
     }),
 };

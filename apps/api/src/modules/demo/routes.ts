@@ -17,6 +17,7 @@ type Params = Record<string, string | undefined>;
 const ScenarioParamSchema = z.object({ id: ScenarioNameSchema });
 const JobParamSchema = z.object({ jobId: z.string().uuid() });
 const DriverBodySchema = z.object({ driverId: z.string().uuid() });
+const RunParamSchema = z.object({ runId: z.string().uuid() });
 const IdempotencyHeaderSchema = z.object({
   "idempotency-key": z.string().uuid(),
 });
@@ -55,6 +56,20 @@ export function registerDemoRoutes(
       "idempotency-key": request.headers["idempotency-key"],
     });
     const result = store.assign(params.jobId, body.driverId, headers["idempotency-key"]);
+    for (const event of store.drainOutbox()) {
+      bus.publishBusiness(event);
+    }
+    return result;
+  });
+
+  app.post("/v1/optimization/run", async (request) => {
+    const body = DriverBodySchema.parse(request.body);
+    return store.runOptimization(body.driverId);
+  });
+
+  app.post("/v1/optimization/:runId/approve", async (request) => {
+    const params = RunParamSchema.parse({ runId: (request.params as Params).runId });
+    const result = store.approve(params.runId);
     for (const event of store.drainOutbox()) {
       bus.publishBusiness(event);
     }

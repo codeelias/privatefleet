@@ -13,6 +13,8 @@ import type {
   FleetState,
   JobDto,
   JobPriority,
+  OptimizationProposal,
+  OptimizedStop,
   ScenarioName,
   VehicleDto,
   VehiclePosition,
@@ -49,6 +51,7 @@ export class DemoStore {
   private outbox: EventEnvelope[] = [];
   private receipts = new Map<string, AssignResponse>();
   private telemetrySequence = 0;
+  private lastRun: OptimizationProposal | undefined;
 
   constructor(scenario: ScenarioName) {
     this.reset(scenario);
@@ -62,6 +65,7 @@ export class DemoStore {
     this.alerts = [];
     this.outbox = [];
     this.receipts.clear();
+    this.lastRun = undefined;
 
     const now = new Date().toISOString();
 
@@ -251,6 +255,133 @@ export class DemoStore {
     return events;
   }
 
+  /**
+   * Seeded optimisation proposal (docs/10.4): deterministic nearest-
+   * neighbour reorder with the documented demo metrics, labelled
+   * simulated. Real VROOM/OSRM output arrives in Phase 5.
+   */
+  runOptimization(driverId: string): OptimizationProposal {
+    const driver = this.drivers.get(driverId);
+    if (!driver) {
+      throw new Error("JOB_OR_DRIVER_NOT_FOUND");
+    }
+    const candidates = [...this.jobs.values()]
+      .map((j) => j.dto)
+      .sort((a, b) => a.reference.localeCompare(b.reference))
+      .slice(0, 3)
+      .flatMap((j) =>
+        j.stops.map((s) => ({
+          jobId: s.jobId,
+          jobRef: j.reference,
+          address: s.address,
+          stopType: s.stopType,
+          location: s.location,
+        })),
+      );
+
+    const base = new Date();
+    base.setHours(8, 0, 0, 0);
+    const baseline: OptimizedStop[] = candidates.map((s, i) => ({
+      jobId: s.jobId,
+      jobRef: s.jobRef,
+      address: s.address,
+      stopType: s.stopType,
+      arrivalAt: new Date(base.getTime() + i * 22 * 60_000).toISOString(),
+      feasible: i < candidates.length - 2,
+    }));
+
+    const rest = [...candidates];
+    const ordered: typeof candidates = [];
+    let current = rest.shift();
+    while (current && rest.length > 0) {
+      ordered.push(current);
+      const cur = current;
+      let bestIndex = -1;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      rest.forEach((s, i) => {
+        const distance =
+          (s.location.latitude - cur.location.latitude) ** 2 +
+          (s.location.longitude - cur.location.longitude) ** 2;
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = i;
+        }
+      });
+      if (bestIndex >= 0) {
+        current = rest.splice(bestIndex, 1)[0] ?? undefined;
+      } else {
+        break;
+      }
+    }
+    if (current) {
+      ordered.push(current);
+    }
+
+    const proposal: OptimizedStop[] = ordered.map((s, i) => ({
+      jobId: s.jobId,
+      jobRef: s.jobRef,
+      address: s.address,
+      stopType: s.stopType,
+      arrivalAt: new Date(base.getTime() + 15 * 60_000 + i * 19 * 60_000).toISOString(),
+      feasible: true,
+    }));
+
+    const run: OptimizationProposal = {
+      runId: randomUUID(),
+      driverId,
+      driverName: driver.fullName,
+      demoMode: true,
+      engine: "seeded-demo",
+      engineVersion: "seed-v1",
+      status: "succeeded",
+      published: false,
+      baseline: {
+        distanceMiles: 31.6,
+        durationMinutes: 138,
+        atRiskWindows: 2,
+        stops: baseline,
+      },
+      proposal: {
+        distanceMiles: 23.2,
+        durationMinutes: 115,
+        feasibleWindows: true,
+        stops: proposal,
+      },
+      savedMinutes: 23,
+      savedMiles: 8.4,
+    };
+    this.lastRun = run;
+    return run;
+  }
+
+  approve(runId: string): OptimizationProposal {
+    if (!this.lastRun || this.lastRun.runId !== runId) {
+      throw new Error("OPTIMIZATION_RUN_NOT_FOUND");
+    }
+    const run: OptimizationProposal = {
+      ...this.lastRun,
+      published: true,
+      publishedAt: new Date().toISOString(),
+    };
+    this.lastRun = run;
+    this.outbox.push({
+      eventId: randomUUID(),
+      schemaVersion: EVENT_SCHEMA_VERSION,
+      tenantId: DEMO_TENANT_ID,
+      aggregateType: "route",
+      aggregateId: runId,
+      type: "route.published",
+      occurredAt: new Date().toISOString(),
+      payload: {
+        runId,
+        driverId: run.driverId,
+        savedMinutes: run.savedMinutes,
+        savedMiles: run.savedMiles,
+      },
+    });
+    return run;
+  }
+
   advanceVehicle(vehicleId: string): VehiclePosition | undefined {
     const record = this.vehicles.get(vehicleId);
     if (!record) {
@@ -292,6 +423,8 @@ export class DemoStore {
         stale,
       };
     });
+    const publishedPlan =
+      this.lastRun && this.lastRun.published ? this.lastRun : undefined;
     return {
       tenantId: DEMO_TENANT_ID,
       scenario: this.scenario,
@@ -301,6 +434,7 @@ export class DemoStore {
       jobs: [...this.jobs.values()].map((j) => j.dto),
       alerts: this.alerts,
       serverTime: new Date().toISOString(),
+      ...(publishedPlan ? { publishedPlan } : {}),
     };
   }
 }

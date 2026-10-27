@@ -16,6 +16,7 @@ import { DispatchBoard } from "../features/dispatch-board/Board";
 import { JobCard } from "../features/dispatch/JobCard";
 import { AssignmentModal } from "../features/live-map/AssignmentModal";
 import { MapCanvas } from "../features/live-map/MapCanvas";
+import { OptimizationScreen } from "../features/optimization/OptimizationScreen";
 import { api } from "../shared/api/client";
 import { createFleetSocket } from "../shared/realtime/socket";
 import { KpiCard } from "../shared/ui/KpiCard";
@@ -207,6 +208,8 @@ export function App() {
           <main className="flex flex-1 flex-col overflow-hidden">
             {screen === "board" ? (
               <DispatchBoard state={state} />
+            ) : screen === "optimise" ? (
+              <OptimizationScreen state={state} />
             ) : screen === "live" ? (
               <>
                 {/* KPI strip + demo scenarios */}

@@ -24,6 +24,47 @@ export const AlertDtoSchema = z.object({
 });
 export type AlertDto = z.infer<typeof AlertDtoSchema>;
 
+export const OptimizedStopSchema = z.object({
+  jobId: IdSchema,
+  jobRef: z.string(),
+  address: z.string(),
+  stopType: z.enum(["pickup", "dropoff", "waypoint"]),
+  arrivalAt: z.string().datetime(),
+  feasible: z.boolean(),
+});
+export type OptimizedStop = z.infer<typeof OptimizedStopSchema>;
+
+/**
+ * Seeded demo proposal (docs/10.4): labelled simulated until the routing
+ * engine ships in Phase 5. Metric values are the documented demo figures.
+ */
+export const OptimizationProposalSchema = z.object({
+  runId: IdSchema,
+  driverId: IdSchema,
+  driverName: z.string(),
+  demoMode: z.literal(true),
+  engine: z.literal("seeded-demo"),
+  engineVersion: z.string(),
+  status: z.literal("succeeded"),
+  published: z.boolean(),
+  publishedAt: z.string().datetime().optional(),
+  baseline: z.object({
+    distanceMiles: z.number(),
+    durationMinutes: z.number().int(),
+    atRiskWindows: z.number().int(),
+    stops: z.array(OptimizedStopSchema),
+  }),
+  proposal: z.object({
+    distanceMiles: z.number(),
+    durationMinutes: z.number().int(),
+    feasibleWindows: z.boolean(),
+    stops: z.array(OptimizedStopSchema),
+  }),
+  savedMinutes: z.number().int(),
+  savedMiles: z.number(),
+});
+export type OptimizationProposal = z.infer<typeof OptimizationProposalSchema>;
+
 export const FleetStateSchema = z.object({
   tenantId: IdSchema,
   scenario: ScenarioNameSchema.optional(),
@@ -33,6 +74,7 @@ export const FleetStateSchema = z.object({
   jobs: z.array(JobDtoSchema),
   alerts: z.array(AlertDtoSchema),
   serverTime: z.string().datetime(),
+  publishedPlan: OptimizationProposalSchema.optional(),
 });
 export type FleetState = z.infer<typeof FleetStateSchema>;
 
