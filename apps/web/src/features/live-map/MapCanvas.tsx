@@ -1,18 +1,29 @@
 /**
- * Live map canvas (docs/05.6, ADR-0010): MapLibre GL renders real
- * OpenFreeMap tiles (dark style for the command center); vehicle pins
- * and job markers stay as HTML overlays so the ghost-pin/status
- * semantics and the drag targets are untouched. If tiles cannot load
- * (offline pitch), the schematic grid underneath keeps the demo usable.
+ * Live map canvas (docs/05.6, ADR-0010).
+ *
+ * Two rendering engines, one contract:
+ * - Primary: MapLibre GL vector tiles (OpenFreeMap dark). Requires WebGL.
+ * - Fallback: Leaflet DOM raster tiles - works in every browser,
+ *   including remote-desktop / GPU-less / hardware-acceleration-off
+ *   sessions where WebGL is unavailable. Engaged automatically when
+ *   MapLibre fails to initialise or load its style, and manually via
+ *   the query flag `?map=leaflet` for diagnosis.
+ *
+ * Vehicle pins and job markers stay as HTML overlays in both modes, so
+ * the ghost-pin/status semantics and drag targets never change.
  */
 import { useEffect, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import type { FleetState, VehicleDto } from "@privatefleet/contracts";
 
 const LONDON = { lng: -0.107, lat: 51.517 };
 const TILE_STYLE = "https://tiles.openfreemap.org/styles/dark";
+const RASTER_DARK = "https://tiles.openfreemap.org/styles/dark/{z}/{x}/{y}.png";
+const RASTER_LIBERTY = "https://tiles.openfreemap.org/styles/liberty/{z}/{x}/{y}.png";
 
 const BOUNDS = {
   minLat: 51.49,
@@ -20,6 +31,10 @@ const BOUNDS = {
   minLng: -0.15,
   maxLng: -0.07,
 };
+
+function forceLeaflet(): boolean {
+  return new URLSearchParams(window.location.search).get("map") === "leaflet";
+}
 
 function project(latitude: number, longitude: number): { x: number; y: number } {
   const x = ((longitude - BOUNDS.minLng) / (BOUNDS.maxLng - BOUNDS.minLng)) * 100;
@@ -85,12 +100,48 @@ function VehiclePin({
 export function MapCanvas({ state }: { state: FleetState }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
-  const [mapFailed, setMapFailed] = useState(false);
-  const [failReason, setFailReason] = useState("");
+  const leafletRef = useRef<L.Map | null>(null);
+  const [mapFailed, setMapFailed] = useState(forceLeaflet());
+  const [failReason, setFailReason] = useState(
+    forceLeaflet() ? "WebGL-free raster mode" : "",
+  );
   const [mapStatus, setMapStatus] = useState("loading tiles");
+  const useLeaflet = mapFailed;
 
+  // Leaflet raster layer: mounts when MapLibre is unavailable or the
+  // ?map=leaflet flag is set. DOM rendering - no WebGL required.
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) {
+    if (!useLeaflet || !containerRef.current || leafletRef.current) {
+      return;
+    }
+    const container = containerRef.current;
+    const map = L.map(container, {
+      center: [LONDON.lat, LONDON.lng],
+      zoom: 12,
+      zoomControl: false,
+      attributionControl: false,
+    });
+    let swapped = false;
+    const layer = L.tileLayer(RASTER_DARK, { maxZoom: 19 });
+    layer.on("tileerror", () => {
+      if (!swapped) {
+        swapped = true;
+        L.tileLayer(RASTER_LIBERTY, { maxZoom: 19 }).addTo(map);
+      }
+    });
+    layer.addTo(map);
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    leafletRef.current = map;
+    setMapStatus("raster tiles (no WebGL needed)");
+    return () => {
+      map.remove();
+      leafletRef.current = null;
+    };
+  }, [useLeaflet]);
+
+  // MapLibre vector layer: the primary engine when WebGL is available.
+  useEffect(() => {
+    if (useLeaflet || !containerRef.current || mapRef.current) {
       return;
     }
     let map: maplibregl.Map;
@@ -103,27 +154,17 @@ export function MapCanvas({ state }: { state: FleetState }) {
         attributionControl: false,
       });
     } catch (err) {
-      // No WebGL or init failure: the schematic fallback stays visible
-      // and the demo remains fully usable (docs: demo resilience).
-      console.error("MapLibre init failed - schematic fallback active", err);
+      console.error("MapLibre init failed - switching to raster fallback", err);
+      setFailReason("WebGL unavailable - raster fallback active");
       setMapFailed(true);
-      setFailReason("WebGL unavailable in this browser");
-      setMapStatus("no WebGL - schematic view");
       return;
     }
     map.on("error", (event) => {
-      // Tile-level failures are noisy and non-fatal; only a failure to
-      // load the style itself means the map is truly offline.
       const message = event.error?.message ?? String(event.error);
       console.warn("MapLibre error event:", message);
       if (!map.isStyleLoaded()) {
+        setFailReason("tile service unreachable - raster fallback active");
         setMapFailed(true);
-        setFailReason(
-          message.toLowerCase().includes("style")
-            ? "tile service unreachable"
-            : `map error: ${message}`,
-        );
-        setMapStatus("style failed - schematic view");
       }
     });
     map.on("load", () => {
@@ -133,13 +174,9 @@ export function MapCanvas({ state }: { state: FleetState }) {
       const canvas = map.getCanvas();
       setMapStatus(`tiles rendering (${canvas.width}x${canvas.height})`);
     });
-    // Zero-size creation race: ensure the canvas matches its container
-    // after the first layout, and on any later resize (HMR, drawers).
     const raf = requestAnimationFrame(() => map.resize());
     const observer = new ResizeObserver(() => map.resize());
     observer.observe(containerRef.current);
-    // The dark style references a missing sprite image ("wood-pattern");
-    // substitute a neutral placeholder so the console stays clean.
     map.on("styleimagemissing", (event) => {
       const placeholder = document.createElement("canvas");
       placeholder.width = 2;
@@ -159,14 +196,14 @@ export function MapCanvas({ state }: { state: FleetState }) {
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [useLeaflet]);
 
   const jobs = state.jobs.filter((j) => j.status === "unassigned");
   return (
     <section className="relative flex-1 bg-command-bg">
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative h-[92%] w-[94%] overflow-hidden rounded-2xl border border-command-border bg-command-surface/60">
-          {/* Schematic fallback layer - visible only while tiles load or offline. */}
+          {/* Schematic fallback layer - visible only while nothing renders. */}
           <div
             className="absolute inset-0 opacity-20"
             style={{
@@ -220,9 +257,8 @@ export function MapCanvas({ state }: { state: FleetState }) {
             Grey ghost pins show last known position - never imply a fresh GPS fix.
           </p>
           {mapFailed ? (
-            <p className="absolute bottom-2 left-3 z-10 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
-              Map offline ({failReason}) - schematic view active. Dispatch stays
-              fully usable.
+            <p className="absolute bottom-2 left-3 z-10 rounded-md border border-brand-primary/50 bg-brand-primary/10 px-2 py-1 text-[10px] text-brand-primary">
+              Map: {failReason} - dispatch stays fully usable.
             </p>
           ) : (
             <p className="absolute bottom-2 left-3 z-10 text-[10px] text-text-secondary">
