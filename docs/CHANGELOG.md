@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.12 - rehearsal is the active gate; pre-Phase 2 preparation (2026-10-27)
+- Active blocking task: the 120-second rehearsal (14.2b), then the demo in front of a real prospect; Phase 2 waits for the prospect's yes - nothing else.
+- 14.1b amended: Phase 0 is the immediate next commercial action, not a parallel track.
+- Tree audit: working tree clean; no WIP commits - the Phase 1 history is already a set of logical conventional commits (402e877..1215fe0), so no squashing was needed.
+- Added scripts/generate-roi.ts: the ROI leave-behind generator (14.2c) - prospect baseline inputs become a one-page Markdown summary with every assumption printed; sample output in scripts/output/roi-leave-behind.md (ASCII-only, per policy).
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.11 - Phase 1 complete (2026-10-27)
 - Phase 1 (the Honey Pot demo) is implemented and verified: monorepo (pnpm + Turborepo), contracts package, dispatcher web app with all 5 screens, driver app with 3 screens (RN via react-native-web), DEMO_MODE Fastify API with the three seeded scenarios, simulated GPS, outbox-to-Socket.IO pipeline, ADR-0011 error mapping, and Playwright E2E for Morning Rush / Emergency / Proof of Service (3/3 passing locally; CI proven green on run 40588487908).
 - Acceptance checklist (handoff section 10) status: all items met within Phase 1 scope; item 8 (tenant theme contrast) is exercised with the mock tenant and completes fully with real tenants in Phase 6.

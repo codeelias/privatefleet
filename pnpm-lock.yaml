@@ -169,6 +169,9 @@ importers:
 
   .:
     devDependencies:
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.15
       turbo:
         specifier: ^2.3.3
         version: 2.11.10

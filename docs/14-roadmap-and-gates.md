@@ -17,9 +17,9 @@ Effort estimates are a planning hypothesis, not a delivery guarantee - a product
 | **5. Optimization** | OSRM matrix + VROOM solve; adapters; proposal/approval flow; route versioning | Infeasible plans surface correctly; approved plans publish without conflicts; demo banners cite stored `optimization_runs` |
 | **6. Pilot hardening** | Customer tracking + POD vault; alerts/geofences; backups + restore drill; deployment automation; retention; branded subdomains; support runbooks | Acceptance tests, recovery tests, and the monthly restore drill pass; tenant provisioning is scripted |
 
-### 14.1b Phase 0 disposition (owner directive, 2026-10-27)
+### 14.1b Phase 0 disposition (owner directive, amended 2026-10-27)
 
-Phase 0's design-partner gate is **parked** by owner directive: Phase 1 proceeds now, and Phase 0 continues in parallel as a commercial track (design partner, 120-second pitch, baseline metrics, licence scope). The gate's commercial intent is unchanged - it simply no longer blocks implementation. Recorded in CHANGELOG v1.8.
+Phase 0 is **not** a parallel track - it is the immediate next commercial action and the entire reason the product exists. Phase 1 code shipped first by owner directive; from v1.11 onward the active blocking task is the **120-second rehearsal** ([14.2b](#142b-the-120-second-honey-pot-sales-script)), followed by putting the demo in front of a real courier or medical transport owner. The explicit prospect yes gates Phase 2 - nothing else does. Recorded in CHANGELOG v1.12.
 
 ## 14.2 Phase 1 scope detail (the demo)
 
