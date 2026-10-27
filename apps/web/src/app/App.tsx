@@ -227,6 +227,13 @@ export function App() {
 
           {/* Main column */}
           <main className="flex flex-1 flex-col overflow-hidden">
+            {fleetQuery.isError && (
+              <div className="border-b border-status-warning/40 bg-status-warning/10 px-5 py-2 text-xs text-status-warning">
+                Demo API not reachable - restart the stack with `pnpm dev` (API on
+                port 4000). The dashboard will recover automatically when it
+                returns.
+              </div>
+            )}
             {screen === "board" ? (
               <DispatchBoard state={state} />
             ) : screen === "optimise" ? (
