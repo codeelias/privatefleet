@@ -14,3 +14,4 @@ coverage/
 .figma/text-dump.txt
 test-results/
 playwright-report/
+screenshots/

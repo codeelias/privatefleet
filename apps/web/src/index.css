@@ -48,3 +48,29 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Leaflet ships a light-grey default container background (#ddd) that
+   overrides our dark tokens and flashes grey before tiles paint. */
+.leaflet-container {
+  background: #0b1220 !important;
+  font-family: inherit !important;
+}
+
+/* Leaflet attribution + controls on the dark command centre */
+.leaflet-control-attribution {
+  background: rgba(15, 23, 42, 0.8) !important;
+  color: #94a3b8 !important;
+  font-size: 9px !important;
+}
+.leaflet-bar a {
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+/* CARTO Dark Matter is almost black (measured 16 colours, brightness 40)
+   - lift the tiles so London streets are clearly readable in the demo
+   while keeping the dark command-centre mood. */
+.leaflet-container img.leaflet-tile {
+  filter: brightness(2.6) contrast(1.08) saturate(1.25);
+}
