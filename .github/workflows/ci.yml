@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Documentation package present
+        run: |
+          test -d docs
+          test -f docs/README.md
+          echo "Baseline documentation verified."
+      # Future steps (activate when apps/ exists):
+      # - lint -> typecheck -> unit -> integration -> build -> e2e
