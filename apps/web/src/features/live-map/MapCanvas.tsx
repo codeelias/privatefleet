@@ -3,6 +3,7 @@
  * fixed London viewport. MapLibre layers replace this projection in the
  * next slice; marker behaviour (stale ghosts, status colours) stays.
  */
+import { useDroppable } from "@dnd-kit/core";
 import type { FleetState, VehicleDto } from "@privatefleet/contracts";
 
 const BOUNDS = {
@@ -29,6 +30,48 @@ function colourFor(vehicle: VehicleDto): string {
     return "bg-status-warning";
   }
   return "bg-brand-primary";
+}
+
+function VehiclePin({
+  vehicle,
+  driverName,
+  x,
+  y,
+}: {
+  vehicle: VehicleDto;
+  driverName: string;
+  x: number;
+  y: number;
+}) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `pin-${vehicle.id}`,
+    data: { driverId: vehicle.driverId, vehicleId: vehicle.id },
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`absolute -translate-x-1/2 -translate-y-1/2 ${
+        vehicle.stale ? "stale-ghost" : ""
+      } ${isOver ? "scale-125" : ""}`}
+      style={{ left: `${x}%`, top: `${y}%`, transition: "transform 120ms ease" }}
+      title={`${driverName} - ${vehicle.registration} - ${
+        vehicle.stale ? "last known" : vehicle.status
+      }`}
+    >
+      <span
+        className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-bold text-command-bg ${colourFor(
+          vehicle,
+        )} ${isOver ? "border-brand-primary" : "border-command-bg"} ${
+          vehicle.status === "on_route" && !vehicle.stale ? "animate-pulse" : ""
+        }`}
+      >
+        {driverName
+          .split(" ")
+          .map((part) => part[0])
+          .join("") ?? "?"}
+      </span>
+    </div>
+  );
 }
 
 export function MapCanvas({ state }: { state: FleetState }) {
@@ -76,27 +119,13 @@ export function MapCanvas({ state }: { state: FleetState }) {
             const { x, y } = project(vehicle.location.latitude, vehicle.location.longitude);
             const driver = state.drivers.find((d) => d.id === vehicle.driverId);
             return (
-              <div
+              <VehiclePin
                 key={vehicle.id}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 ${
-                  vehicle.stale ? "stale-ghost" : ""
-                }`}
-                style={{ left: `${x}%`, top: `${y}%` }}
-                title={`${driver?.fullName ?? "Driver"} - ${vehicle.registration} - ${
-                  vehicle.stale ? "last known" : vehicle.status
-                }`}
-              >
-                <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-command-bg text-[10px] font-bold text-command-bg ${colourFor(
-                    vehicle,
-                  )} ${vehicle.status === "on_route" && !vehicle.stale ? "animate-pulse" : ""}`}
-                >
-                  {driver?.fullName
-                    .split(" ")
-                    .map((part) => part[0])
-                    .join("") ?? "?"}
-                </span>
-              </div>
+                vehicle={vehicle}
+                driverName={driver?.fullName ?? "Driver"}
+                x={x}
+                y={y}
+              />
             );
           })}
           <p className="absolute bottom-2 right-3 text-[10px] text-text-secondary">

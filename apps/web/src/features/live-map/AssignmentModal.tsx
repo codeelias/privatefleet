@@ -1,7 +1,8 @@
 /**
  * Assignment modal (the Honey Pot interaction, docs/05.5): dry-run
- * preview with ETA impact, then one authoritative commit with an
- * idempotency key. Keyboard operable throughout.
+ * preview with ETA impact and cascade, then one authoritative commit
+ * with an idempotency key. Keyboard operable throughout. When opened
+ * from a drag drop, the target driver is preselected.
  */
 import { useEffect, useState } from "react";
 import type { AssignmentPreview, DriverDto, FleetState } from "@privatefleet/contracts";
@@ -11,11 +12,13 @@ import { StatusChip } from "../../shared/ui/StatusChip";
 export function AssignmentModal({
   state,
   jobId,
+  initialDriverId,
   onClose,
   onAssigned,
 }: {
   state: FleetState;
   jobId: string;
+  initialDriverId?: string | undefined;
   onClose: () => void;
   onAssigned: () => void;
 }) {
@@ -29,7 +32,13 @@ export function AssignmentModal({
     setSelectedDriver(null);
     setPreview(null);
     setError(null);
-  }, [jobId]);
+    if (initialDriverId) {
+      const driver = state.drivers.find((d) => d.id === initialDriverId);
+      if (driver) {
+        void chooseDriver(driver);
+      }
+    }
+  }, [jobId, initialDriverId]);
 
   async function chooseDriver(driver: DriverDto) {
     setSelectedDriver(driver);
@@ -112,11 +121,8 @@ export function AssignmentModal({
         {preview && (
           <div className="mt-4 rounded-xl border border-command-border bg-command-bg p-4">
             <p className="text-sm text-text-primary">{preview.message}</p>
-            <div className="mt-2 flex items-center gap-3">
-              <StatusChip
-                tone="warning"
-                label={`+${preview.etaImpactMinutes} min`}
-              />
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <StatusChip tone="warning" label={`+${preview.etaImpactMinutes} min`} />
               {preview.constraintsViolated.map((constraint) => (
                 <StatusChip key={constraint} tone="danger" label={constraint} />
               ))}
@@ -124,6 +130,18 @@ export function AssignmentModal({
                 demo projection
               </span>
             </div>
+            {preview.etaCascade.length > 0 && (
+              <ul className="mt-3 space-y-1 border-t border-command-border pt-3 text-xs text-text-secondary">
+                {preview.etaCascade.map((entry) => (
+                  <li key={entry.address} className="flex justify-between">
+                    <span>{entry.address}</span>
+                    <span className="font-semibold text-status-warning">
+                      +{entry.arrivalDeltaMinutes} min
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <button
               type="button"
               disabled={busy || preview.constraintsViolated.length > 0}

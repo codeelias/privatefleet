@@ -165,7 +165,22 @@ export const SIMULATOR_ROUTES: Record<string, GeoPoint[]> = {
   ],
 };
 
-export function buildJobDto(seed: DemoJobSeed): JobDto {
+/** Deterministic shift-day windows for the Gantt board (08:00 + index*65min). */
+function slotFor(index: number): { pickupStart: string; pickupEnd: string; dropStart: string; dropEnd: string } {
+  const base = new Date();
+  base.setHours(8, 0, 0, 0);
+  const pickupStart = new Date(base.getTime() + index * 65 * 60_000);
+  const dropStart = new Date(pickupStart.getTime() + 35 * 60_000);
+  return {
+    pickupStart: pickupStart.toISOString(),
+    pickupEnd: new Date(pickupStart.getTime() + 15 * 60_000).toISOString(),
+    dropStart: dropStart.toISOString(),
+    dropEnd: new Date(dropStart.getTime() + 15 * 60_000).toISOString(),
+  };
+}
+
+export function buildJobDto(seed: DemoJobSeed, index: number): JobDto {
+  const windows = slotFor(index);
   return {
     id: seed.id,
     reference: seed.reference,
@@ -181,6 +196,8 @@ export function buildJobDto(seed: DemoJobSeed): JobDto {
         address: seed.pickupAddress,
         location: seed.pickup,
         status: "pending",
+        windowStart: windows.pickupStart,
+        windowEnd: windows.pickupEnd,
       },
       {
         id: `${seed.id.slice(0, 8)}-0000-4000-8000-00000000000b`,
@@ -190,6 +207,8 @@ export function buildJobDto(seed: DemoJobSeed): JobDto {
         address: seed.dropoffAddress,
         location: seed.dropoff,
         status: "pending",
+        windowStart: windows.dropStart,
+        windowEnd: windows.dropEnd,
       },
     ],
     version: 1,

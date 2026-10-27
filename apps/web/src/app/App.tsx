@@ -1,15 +1,19 @@
 /**
  * Calm Command Center shell wired to the DEMO_MODE API (handoff section 9
- * steps 1-3): live fleet snapshot via React Query, telemetry via
- * Socket.IO, scenario reset, and the assignment flow.
+ * steps 1-4): live fleet snapshot via React Query, telemetry via
+ * Socket.IO, scenario reset, drag-and-drop assignment (map pins and
+ * dispatch lanes) with keyboard/click fallbacks, and screen navigation.
  */
 import { useEffect, useState } from "react";
+import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   FleetState,
   ScenarioName,
   VehiclePosition,
 } from "@privatefleet/contracts";
+import { DispatchBoard } from "../features/dispatch-board/Board";
+import { JobCard } from "../features/dispatch/JobCard";
 import { AssignmentModal } from "../features/live-map/AssignmentModal";
 import { MapCanvas } from "../features/live-map/MapCanvas";
 import { api } from "../shared/api/client";
@@ -18,13 +22,15 @@ import { KpiCard } from "../shared/ui/KpiCard";
 import { Panel } from "../shared/ui/Panel";
 import { StatusChip } from "../shared/ui/StatusChip";
 
-const WORKSPACE_ITEMS: ReadonlyArray<{ label: string; active?: boolean }> = [
-  { label: "Live Operations", active: true },
-  { label: "Dispatch Board" },
-  { label: "Jobs & Work Orders" },
-  { label: "Route Optimisation" },
-  { label: "Exceptions & Alerts" },
-  { label: "Customer Tracking" },
+type ScreenId = "live" | "board" | "jobs" | "optimise" | "alerts" | "tracking";
+
+const WORKSPACE_ITEMS: ReadonlyArray<{ label: string; id: ScreenId }> = [
+  { label: "Live Operations", id: "live" },
+  { label: "Dispatch Board", id: "board" },
+  { label: "Jobs & Work Orders", id: "jobs" },
+  { label: "Route Optimisation", id: "optimise" },
+  { label: "Exceptions & Alerts", id: "alerts" },
+  { label: "Customer Tracking", id: "tracking" },
 ];
 
 const MANAGE_ITEMS: ReadonlyArray<string> = [
@@ -60,7 +66,9 @@ function todayLabel(): string {
 
 export function App() {
   const queryClient = useQueryClient();
+  const [screen, setScreen] = useState<ScreenId>("live");
   const [assignJobId, setAssignJobId] = useState<string | null>(null);
+  const [assignDriverId, setAssignDriverId] = useState<string | undefined>(undefined);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
 
   const fleetQuery = useQuery({
@@ -112,6 +120,19 @@ export function App() {
     }
   }
 
+  function openAssignment(jobId: string, driverId?: string) {
+    setAssignJobId(jobId);
+    setAssignDriverId(driverId);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const jobId = event.active.data.current?.jobId as string | undefined;
+    const driverId = event.over?.data.current?.driverId as string | undefined;
+    if (jobId && driverId) {
+      openAssignment(jobId, driverId);
+    }
+  }
+
   const activeVehicles = state.vehicles.filter((v) => !v.stale).length;
   const onRoute = state.vehicles.filter((v) => v.status === "on_route").length;
   const inProgress = state.jobs.filter((j) => j.status !== "unassigned").length;
@@ -120,174 +141,188 @@ export function App() {
   const atRisk = state.alerts.length;
 
   return (
-    <div className="flex h-full min-h-screen flex-col bg-command-bg text-text-primary">
-      {/* Topbar */}
-      <header className="flex items-center justify-between border-b border-command-border bg-command-surface px-5 py-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary text-sm font-black text-command-bg">
-            N
-          </span>
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-widest text-text-secondary">
-              Fleet Operations
-            </p>
-            <p className="text-sm font-bold">Northstar</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="hidden text-sm text-text-secondary sm:block">{todayLabel()}</span>
-          <StatusChip tone="success" label="Live" pulse />
-        </div>
-      </header>
-
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left nav */}
-        <nav className="flex w-56 shrink-0 flex-col border-r border-command-border bg-command-surface p-3">
-          <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-            Workspace
-          </p>
-          <ul className="space-y-0.5">
-            {WORKSPACE_ITEMS.map((item) => (
-              <li key={item.label}>
-                <button
-                  type="button"
-                  className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
-                    item.active
-                      ? "bg-brand-primary/15 font-semibold text-brand-primary"
-                      : "text-text-secondary hover:bg-command-raised hover:text-text-primary"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              </li>
-            ))}
-          </ul>
-          <p className="px-2 pb-2 pt-5 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-            Manage
-          </p>
-          <ul className="space-y-0.5">
-            {MANAGE_ITEMS.map((item) => (
-              <li key={item}>
-                <button
-                  type="button"
-                  className="w-full rounded-lg px-3 py-2 text-left text-sm text-text-secondary hover:bg-command-raised hover:text-text-primary"
-                >
-                  {item}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
-
-        {/* Main column */}
-        <main className="flex flex-1 flex-col overflow-hidden">
-          {/* KPI strip + demo scenarios */}
-          <div className="flex flex-wrap items-center gap-3 border-b border-command-border px-5 py-3">
-            <KpiCard label="Active vehicles" value={String(activeVehicles)} sub={`${onRoute} on route`} />
-            <KpiCard label="Jobs in progress" value={String(inProgress)} sub={`${unassigned.length} unassigned`} />
-            <KpiCard label="Unassigned" value={String(unassigned.length)} sub={`${urgent} urgent`} tone={urgent > 0 ? "warning" : undefined} />
-            <KpiCard label="At-risk stops" value={String(atRisk)} sub="needs attention" tone={atRisk > 0 ? "danger" : undefined} />
-            <div className="ml-auto flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                Demo scenario
-              </span>
-              {SCENARIOS.map((scenario) => (
-                <button
-                  key={scenario.id}
-                  type="button"
-                  onClick={() => void resetScenario(scenario.id)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
-                    state.scenario === scenario.id
-                      ? "border-brand-primary bg-brand-primary/15 text-brand-primary"
-                      : "border-command-border text-text-secondary hover:text-text-primary"
-                  }`}
-                >
-                  {scenario.label}
-                </button>
-              ))}
-            </div>
-            {scenarioError && <p className="text-xs text-status-danger">{scenarioError}</p>}
-          </div>
-
-          <div className="flex flex-1 overflow-hidden">
-            <MapCanvas state={state} />
-
-            {/* Right drawer */}
-            <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-y-auto border-l border-command-border p-3 lg:flex">
-              <Panel title="Selected vehicle">
-                {state.vehicles[0] ? (
-                  <VehicleDetails state={state} vehicleId={state.vehicles[0].id} />
-                ) : (
-                  <p className="text-sm text-text-secondary">No vehicles on shift.</p>
-                )}
-              </Panel>
-              <Panel title="Needs attention">
-                {state.alerts.length === 0 ? (
-                  <p className="text-sm text-text-secondary">All clear.</p>
-                ) : (
-                  <ul className="space-y-2 text-xs text-text-secondary">
-                    {state.alerts.map((alert) => (
-                      <li key={alert.id} className="flex items-start gap-2">
-                        <StatusChip
-                          tone={alert.severity === "urgent" ? "danger" : "warning"}
-                          label={alert.severity === "urgent" ? "urgent" : "at risk"}
-                        />
-                        {alert.title}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </Panel>
-            </aside>
-          </div>
-
-          {/* Bottom tray - unassigned jobs */}
-          <div className="border-t border-command-border bg-command-surface px-5 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                Unassigned jobs - select to assign
+    <DndContext onDragEnd={handleDragEnd}>
+      <div className="flex h-full min-h-screen flex-col bg-command-bg text-text-primary">
+        {/* Topbar */}
+        <header className="flex items-center justify-between border-b border-command-border bg-command-surface px-5 py-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary text-sm font-black text-command-bg">
+              N
+            </span>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-text-secondary">
+                Fleet Operations
               </p>
-              {unassigned.map((job) => (
-                <button
-                  key={job.id}
-                  type="button"
-                  onClick={() => setAssignJobId(job.id)}
-                  className="flex items-center gap-2 rounded-lg border border-command-border bg-command-raised px-3 py-1.5 text-xs hover:border-brand-primary/60"
-                >
-                  <span className="font-bold">{job.reference}</span>
-                  <StatusChip
-                    tone={
-                      job.priority === "stat" || job.priority === "urgent" ? "danger" : "neutral"
-                    }
-                    label={job.priority === "stat" ? "stat" : job.serviceType}
-                  />
-                  <span className="text-text-secondary">
-                    {job.stops.find((s) => s.stopType === "pickup")?.address ?? ""}
-                  </span>
-                </button>
-              ))}
-              {unassigned.length === 0 && (
-                <p className="text-xs text-text-secondary">
-                  Queue clear. Reset a scenario to seed new jobs.
-                </p>
-              )}
+              <p className="text-sm font-bold">Northstar</p>
             </div>
           </div>
-        </main>
-      </div>
+          <div className="flex items-center gap-4">
+            <span className="hidden text-sm text-text-secondary sm:block">{todayLabel()}</span>
+            <StatusChip tone="success" label="Live" pulse />
+          </div>
+        </header>
 
-      {assignJobId && (
-        <AssignmentModal
-          state={state}
-          jobId={assignJobId}
-          onClose={() => setAssignJobId(null)}
-          onAssigned={() => {
-            setAssignJobId(null);
-            void queryClient.invalidateQueries({ queryKey: ["fleet"] });
-          }}
-        />
-      )}
-    </div>
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left nav */}
+          <nav className="flex w-56 shrink-0 flex-col border-r border-command-border bg-command-surface p-3">
+            <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+              Workspace
+            </p>
+            <ul className="space-y-0.5">
+              {WORKSPACE_ITEMS.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => setScreen(item.id)}
+                    aria-current={screen === item.id ? "page" : undefined}
+                    className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
+                      screen === item.id
+                        ? "bg-brand-primary/15 font-semibold text-brand-primary"
+                        : "text-text-secondary hover:bg-command-raised hover:text-text-primary"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="px-2 pb-2 pt-5 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+              Manage
+            </p>
+            <ul className="space-y-0.5">
+              {MANAGE_ITEMS.map((item) => (
+                <li key={item}>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-text-secondary hover:bg-command-raised hover:text-text-primary"
+                  >
+                    {item}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          {/* Main column */}
+          <main className="flex flex-1 flex-col overflow-hidden">
+            {screen === "board" ? (
+              <DispatchBoard state={state} />
+            ) : screen === "live" ? (
+              <>
+                {/* KPI strip + demo scenarios */}
+                <div className="flex flex-wrap items-center gap-3 border-b border-command-border px-5 py-3">
+                  <KpiCard label="Active vehicles" value={String(activeVehicles)} sub={`${onRoute} on route`} />
+                  <KpiCard label="Jobs in progress" value={String(inProgress)} sub={`${unassigned.length} unassigned`} />
+                  <KpiCard label="Unassigned" value={String(unassigned.length)} sub={`${urgent} urgent`} tone={urgent > 0 ? "warning" : undefined} />
+                  <KpiCard label="At-risk stops" value={String(atRisk)} sub="needs attention" tone={atRisk > 0 ? "danger" : undefined} />
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                      Demo scenario
+                    </span>
+                    {SCENARIOS.map((scenario) => (
+                      <button
+                        key={scenario.id}
+                        type="button"
+                        onClick={() => void resetScenario(scenario.id)}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                          state.scenario === scenario.id
+                            ? "border-brand-primary bg-brand-primary/15 text-brand-primary"
+                            : "border-command-border text-text-secondary hover:text-text-primary"
+                        }`}
+                      >
+                        {scenario.label}
+                      </button>
+                    ))}
+                  </div>
+                  {scenarioError && <p className="text-xs text-status-danger">{scenarioError}</p>}
+                </div>
+
+                <div className="flex flex-1 overflow-hidden">
+                  <MapCanvas state={state} />
+
+                  {/* Right drawer */}
+                  <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-y-auto border-l border-command-border p-3 lg:flex">
+                    <Panel title="Selected vehicle">
+                      {state.vehicles[0] ? (
+                        <VehicleDetails state={state} vehicleId={state.vehicles[0].id} />
+                      ) : (
+                        <p className="text-sm text-text-secondary">No vehicles on shift.</p>
+                      )}
+                    </Panel>
+                    <Panel title="Needs attention">
+                      {state.alerts.length === 0 ? (
+                        <p className="text-sm text-text-secondary">All clear.</p>
+                      ) : (
+                        <ul className="space-y-2 text-xs text-text-secondary">
+                          {state.alerts.map((alert) => (
+                            <li key={alert.id} className="flex items-start gap-2">
+                              <StatusChip
+                                tone={alert.severity === "urgent" ? "danger" : "warning"}
+                                label={alert.severity === "urgent" ? "urgent" : "at risk"}
+                              />
+                              {alert.title}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </Panel>
+                  </aside>
+                </div>
+
+                {/* Bottom tray - unassigned jobs (drag onto pins, or click) */}
+                <div className="border-t border-command-border bg-command-surface px-5 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                      Unassigned jobs - drag onto a driver or select
+                    </p>
+                    {unassigned.map((job) => (
+                      <JobCard
+                        key={job.id}
+                        job={job}
+                        onSelect={() => openAssignment(job.id)}
+                      />
+                    ))}
+                    {unassigned.length === 0 && (
+                      <p className="text-xs text-text-secondary">
+                        Queue clear. Reset a scenario to seed new jobs.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-1 items-center justify-center">
+                <div className="max-w-sm text-center">
+                  <p className="text-lg font-bold">Next slice</p>
+                  <p className="mt-2 text-sm text-text-secondary">
+                    {WORKSPACE_ITEMS.find((i) => i.id === screen)?.label} arrives in the
+                    following build slices, per the handoff sequence. Live Operations and
+                    the Dispatch Board are live now.
+                  </p>
+                </div>
+              </div>
+            )}
+          </main>
+        </div>
+
+        {assignJobId && (
+          <AssignmentModal
+            state={state}
+            jobId={assignJobId}
+            initialDriverId={assignDriverId}
+            onClose={() => {
+              setAssignJobId(null);
+              setAssignDriverId(undefined);
+            }}
+            onAssigned={() => {
+              setAssignJobId(null);
+              setAssignDriverId(undefined);
+              void queryClient.invalidateQueries({ queryKey: ["fleet"] });
+            }}
+          />
+        )}
+      </div>
+    </DndContext>
   );
 }
 

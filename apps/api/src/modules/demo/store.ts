@@ -95,8 +95,8 @@ export class DemoStore {
       });
     }
 
-    for (const seed of JOB_SEEDS) {
-      const dto = buildJobDto(seed);
+    for (const [index, seed] of JOB_SEEDS.entries()) {
+      const dto = buildJobDto(seed, index);
       if (scenario === "emergency" && seed.reference === "J-208") {
         dto.priority = "stat" satisfies JobPriority;
       }
@@ -162,6 +162,17 @@ export class DemoStore {
     }
     const hash = (jobId + driverId).split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
     const etaImpactMinutes = 3 + (hash % 9);
+    // Deterministic demo cascade: every pending stop downstream of this
+    // driver shifts by the impact (labelled simulated, docs/05.5 step 2).
+    const driverStops = [...this.jobs.values()]
+      .filter((j) => j.dto.assignedDriverId === driverId && j.dto.id !== jobId)
+      .flatMap((j) => j.dto.stops)
+      .filter((s) => s.status === "pending");
+    const newStops = job.stops.filter((s) => s.status === "pending");
+    const etaCascade = [...driverStops, ...newStops].map((s) => ({
+      address: s.address,
+      arrivalDeltaMinutes: etaImpactMinutes,
+    }));
     return {
       jobId,
       driverId,
@@ -169,6 +180,7 @@ export class DemoStore {
       etaImpactMinutes,
       message: `Assigning this to ${driver.fullName} adds ${etaImpactMinutes} min to their next stop. Confirm?`,
       constraintsViolated: constraints,
+      etaCascade,
     };
   }
 

@@ -42,6 +42,12 @@ export const ScenariosListSchema = z.object({
 });
 export type ScenariosList = z.infer<typeof ScenariosListSchema>;
 
+export const EtaCascadeEntrySchema = z.object({
+  address: z.string(),
+  arrivalDeltaMinutes: z.number().int(),
+});
+export type EtaCascadeEntry = z.infer<typeof EtaCascadeEntrySchema>;
+
 export const AssignmentPreviewSchema = z.object({
   jobId: IdSchema,
   driverId: IdSchema,
@@ -49,6 +55,7 @@ export const AssignmentPreviewSchema = z.object({
   etaImpactMinutes: z.number().int().nonnegative(),
   message: z.string(),
   constraintsViolated: z.array(z.string()),
+  etaCascade: z.array(EtaCascadeEntrySchema),
 });
 export type AssignmentPreview = z.infer<typeof AssignmentPreviewSchema>;
 
