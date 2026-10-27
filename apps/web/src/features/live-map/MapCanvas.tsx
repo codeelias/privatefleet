@@ -5,7 +5,7 @@
  * semantics and the drag targets are untouched. If tiles cannot load
  * (offline pitch), the schematic grid underneath keeps the demo usable.
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -85,17 +85,31 @@ function VehiclePin({
 export function MapCanvas({ state }: { state: FleetState }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const [mapFailed, setMapFailed] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
       return;
     }
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: TILE_STYLE,
-      center: [LONDON.lng, LONDON.lat],
-      zoom: 11.5,
-      attributionControl: false,
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: TILE_STYLE,
+        center: [LONDON.lng, LONDON.lat],
+        zoom: 11.5,
+        attributionControl: false,
+      });
+    } catch (err) {
+      // No WebGL or init failure: the schematic fallback stays visible
+      // and the demo remains fully usable (docs: demo resilience).
+      console.error("MapLibre init failed - schematic fallback active", err);
+      setMapFailed(true);
+      return;
+    }
+    map.on("error", (event) => {
+      console.error("MapLibre runtime error - schematic fallback active", event.error);
+      setMapFailed(true);
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     mapRef.current = map;
@@ -163,6 +177,11 @@ export function MapCanvas({ state }: { state: FleetState }) {
           <p className="absolute bottom-2 right-3 z-10 text-[10px] text-text-secondary">
             Grey ghost pins show last known position - never imply a fresh GPS fix.
           </p>
+          {mapFailed && (
+            <p className="absolute bottom-2 left-3 z-10 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
+              Map offline - schematic view active. Dispatch stays fully usable.
+            </p>
+          )}
         </div>
       </div>
     </section>
