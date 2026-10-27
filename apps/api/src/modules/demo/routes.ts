@@ -17,6 +17,20 @@ type Params = Record<string, string | undefined>;
 const ScenarioParamSchema = z.object({ id: ScenarioNameSchema });
 const JobParamSchema = z.object({ jobId: z.string().uuid() });
 const DriverBodySchema = z.object({ driverId: z.string().uuid() });
+const StopParamSchema = z.object({
+  jobId: z.string().uuid(),
+  stopId: z.string().uuid(),
+});
+const CompleteBodySchema = z.object({
+  driverId: z.string().uuid(),
+  recipientName: z.string().optional(),
+  notes: z.string().optional(),
+});
+const SkipBodySchema = z.object({
+  driverId: z.string().uuid(),
+  reason: z.string().min(1),
+});
+const DriverParamSchema = z.object({ driverId: z.string().uuid() });
 const RunParamSchema = z.object({ runId: z.string().uuid() });
 const AlertParamSchema = z.object({ alertId: z.string().uuid() });
 const IdempotencyHeaderSchema = z.object({
@@ -89,6 +103,52 @@ export function registerDemoRoutes(
   app.post("/v1/alerts/:alertId/resolve", async (request) => {
     const params = AlertParamSchema.parse({ alertId: (request.params as Params).alertId });
     const result = store.actOnAlert(params.alertId, "resolve");
+    for (const event of store.drainOutbox()) {
+      bus.publishBusiness(event);
+    }
+    return result;
+  });
+
+  // ---- Driver app commands (server-authoritative, docs/08.2) ----
+  app.post("/v1/driver/shift/start", async (request) => {
+    const body = DriverBodySchema.parse(request.body);
+    return store.startShift(body.driverId);
+  });
+
+  app.get("/v1/driver/:driverId/queue", async (request) => {
+    const params = DriverParamSchema.parse({
+      driverId: (request.params as Params).driverId,
+    });
+    return store.driverQueue(params.driverId);
+  });
+
+  app.post("/v1/jobs/:jobId/stops/:stopId/arrive", async (request) => {
+    const params = StopParamSchema.parse(request.params as Params);
+    const body = DriverBodySchema.parse(request.body);
+    const result = store.arrive(params.jobId, params.stopId, body.driverId);
+    for (const event of store.drainOutbox()) {
+      bus.publishBusiness(event);
+    }
+    return result;
+  });
+
+  app.post("/v1/jobs/:jobId/stops/:stopId/complete", async (request) => {
+    const params = StopParamSchema.parse(request.params as Params);
+    const body = CompleteBodySchema.parse(request.body);
+    const result = store.complete(params.jobId, params.stopId, body.driverId, {
+      recipientName: body.recipientName,
+      notes: body.notes,
+    });
+    for (const event of store.drainOutbox()) {
+      bus.publishBusiness(event);
+    }
+    return result;
+  });
+
+  app.post("/v1/jobs/:jobId/stops/:stopId/skip", async (request) => {
+    const params = StopParamSchema.parse(request.params as Params);
+    const body = SkipBodySchema.parse(request.body);
+    const result = store.skip(params.jobId, params.stopId, body.driverId, body.reason);
     for (const event of store.drainOutbox()) {
       bus.publishBusiness(event);
     }

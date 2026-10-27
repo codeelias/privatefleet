@@ -268,6 +268,159 @@ export class DemoStore {
     });
   }
 
+  /**
+   * Driver commands (docs/08.2): server-authoritative stop transitions.
+   * The driver app queues these with idempotency keys; the server is the
+   * only party that decides accepted state.
+   */
+  startShift(driverId: string): DriverDto {
+    const driver = this.drivers.get(driverId);
+    if (!driver) {
+      throw new Error("JOB_OR_DRIVER_NOT_FOUND");
+    }
+    if (driver.status === "off_duty") {
+      driver.status = "available";
+    }
+    return driver;
+  }
+
+  driverQueue(driverId: string): { driver: DriverDto; jobs: JobDto[] } {
+    const driver = this.drivers.get(driverId);
+    if (!driver) {
+      throw new Error("JOB_OR_DRIVER_NOT_FOUND");
+    }
+    const jobs = [...this.jobs.values()]
+      .map((j) => j.dto)
+      .filter(
+        (j) =>
+          j.assignedDriverId === driverId &&
+          (j.status === "assigned" || j.status === "in_progress"),
+      );
+    return { driver, jobs };
+  }
+
+  private requireStop(jobId: string, stopId: string, driverId: string) {
+    const record = this.jobs.get(jobId);
+    const stop = record?.dto.stops.find((s) => s.id === stopId);
+    if (!record || !stop) {
+      throw new Error("STOP_NOT_FOUND");
+    }
+    if (record.dto.assignedDriverId !== driverId) {
+      throw new Error("STOP_NOT_ASSIGNED_TO_DRIVER");
+    }
+    return { record, stop };
+  }
+
+  arrive(jobId: string, stopId: string, driverId: string): JobDto {
+    const { record, stop } = this.requireStop(jobId, stopId, driverId);
+    if (stop.status === "arrived") {
+      return record.dto;
+    }
+    if (stop.status !== "pending") {
+      throw new Error("INVALID_STOP_TRANSITION");
+    }
+    const now = new Date().toISOString();
+    stop.status = "arrived";
+    stop.arrivedAt = now;
+    record.dto.status = "in_progress";
+    this.outbox.push({
+      eventId: randomUUID(),
+      schemaVersion: EVENT_SCHEMA_VERSION,
+      tenantId: DEMO_TENANT_ID,
+      aggregateType: "stop",
+      aggregateId: stopId,
+      type: "stop.arrived",
+      occurredAt: now,
+      payload: { jobId, stopId, driverId, capturedAt: now, receivedAt: now },
+    });
+    return record.dto;
+  }
+
+  complete(
+    jobId: string,
+    stopId: string,
+    driverId: string,
+    payload: { recipientName?: string | undefined; notes?: string | undefined },
+  ): JobDto {
+    const { record, stop } = this.requireStop(jobId, stopId, driverId);
+    if (stop.status === "completed") {
+      return record.dto;
+    }
+    if (stop.status !== "pending" && stop.status !== "arrived") {
+      throw new Error("INVALID_STOP_TRANSITION");
+    }
+    const now = new Date().toISOString();
+    stop.status = "completed";
+    stop.completedAt = now;
+    this.outbox.push({
+      eventId: randomUUID(),
+      schemaVersion: EVENT_SCHEMA_VERSION,
+      tenantId: DEMO_TENANT_ID,
+      aggregateType: "stop",
+      aggregateId: stopId,
+      type: "stop.completed",
+      occurredAt: now,
+      payload: { jobId, stopId, driverId, recipientName: payload.recipientName },
+    });
+    if (payload.recipientName) {
+      this.outbox.push({
+        eventId: randomUUID(),
+        schemaVersion: EVENT_SCHEMA_VERSION,
+        tenantId: DEMO_TENANT_ID,
+        aggregateType: "pod",
+        aggregateId: stopId,
+        type: "pod.captured",
+        occurredAt: now,
+        payload: { jobId, stopId, kind: "note", recipientName: payload.recipientName },
+      });
+    }
+    if (record.dto.stops.every((s) => s.status === "completed" || s.status === "skipped")) {
+      record.dto.status = "completed";
+      this.outbox.push({
+        eventId: randomUUID(),
+        schemaVersion: EVENT_SCHEMA_VERSION,
+        tenantId: DEMO_TENANT_ID,
+        aggregateType: "job",
+        aggregateId: jobId,
+        type: "job.completed",
+        occurredAt: now,
+        payload: { jobId, driverId },
+      });
+    }
+    return record.dto;
+  }
+
+  skip(jobId: string, stopId: string, driverId: string, reason: string): JobDto {
+    const { record, stop } = this.requireStop(jobId, stopId, driverId);
+    if (stop.status !== "pending" && stop.status !== "arrived") {
+      throw new Error("INVALID_STOP_TRANSITION");
+    }
+    const now = new Date().toISOString();
+    stop.status = "skipped";
+    this.outbox.push({
+      eventId: randomUUID(),
+      schemaVersion: EVENT_SCHEMA_VERSION,
+      tenantId: DEMO_TENANT_ID,
+      aggregateType: "stop",
+      aggregateId: stopId,
+      type: "stop.skipped",
+      occurredAt: now,
+      payload: { jobId, stopId, driverId, reason },
+    });
+    this.alerts.push(
+      this.seedAlert({
+        severity: "at_risk",
+        title: `Stop skipped at ${stop.address} - ${reason}`,
+        entity: "Driver report",
+        location: stop.address,
+        freshness: "just now",
+        recommendedAction: "Review the skip reason and reassign if needed",
+        reference: record.dto.reference,
+      }),
+    );
+    return record.dto;
+  }
+
   /** Deterministic demo projection - labelled simulated, never fake solver math. */
   preview(jobId: string, driverId: string): AssignmentPreview {
     const job = this.jobs.get(jobId)?.dto;

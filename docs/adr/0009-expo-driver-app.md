@@ -1,6 +1,10 @@
-﻿# ADR-0009 - Expo driver app from day one (web target for the demo)
+# ADR-0009 - Expo driver app from day one (web target for the demo)
 
-**Status:** accepted (2026-10-27)
+**Status:** accepted (2026-10-27) - see the Phase 1 note below.
+
+## Phase 1 note (2026-10-27)
+
+The demo transport is Vite + react-native-web rendering the same React Native components; Expo CLI / EAS takes over for the native pilot builds in Phase 3. The architectural commitment (one RN codebase, web for the demo) is unchanged.
 
 ## Context
 The demo needs driver screens on a tablet; the pilot needs background GPS, which browsers cannot reliably provide. Building a PWA driver app first and a native app later would duplicate the driver UI.

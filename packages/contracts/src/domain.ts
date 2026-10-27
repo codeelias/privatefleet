@@ -84,6 +84,8 @@ export const JobStopDtoSchema = z.object({
   status: StopStatusSchema,
   windowStart: z.string().datetime().optional(),
   windowEnd: z.string().datetime().optional(),
+  arrivedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional(),
 });
 export type JobStopDto = z.infer<typeof JobStopDtoSchema>;
 

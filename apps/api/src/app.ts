@@ -39,6 +39,18 @@ const ERROR_MAP: Record<string, { status: number; uiMessage: string }> = {
     status: 404,
     uiMessage: "That alert was already handled. Refresh the list.",
   },
+  STOP_NOT_FOUND: {
+    status: 404,
+    uiMessage: "That stop no longer exists. Refresh your queue.",
+  },
+  STOP_NOT_ASSIGNED_TO_DRIVER: {
+    status: 403,
+    uiMessage: "This stop is not assigned to you. Pull to refresh your queue.",
+  },
+  INVALID_STOP_TRANSITION: {
+    status: 409,
+    uiMessage: "Wait - this stop already changed state. Refresh your queue.",
+  },
 };
 
 export function buildApp(config: AppConfig): {
