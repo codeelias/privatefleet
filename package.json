@@ -9,7 +9,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "e2e": "echo \"Playwright suite arrives with the demo scenarios (docs/12.2)\""
+    "e2e": "pnpm --filter @privatefleet/e2e test"
   },
   "devDependencies": {
     "turbo": "^2.3.3"

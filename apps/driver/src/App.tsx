@@ -121,6 +121,9 @@ export function DriverApp() {
   const [view, setView] = useState<Screen>({ name: "pick" });
   const [error, setError] = useState<string | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
+  const [recipientName, setRecipientName] = useState("");
+  const [notes, setNotes] = useState("");
+  const [reason, setReason] = useState<string>(SKIP_REASONS[0]);
 
   const fleetQuery = useQuery({
     queryKey: ["fleet"],
@@ -385,9 +388,6 @@ export function DriverApp() {
   }
 
   // POD / exceptions
-  const [recipientName, setRecipientName] = useState("");
-  const [notes, setNotes] = useState("");
-  const [reason, setReason] = useState<string>(SKIP_REASONS[0]);
   return (
     <View style={styles.screen}>
       <SyncBanner online={online} />

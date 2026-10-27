@@ -1,6 +1,7 @@
 /**
- * Draggable job card (dnd-kit) with a keyboard/click fallback that opens
- * the assignment flow without a drag (handoff section 8 accessibility).
+ * Draggable job card (dnd-kit): the grip is the only drag activator, so
+ * the card's click opens the assignment flow without interference.
+ * Keyboard/click fallback per handoff section 8.
  */
 import { useDraggable } from "@dnd-kit/core";
 import type { JobDto } from "@privatefleet/contracts";
@@ -23,9 +24,7 @@ export function JobCard({
       ref={setNodeRef}
       type="button"
       onClick={onSelect}
-      {...listeners}
-      {...attributes}
-      className={`flex cursor-grab items-center gap-2 rounded-lg border bg-command-raised px-3 py-1.5 text-xs active:cursor-grabbing ${
+      className={`flex items-center gap-2 rounded-lg border bg-command-raised px-3 py-1.5 text-xs ${
         isDragging ? "opacity-40" : "border-command-border hover:border-brand-primary/60"
       }`}
       style={{
@@ -34,6 +33,14 @@ export function JobCard({
           : undefined,
       }}
     >
+      <span
+        {...listeners}
+        {...attributes}
+        aria-label={`Drag ${job.reference} to assign`}
+        className="cursor-grab touch-none select-none px-1 text-text-secondary active:cursor-grabbing"
+      >
+        ..
+      </span>
       <span className="font-bold">{job.reference}</span>
       <StatusChip
         tone={job.priority === "stat" || job.priority === "urgent" ? "danger" : "neutral"}

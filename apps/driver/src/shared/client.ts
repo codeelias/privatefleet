@@ -15,8 +15,8 @@ import { io } from "socket.io-client";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
-    headers: { "content-type": "application/json", ...init?.headers },
     ...init,
+    headers: { "content-type": "application/json", ...init?.headers },
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { uiMessage?: string } | null;
@@ -103,7 +103,11 @@ export async function enqueue(command: Omit<QueuedCommand, "status">): Promise<v
   const queue = loadQueue();
   queue.push({ ...command, status: "pending" });
   saveQueue(queue);
-  await flush();
+  const result = await flush();
+  // Conflicts surface to the driver explicitly - never silent (docs/06.4).
+  if (!result.ok) {
+    throw new Error(result.message ?? "Sync failed");
+  }
 }
 
 /** Submit pending commands in order; conflicts surface, never overwrite. */

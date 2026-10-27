@@ -17,3 +17,15 @@ jobs:
           echo "Baseline documentation verified."
       # Future steps (activate when apps/ exists):
       # - lint -> typecheck -> unit -> integration -> build -> e2e
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e

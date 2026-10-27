@@ -1,0 +1,22 @@
+{
+  "name": "@privatefleet/e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint tests playwright.config.ts"
+  },
+  "dependencies": {
+    "@privatefleet/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1",
+    "@privatefleet/eslint-config": "workspace:*",
+    "@privatefleet/tsconfig": "workspace:*",
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2"
+  }
+}

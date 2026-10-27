@@ -14,8 +14,8 @@ import type {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
-    headers: { "content-type": "application/json", ...init?.headers },
     ...init,
+    headers: { "content-type": "application/json", ...init?.headers },
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { uiMessage?: string } | null;

@@ -9,6 +9,12 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.10 - Playwright E2E scenarios (2026-10-27)
+- Added `apps/e2e`: the three demo scenarios as executable acceptance tests (docs/12.2) against the real DEMO_MODE stack - Morning Rush (click assign + impact preview + budget timing), Emergency (drag J-208 onto a driver pin via dnd-kit), Proof of Service (driver completes both stops on the mobile app; server state asserted).
+- CI gained an `e2e` job (setup-node 22 + pnpm + chromium) so every push proves the scenarios.
+- Fixed a real client bug the tests caught: `request()` spread order dropped the `content-type` header whenever an idempotency key was set, so every command with headers failed validation - the tests paid for themselves immediately.
+- Driver conflict surfacing: failed queue flushes now raise the server's uiMessage to the driver instead of navigating silently.
+
 ### v1.9 - driver app slice (2026-10-27)
 - Added `apps/driver`: the three driver screens (Shift Home & Route Queue, Active Job with hold-to-confirm arrival, Proof of Service & Exceptions) in React Native components rendered on the web via react-native-web + Vite for the Phase 1 demo. Light theme per handoff Q1 (bg `#F8FAFC`, text `#0F172A`, primary `#2563EB`).
 - Offline command queue per docs/06.4: stable idempotency keys, pending/accepted/conflict states, localStorage persistence on web (expo-sqlite replaces it in Phase 3 native), conflicts surface the server's uiMessage - no last-write-wins.
