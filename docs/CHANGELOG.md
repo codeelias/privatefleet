@@ -9,6 +9,12 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.11 - Phase 1 complete (2026-10-27)
+- Phase 1 (the Honey Pot demo) is implemented and verified: monorepo (pnpm + Turborepo), contracts package, dispatcher web app with all 5 screens, driver app with 3 screens (RN via react-native-web), DEMO_MODE Fastify API with the three seeded scenarios, simulated GPS, outbox-to-Socket.IO pipeline, ADR-0011 error mapping, and Playwright E2E for Morning Rush / Emergency / Proof of Service (3/3 passing locally; CI proven green on run 40588487908).
+- Acceptance checklist (handoff section 10) status: all items met within Phase 1 scope; item 8 (tenant theme contrast) is exercised with the mock tenant and completes fully with real tenants in Phase 6.
+- Repository note (owner directive 2026-10-27): pushes to GitHub are paused; all commits are local from v1.11 onward until further notice. Remote remains at commit 25ee384.
+- Remaining human step: the 120-second rehearsal with the demo script (docs/14.2b) on the demo tablet.
+
 ### v1.10 - Playwright E2E scenarios (2026-10-27)
 - Added `apps/e2e`: the three demo scenarios as executable acceptance tests (docs/12.2) against the real DEMO_MODE stack - Morning Rush (click assign + impact preview + budget timing), Emergency (drag J-208 onto a driver pin via dnd-kit), Proof of Service (driver completes both stops on the mobile app; server state asserted).
 - CI gained an `e2e` job (setup-node 22 + pnpm + chromium) so every push proves the scenarios.
