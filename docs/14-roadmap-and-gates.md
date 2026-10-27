@@ -1,4 +1,4 @@
-﻿# 14 - Roadmap & Gates
+# 14 - Roadmap & Gates
 
 **Status:** Draft v1 - for approval.
 **Related:** [01.4](01-vision-and-principles.md) (demo philosophy), [12.2](12-testing-and-quality.md) (scenario tests).
@@ -16,6 +16,10 @@ Effort estimates are a planning hypothesis, not a delivery guarantee - a product
 | **4. Live tracking** | GPS ingestion; hot/cold position split; outbox publisher hardening; Socket.IO rooms + snapshot recovery; staleness handling | Live map works in the field; tracking edge-case tests pass ([12.3](12-testing-and-quality.md) #1-3) |
 | **5. Optimization** | OSRM matrix + VROOM solve; adapters; proposal/approval flow; route versioning | Infeasible plans surface correctly; approved plans publish without conflicts; demo banners cite stored `optimization_runs` |
 | **6. Pilot hardening** | Customer tracking + POD vault; alerts/geofences; backups + restore drill; deployment automation; retention; branded subdomains; support runbooks | Acceptance tests, recovery tests, and the monthly restore drill pass; tenant provisioning is scripted |
+
+### 14.1b Phase 0 disposition (owner directive, 2026-10-27)
+
+Phase 0's design-partner gate is **parked** by owner directive: Phase 1 proceeds now, and Phase 0 continues in parallel as a commercial track (design partner, 120-second pitch, baseline metrics, licence scope). The gate's commercial intent is unchanged - it simply no longer blocks implementation. Recorded in CHANGELOG v1.8.
 
 ## 14.2 Phase 1 scope detail (the demo)
 

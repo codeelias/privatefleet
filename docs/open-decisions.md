@@ -1,4 +1,4 @@
-﻿# Open Decisions - Approved
+# Open Decisions - Approved
 
 **Status: APPROVED - 2026-10-27.** All 21 decisions (A7/B5/C4/D5) approved; all 11 ADRs accepted. Q1 (driver theme) resolved: **light** ([ui-ux-handoff](figma/ui-ux-handoff.md) Section 12). No open items remain - this file is now the approval record.
 
@@ -12,7 +12,7 @@
 | Decisions | All 21 approved (A1-A7, B1-B5, C1-C4, D1-D5) |
 | Q1 driver theme | Resolved: **light** (`#F8FAFC` / `#FFFFFF`); the three Figma driver frames are updated in Figma before any driver-screen code |
 | Q2 portal primary | Resolved: `#2563EB` fallback; tenant theme wins when configured |
-| Q3 build timing | Gated by Phase 0: design partner + 120-second Figma pitch + explicit yes **before** any Phase 1 code |
+| Q3 build timing | Amended 2026-10-27 by owner directive: Phase 0 parked as a parallel commercial track; Phase 1 proceeds (CHANGELOG v1.8) |
 | Housekeeping | Figma token `figd_07-MZ...` must be revoked by the account owner in Figma -> Settings -> Security |
 
 ## A. Architecture decisions

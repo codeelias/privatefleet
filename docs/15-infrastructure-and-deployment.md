@@ -1,4 +1,4 @@
-﻿# 15 - Infrastructure & Deployment
+# 15 - Infrastructure & Deployment
 
 **Status:** Draft v1 - for approval.
 **Related:** [02.4](02-architecture-overview.md) (environments), [ADR-0010](adr/0010-map-tiles.md) (tiles).
@@ -26,7 +26,7 @@ Phase 1 needs **none** of this to run the demo (in-memory mode) - Compose become
 
 ## 15.3 Demo deployment
 
-- Small VPS: Caddy serves `web` build + `driver` web export; API on a local port, proxied with WebSocket support.
+- **Orchestration host (owner decision, 2026-10-27):** all containers and demo deployments run on the Windows 11 host `Alemnesh` (192.168.1.128, SSH alias `privatefleet`, user `deploy`) via Docker Desktop (verified: Docker Desktop 4.95.0, engine 29.8.2, WSL2 backend). The Linux VPS option from earlier drafts is superseded. SSH uses `~/.ssh/deploy_auto_ed25519` (see CHANGELOG v1.7).
 - `DEMO_MODE=true`, scenario seeds, nightly reset via a scheduled API call; health checks on `/healthz` + `/readyz`; uptime alerting (simple, external).
 - **Prospect sandboxes:** per-prospect branded demo tenants (their uploaded logo, 48-72 h expiry) provisioned by the demo module on the same stack - the leave-behind from [14.2c](14-roadmap-and-gates.md); reset nightly with the other demo data.
 - The demo deployment is rebuilt from CI artifacts - the deployed demo is exactly the tested demo.
