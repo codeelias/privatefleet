@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.13 - rehearsal review fixes (2026-10-27)
+- The prospect said yes; the rehearsal surfaced three review items, all fixed:
+  1. Error toast: scenario resets now guard against double-fires, retry once automatically, and surface transient hiccups as an amber notice instead of a red server-blame banner; the stale background API that held port 4000 during the rehearsal was killed (their `pnpm dev` now boots cleanly).
+  2. Real map: MapLibre GL renders OpenFreeMap dark tiles (ADR-0010) over London; the schematic grid remains only as an offline fallback layer. Ghost-pin and status markers stay as HTML overlays so drag targets are unchanged.
+  3. Board density: 12 seeded jobs - 8 pre-assigned blocks (3/3/2 per lane) plus 4 unassigned cards, time slots tightened to 45 min so everything fits the 06:00-18:00 shift.
+- E2E re-verified 3/3 against the new seeds. Pushes remain paused (owner directive); local commits only.
+
 ### v1.12 - rehearsal is the active gate; pre-Phase 2 preparation (2026-10-27)
 - Active blocking task: the 120-second rehearsal (14.2b), then the demo in front of a real prospect; Phase 2 waits for the prospect's yes - nothing else.
 - 14.1b amended: Phase 0 is the immediate next commercial action, not a parallel track.

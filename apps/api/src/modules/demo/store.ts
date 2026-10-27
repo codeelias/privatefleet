@@ -43,6 +43,42 @@ interface VehicleRecord {
   lastCapturedAt: string;
 }
 
+interface JobPlanEntry {
+  ref: string;
+  driver: number;
+}
+
+/** Pre-assigned blocks per scenario (review fix: the board must feel busy). */
+const PLANNED: Record<ScenarioName, JobPlanEntry[]> = {
+  "morning-rush": [
+    { ref: "J-196", driver: 0 },
+    { ref: "J-201", driver: 0 },
+    { ref: "J-182", driver: 0 },
+    { ref: "J-202", driver: 1 },
+    { ref: "J-205", driver: 1 },
+    { ref: "J-191", driver: 1 },
+    { ref: "J-214", driver: 2 },
+    { ref: "J-219", driver: 2 },
+  ],
+  emergency: [
+    { ref: "J-196", driver: 0 },
+    { ref: "J-201", driver: 0 },
+    { ref: "J-182", driver: 0 },
+    { ref: "J-202", driver: 1 },
+    { ref: "J-205", driver: 1 },
+    { ref: "J-191", driver: 1 },
+    { ref: "J-214", driver: 2 },
+    { ref: "J-219", driver: 2 },
+  ],
+  proof: [
+    { ref: "J-202", driver: 1 },
+    { ref: "J-205", driver: 1 },
+    { ref: "J-191", driver: 1 },
+    { ref: "J-214", driver: 2 },
+    { ref: "J-219", driver: 2 },
+  ],
+};
+
 export class DemoStore {
   private scenario: ScenarioName = "morning-rush";
   private drivers = new Map<string, DriverDto>();
@@ -119,6 +155,17 @@ export class DemoStore {
           }
         }
       }
+      // Busy-day plan: pre-assigned blocks so the Dispatch Board feels
+      // like a real operational morning (review fix: sparse board).
+      const plan = PLANNED[scenario].find((p) => p.ref === seed.reference);
+      if (plan && dto.status === "unassigned") {
+        const driver = DRIVER_SEEDS[plan.driver];
+        if (driver) {
+          dto.status = "assigned";
+          dto.assignedDriverId = driver.id;
+          dto.assignedVehicleId = driver.vehicleId;
+        }
+      }
       this.jobs.set(seed.id, { dto });
     }
 
@@ -126,12 +173,12 @@ export class DemoStore {
       this.alerts.push(
         this.seedAlert({
           severity: "urgent",
-          title: "J-198 may miss the pickup window",
-          entity: "Alex Brooks - VAN-04",
-          location: "St Thomas' Hospital",
-          freshness: "updated 24 sec ago",
-          recommendedAction: "Reassign to a driver near St Thomas'",
-          reference: "J-198",
+          title: "J-208 STAT pickup unassigned - assign a driver now",
+          entity: "STAT intake",
+          location: "Farringdon",
+          freshness: "received 2 minutes ago",
+          recommendedAction: "Drag J-208 onto the nearest driver",
+          reference: "J-208",
         }),
         this.seedAlert({
           severity: "at_risk",
@@ -143,8 +190,8 @@ export class DemoStore {
         }),
         this.seedAlert({
           severity: "info",
-          title: "Vehicle CAR-08 has stopped reporting",
-          entity: "J. Singh - CAR-08",
+          title: "Vehicle CAR-03 has stopped reporting",
+          entity: "Tom Cole - CAR-03",
           location: "last known near Farringdon",
           freshness: "last update 2 min 10 sec ago",
           recommendedAction: "Mark stale and notify the driver",
@@ -164,8 +211,8 @@ export class DemoStore {
         }),
         this.seedAlert({
           severity: "at_risk",
-          title: "Vehicle CAR-08 has stopped reporting",
-          entity: "J. Singh - CAR-08",
+          title: "Vehicle CAR-03 has stopped reporting",
+          entity: "Tom Cole - CAR-03",
           location: "last known near Farringdon",
           freshness: "last update 2 min 10 sec ago",
           recommendedAction: "Mark stale and notify the driver",
@@ -177,7 +224,7 @@ export class DemoStore {
         this.seedAlert({
           severity: "at_risk",
           title: "J-198 ETA drift +8 min",
-          entity: "Alex Brooks - VAN-04",
+          entity: "Sarah Reed - VAN-02",
           location: "St Thomas' Hospital",
           freshness: "updated 24 sec ago",
           recommendedAction: "Notify the customer of the revised ETA",

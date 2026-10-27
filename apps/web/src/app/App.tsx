@@ -74,11 +74,13 @@ export function App() {
   const [assignJobId, setAssignJobId] = useState<string | null>(null);
   const [assignDriverId, setAssignDriverId] = useState<string | undefined>(undefined);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
+  const [scenarioBusy, setScenarioBusy] = useState(false);
 
   const fleetQuery = useQuery({
     queryKey: ["fleet"],
     queryFn: api.fleetState,
     refetchInterval: 15_000,
+    retry: 2,
   });
   const state = fleetQuery.data ?? EMPTY_STATE;
 
@@ -115,12 +117,27 @@ export function App() {
   }, [queryClient]);
 
   async function resetScenario(id: ScenarioName) {
+    if (scenarioBusy) {
+      return; // no double-fires during a live pitch
+    }
+    setScenarioBusy(true);
     setScenarioError(null);
     try {
       await api.resetScenario(id);
+    } catch {
+      // One automatic retry absorbs transient dev-server hiccups; only a
+      // persistent failure surfaces, and as an amber notice, not a red
+      // server-blame banner (review fix).
+      try {
+        await api.resetScenario(id);
+      } catch (err) {
+        setScenarioError(
+          err instanceof Error ? err.message : "Demo reset hiccup - try again.",
+        );
+      }
+    } finally {
+      setScenarioBusy(false);
       await queryClient.invalidateQueries({ queryKey: ["fleet"] });
-    } catch (err) {
-      setScenarioError(err instanceof Error ? err.message : "Reset failed");
     }
   }
 
@@ -239,7 +256,8 @@ export function App() {
                         key={scenario.id}
                         type="button"
                         onClick={() => void resetScenario(scenario.id)}
-                        className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${
+                        disabled={scenarioBusy}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
                           state.scenario === scenario.id
                             ? "border-brand-primary bg-brand-primary/15 text-brand-primary"
                             : "border-command-border text-text-secondary hover:text-text-primary"
@@ -249,7 +267,11 @@ export function App() {
                       </button>
                     ))}
                   </div>
-                  {scenarioError && <p className="text-xs text-status-danger">{scenarioError}</p>}
+                  {scenarioError && (
+                    <p className="rounded-lg border border-status-warning/50 bg-status-warning/10 px-3 py-1.5 text-xs text-status-warning">
+                      {scenarioError}
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-1 overflow-hidden">

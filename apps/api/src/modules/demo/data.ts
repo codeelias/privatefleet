@@ -89,6 +89,16 @@ export const JOB_SEEDS: DemoJobSeed[] = [
     dropoff: { latitude: 51.5308, longitude: -0.1238 },
   },
   {
+    id: "30000000-0000-4000-8000-000000000009",
+    reference: "J-203",
+    serviceType: "Pickup",
+    priority: "standard",
+    pickupAddress: "Islington",
+    pickup: { latitude: 51.5362, longitude: -0.103 },
+    dropoffAddress: "Shoreditch",
+    dropoff: { latitude: 51.5265, longitude: -0.078 },
+  },
+  {
     id: "30000000-0000-4000-8000-000000000004",
     reference: "J-202",
     serviceType: "Transfer",
@@ -129,6 +139,36 @@ export const JOB_SEEDS: DemoJobSeed[] = [
     dropoff: { latitude: 51.5362, longitude: -0.103 },
   },
   {
+    id: "30000000-0000-4000-8000-000000000010",
+    reference: "J-219",
+    serviceType: "Delivery",
+    priority: "standard",
+    pickupAddress: "London Bridge",
+    pickup: { latitude: 51.5045, longitude: -0.0865 },
+    dropoffAddress: "Camden",
+    dropoff: { latitude: 51.539, longitude: -0.1426 },
+  },
+  {
+    id: "30000000-0000-4000-8000-000000000011",
+    reference: "J-182",
+    serviceType: "Pickup",
+    priority: "standard",
+    pickupAddress: "Kings Cross",
+    pickup: { latitude: 51.5308, longitude: -0.1238 },
+    dropoffAddress: "London Bridge",
+    dropoff: { latitude: 51.5045, longitude: -0.0865 },
+  },
+  {
+    id: "30000000-0000-4000-8000-000000000012",
+    reference: "J-191",
+    serviceType: "Drop",
+    priority: "standard",
+    pickupAddress: "Westminster",
+    pickup: { latitude: 51.501, longitude: -0.1173 },
+    dropoffAddress: "Shoreditch",
+    dropoff: { latitude: 51.5265, longitude: -0.078 },
+  },
+  {
     id: "30000000-0000-4000-8000-000000000008",
     reference: "J-221",
     serviceType: "Collection",
@@ -165,11 +205,11 @@ export const SIMULATOR_ROUTES: Record<string, GeoPoint[]> = {
   ],
 };
 
-/** Deterministic shift-day windows for the Gantt board (08:00 + index*65min). */
+/** Deterministic shift-day windows for the Gantt board (08:00 + index*45min). */
 function slotFor(index: number): { pickupStart: string; pickupEnd: string; dropStart: string; dropEnd: string } {
   const base = new Date();
   base.setHours(8, 0, 0, 0);
-  const pickupStart = new Date(base.getTime() + index * 65 * 60_000);
+  const pickupStart = new Date(base.getTime() + index * 45 * 60_000);
   const dropStart = new Date(pickupStart.getTime() + 35 * 60_000);
   return {
     pickupStart: pickupStart.toISOString(),
