@@ -86,6 +86,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapFailed, setMapFailed] = useState(false);
+  const [failReason, setFailReason] = useState("");
   const [mapStatus, setMapStatus] = useState("loading tiles");
 
   useEffect(() => {
@@ -106,13 +107,24 @@ export function MapCanvas({ state }: { state: FleetState }) {
       // and the demo remains fully usable (docs: demo resilience).
       console.error("MapLibre init failed - schematic fallback active", err);
       setMapFailed(true);
+      setFailReason("WebGL unavailable in this browser");
       setMapStatus("no WebGL - schematic view");
       return;
     }
     map.on("error", (event) => {
-      console.error("MapLibre runtime error - schematic fallback active", event.error);
-      setMapFailed(true);
-      setMapStatus("tile error - schematic view");
+      // Tile-level failures are noisy and non-fatal; only a failure to
+      // load the style itself means the map is truly offline.
+      const message = event.error?.message ?? String(event.error);
+      console.warn("MapLibre error event:", message);
+      if (!map.isStyleLoaded()) {
+        setMapFailed(true);
+        setFailReason(
+          message.toLowerCase().includes("style")
+            ? "tile service unreachable"
+            : `map error: ${message}`,
+        );
+        setMapStatus("style failed - schematic view");
+      }
     });
     map.on("load", () => {
       setMapStatus("tiles loaded");
@@ -209,7 +221,8 @@ export function MapCanvas({ state }: { state: FleetState }) {
           </p>
           {mapFailed ? (
             <p className="absolute bottom-2 left-3 z-10 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
-              Map offline - schematic view active. Dispatch stays fully usable.
+              Map offline ({failReason}) - schematic view active. Dispatch stays
+              fully usable.
             </p>
           ) : (
             <p className="absolute bottom-2 left-3 z-10 text-[10px] text-text-secondary">
