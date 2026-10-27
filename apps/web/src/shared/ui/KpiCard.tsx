@@ -9,7 +9,7 @@ export function KpiCard({
   label: string;
   value: string;
   sub: string;
-  tone?: "default" | "danger" | "warning";
+  tone?: "default" | "danger" | "warning" | undefined;
 }) {
   const valueClass =
     tone === "danger"
