@@ -1,14 +1,16 @@
 /**
  * Live map canvas (docs/05.6, ADR-0010).
  *
- * Phase 1 demo default: Leaflet raster tiles (CARTO Dark Matter) - no
- * WebGL required, works in every browser including remote-desktop and
- * hardware-acceleration-off sessions. MapLibre vector (OpenFreeMap) is
- * available for later phases via the `?map=vector` flag and falls back
- * to the raster engine automatically if it cannot initialise.
+ * Geographic rendering: vehicles and job markers are placed by their real
+ * latitude/longitude projected through the active engine, never by
+ * schematic percentages. Route polylines come from FleetState.routes so
+ * vehicle movement visibly follows the simulated route.
  *
- * CSS for both engines is imported here at module top (missing engine
- * CSS is the classic cause of a collapsed/blank map).
+ * Engines:
+ * - Vector (MapLibre GL): OpenFreeMap "bright" style (no key), with a
+ *   liberty retry, then automatic raster fallback.
+ * - Raster (Leaflet): OpenStreetMap standard tiles (no key) - works
+ *   without WebGL, including remote-desktop sessions.
  */
 import { useEffect, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
@@ -16,36 +18,39 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { FleetState, VehicleDto } from "@privatefleet/contracts";
+import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
 
 const LONDON = { lng: -0.107, lat: 51.517 };
-// Key-free providers only:
-// - Vector: MapToolkit dark style (free for small commercial projects),
-//   with OpenFreeMap liberty as a one-shot retry if the style fails.
-// - Raster: OpenStreetMap standard tiles (acceptable at demo scale per
-//   their tile usage policy; revisit for production - ADR-0010).
+// Key-free providers only (see ADR-0010).
 const VECTOR_STYLES = [
-  { url: "https://styles.maptoolkit.org/dark.json", name: "MapToolkit dark" },
+  { url: "https://tiles.openfreemap.org/styles/bright", name: "OpenFreeMap bright" },
   { url: "https://tiles.openfreemap.org/styles/liberty", name: "OpenFreeMap liberty" },
 ] as const;
 const RASTER_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const RASTER_ATTRIBUTION = "&copy; OpenStreetMap contributors";
 
-const BOUNDS = {
-  minLat: 51.49,
-  maxLat: 51.55,
-  minLng: -0.15,
-  maxLng: -0.07,
-};
+// Panning is restricted to Greater London (south-west / north-east).
+const LONDON_BOUNDS: [[number, number], [number, number]] = [
+  [-0.32, 51.4],
+  [0.08, 51.62],
+];
 
 function forceVector(): boolean {
   return new URLSearchParams(window.location.search).get("map") === "vector";
 }
 
-function project(latitude: number, longitude: number): { x: number; y: number } {
-  const x = ((longitude - BOUNDS.minLng) / (BOUNDS.maxLng - BOUNDS.minLng)) * 100;
-  const y = ((BOUNDS.maxLat - latitude) / (BOUNDS.maxLat - BOUNDS.minLat)) * 100;
-  return { x, y };
+function routeGeoJson(state: FleetState): GeoJSON.FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: state.routes.map((route) => ({
+      type: "Feature",
+      properties: { vehicleId: route.vehicleId },
+      geometry: {
+        type: "LineString",
+        coordinates: route.points.map((p) => [p.longitude, p.latitude]),
+      },
+    })),
+  };
 }
 
 function colourFor(vehicle: VehicleDto): string {
@@ -82,7 +87,7 @@ function VehiclePin({
       className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 ${
         vehicle.stale ? "stale-ghost" : ""
       } ${isOver ? "scale-125" : ""}`}
-      style={{ left: `${x}%`, top: `${y}%`, transition: "transform 120ms ease" }}
+      style={{ left: `${x}px`, top: `${y}px`, transition: "left 1.8s linear, top 1.8s linear" }}
       title={`${driverName} - ${vehicle.registration} - ${
         vehicle.stale ? "last known" : vehicle.status
       }`}
@@ -107,15 +112,17 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const vectorRef = useRef<maplibregl.Map | null>(null);
   const leafletRef = useRef<L.Map | null>(null);
+  const polylinesRef = useRef<L.Polyline[]>([]);
   const [vectorFailed, setVectorFailed] = useState(false);
   const [vectorProvider, setVectorProvider] = useState<string>(VECTOR_STYLES[0].name);
   const [tileCount, setTileCount] = useState(0);
   const [tilesFailed, setTilesFailed] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [revision, setRevision] = useState(0);
   const styleIndexRef = useRef(0);
   const useVector = forceVector() && !vectorFailed;
 
-  // Raster engine (default): Leaflet + CARTO Dark Matter. DOM images,
-  // no WebGL, works on any browser/session.
+  // --- Raster engine (Leaflet, default) ---------------------------------
   useEffect(() => {
     if (useVector || !containerRef.current || leafletRef.current) {
       return;
@@ -123,14 +130,16 @@ export function MapCanvas({ state }: { state: FleetState }) {
     const container = containerRef.current;
     const map = L.map(container, {
       center: [LONDON.lat, LONDON.lng],
-      zoom: 13,
+      zoom: 12.5,
       zoomControl: false,
       attributionControl: true,
-      // Leaflet fades tiles in from opacity 0; screenshots and slow GPUs
-      // can catch the map mid-fade (measured 0.115 opacity = invisible).
-      // The demo needs tiles at full opacity immediately.
       fadeAnimation: false,
       zoomAnimation: false,
+      maxBounds: L.latLngBounds(
+        [LONDON_BOUNDS[0][1], LONDON_BOUNDS[0][0]],
+        [LONDON_BOUNDS[1][1], LONDON_BOUNDS[1][0]],
+      ),
+      maxBoundsViscosity: 0.8,
     });
     map.attributionControl.setPrefix(false);
     const layer = L.tileLayer(RASTER_URL, {
@@ -153,17 +162,36 @@ export function MapCanvas({ state }: { state: FleetState }) {
     const raf = requestAnimationFrame(() => map.invalidateSize());
     const observer = new ResizeObserver(() => map.invalidateSize());
     observer.observe(container);
+    map.on("move zoom", () => setRevision((r) => r + 1));
+    map.whenReady(() => setReady(true));
     L.control.zoom({ position: "bottomright" }).addTo(map);
     leafletRef.current = map;
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
+      polylinesRef.current = [];
       map.remove();
       leafletRef.current = null;
+      setReady(false);
     };
   }, [useVector]);
 
-  // Vector engine (optional): MapLibre GL + OpenFreeMap dark.
+  // Route polylines for the raster engine.
+  useEffect(() => {
+    const map = leafletRef.current;
+    if (!map || useVector) {
+      return;
+    }
+    polylinesRef.current.forEach((line) => line.remove());
+    polylinesRef.current = state.routes.map((route) =>
+      L.polyline(
+        route.points.map((p) => [p.latitude, p.longitude] as [number, number]),
+        { color: "#4F8CFF", weight: 3, opacity: 0.55 },
+      ).addTo(map),
+    );
+  }, [state.routes, useVector, ready]);
+
+  // --- Vector engine (MapLibre) ----------------------------------------
   useEffect(() => {
     if (!useVector || !containerRef.current || vectorRef.current) {
       return;
@@ -174,7 +202,8 @@ export function MapCanvas({ state }: { state: FleetState }) {
         container: containerRef.current,
         style: VECTOR_STYLES[0].url,
         center: [LONDON.lng, LONDON.lat],
-        zoom: 11.5,
+        zoom: 12,
+        maxBounds: LONDON_BOUNDS,
         attributionControl: { compact: true },
       });
     } catch (err) {
@@ -187,7 +216,6 @@ export function MapCanvas({ state }: { state: FleetState }) {
       console.warn("MapLibre error event:", message);
       if (!map.isStyleLoaded()) {
         if (styleIndexRef.current === 0) {
-          // One retry with the secondary key-free style before giving up.
           styleIndexRef.current = 1;
           map.setStyle(VECTOR_STYLES[1].url);
         } else {
@@ -198,31 +226,71 @@ export function MapCanvas({ state }: { state: FleetState }) {
     map.on("load", () => {
       const current = VECTOR_STYLES[styleIndexRef.current] ?? VECTOR_STYLES[0];
       setVectorProvider(current.name);
+      map.addSource("vehicle-routes", {
+        type: "geojson",
+        data: routeGeoJson(state),
+      });
+      map.addLayer({
+        id: "vehicle-routes-line",
+        type: "line",
+        source: "vehicle-routes",
+        paint: {
+          "line-color": "#4F8CFF",
+          "line-width": 3,
+          "line-opacity": 0.55,
+        },
+      });
+      setReady(true);
     });
+    map.on("move zoom", () => setRevision((r) => r + 1));
     const raf = requestAnimationFrame(() => map.resize());
     const observer = new ResizeObserver(() => map.resize());
     observer.observe(containerRef.current);
-    map.on("styleimagemissing", (event) => {
-      const placeholder = document.createElement("canvas");
-      placeholder.width = 2;
-      placeholder.height = 2;
-      const context = placeholder.getContext("2d");
-      if (context) {
-        context.fillStyle = "#334155";
-        context.fillRect(0, 0, 2, 2);
-        map.addImage(event.id, context.getImageData(0, 0, 2, 2));
-      }
-    });
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     vectorRef.current = map;
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
       map.remove();
       vectorRef.current = null;
+      setReady(false);
     };
   }, [useVector]);
 
+  // Update vector route data when the fleet state changes.
+  useEffect(() => {
+    const map = vectorRef.current;
+    if (!map || !ready) {
+      return;
+    }
+    const source = map.getSource("vehicle-routes") as maplibregl.GeoJSONSource | undefined;
+    if (source) {
+      source.setData(routeGeoJson(state));
+    }
+  }, [state, ready]);
+
+  // Project geo points to container pixels for the overlay layer.
+  function project(point: GeoPoint | undefined): { x: number; y: number } | null {
+    if (!point) {
+      return null;
+    }
+    if (useVector) {
+      const map = vectorRef.current;
+      if (!map) {
+        return null;
+      }
+      const p = map.project([point.longitude, point.latitude]);
+      return { x: p.x, y: p.y };
+    }
+    const map = leafletRef.current;
+    if (!map) {
+      return null;
+    }
+    const p = map.latLngToContainerPoint([point.latitude, point.longitude]);
+    return { x: p.x, y: p.y };
+  }
+
+  // revision forces a re-projection after pan/zoom; ready gates overlays.
+  void revision;
   const jobs = state.jobs.filter((j) => j.status === "unassigned");
   const status = useVector
     ? `vector map (${vectorProvider})`
@@ -239,7 +307,6 @@ export function MapCanvas({ state }: { state: FleetState }) {
           data-testid="map-card"
           className="relative h-[92%] w-[94%] overflow-hidden rounded-2xl border border-command-border bg-command-surface/60"
         >
-          {/* Schematic fallback layer - visible only until tiles paint. */}
           <div
             className="absolute inset-0 opacity-20"
             style={{
@@ -252,15 +319,15 @@ export function MapCanvas({ state }: { state: FleetState }) {
           <div ref={containerRef} className="absolute inset-0 z-10 bg-[#0B1220]" />
           {jobs.map((job) => {
             const pickup = job.stops.find((s) => s.stopType === "pickup");
-            if (!pickup) {
+            const pos = project(pickup?.location);
+            if (!pos) {
               return null;
             }
-            const { x, y } = project(pickup.location.latitude, pickup.location.longitude);
             return (
               <div
                 key={job.id}
                 className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${x}%`, top: `${y}%` }}
+                style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
                 title={`${job.reference} - ${job.serviceType}`}
               >
                 <span
@@ -274,18 +341,18 @@ export function MapCanvas({ state }: { state: FleetState }) {
             );
           })}
           {state.vehicles.map((vehicle) => {
-            if (!vehicle.location) {
+            const pos = project(vehicle.location);
+            if (!pos) {
               return null;
             }
-            const { x, y } = project(vehicle.location.latitude, vehicle.location.longitude);
             const driver = state.drivers.find((d) => d.id === vehicle.driverId);
             return (
               <VehiclePin
                 key={vehicle.id}
                 vehicle={vehicle}
                 driverName={driver?.fullName ?? "Driver"}
-                x={x}
-                y={y}
+                x={pos.x}
+                y={pos.y}
               />
             );
           })}

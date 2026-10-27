@@ -56,6 +56,7 @@ const EMPTY_STATE: FleetState = {
   jobs: [],
   alerts: [],
   serviceZones: [],
+  routes: [],
   serverTime: new Date().toISOString(),
 };
 

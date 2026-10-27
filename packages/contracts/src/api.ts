@@ -5,6 +5,7 @@
 import { z } from "zod";
 import {
   DriverDtoSchema,
+  GeoPointSchema,
   IdSchema,
   JobDtoSchema,
   VehicleDtoSchema,
@@ -86,6 +87,13 @@ export const OptimizationProposalSchema = z.object({
 });
 export type OptimizationProposal = z.infer<typeof OptimizationProposalSchema>;
 
+export const RoutePathSchema = z.object({
+  vehicleId: IdSchema,
+  driverId: IdSchema.optional(),
+  points: z.array(GeoPointSchema).min(2),
+});
+export type RoutePath = z.infer<typeof RoutePathSchema>;
+
 export const FleetStateSchema = z.object({
   tenantId: IdSchema,
   scenario: ScenarioNameSchema.optional(),
@@ -95,6 +103,7 @@ export const FleetStateSchema = z.object({
   jobs: z.array(JobDtoSchema),
   alerts: z.array(AlertDtoSchema),
   serviceZones: z.array(ServiceZoneSchema),
+  routes: z.array(RoutePathSchema),
   serverTime: z.string().datetime(),
   publishedPlan: OptimizationProposalSchema.optional(),
 });

@@ -9,6 +9,14 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.17 - geographic map: correct locations, routes, and movement (2026-10-27)
+- Fixed two real bugs: `advanceVehicle` computed interpolated positions but never stored them, and `fleetState` reported `route[0]` for every vehicle - so all GPS positions were frozen at the route start. The store now keeps `dto.location` in step with the simulated fix.
+- `FleetState.routes` added to the contracts (vehicleId, driverId, GeoPoint[]); the API publishes each vehicle's route and the web map draws them as polylines (Leaflet `path.leaflet-interactive`, MapLibre geojson line layer).
+- Map overlays now use real geographic projection (`map.project` / `latLngToContainerPoint`) instead of schematic percentages, re-projected on every pan/zoom and telemetry tick; vehicle pins animate along their route (verified: pin 308px -> 315px, vehicle 51.515216,-0.130904 -> 51.515432,-0.129808 over 4s).
+- London `maxBounds` on both engines (panning restricted to Greater London); vector engine uses OpenFreeMap `bright` style (no key) per the reference example, liberty retry, then raster fallback.
+- New permanent E2E regression test (`map.spec.ts`): routes present, positions change, polylines rendered, pin moves. Verified screenshot: 7161 unique colours, brightness 205.7, 5.68% route-blue line.
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.16 - key-free tile providers (CARTO watermark removed) (2026-10-27)
 - CARTO's raster service now returns "API KEY REQUIRED" watermarks baked into the tiles; every CARTO request has been removed from the app.
 - Default demo engine (Leaflet raster): OpenStreetMap standard tiles (`tile.openstreetmap.org`), verified 15 tiles loaded, zero CARTO requests, screenshot measures 3840 unique colours / brightness 206 / 97% lit - a bright, detailed London map. Demo-scale use is within OSM's tile policy; a production provider is an ADR-0010 revisit.

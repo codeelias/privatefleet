@@ -719,6 +719,13 @@ export class DemoStore {
       (Math.atan2(to.longitude - from.longitude, to.latitude - from.latitude) * 180) / Math.PI;
     record.sequenceNo += 1;
     record.lastCapturedAt = new Date().toISOString();
+    // Keep the canonical DTO position in step with the simulated fix so
+    // fleet state (and therefore the map) follows the route instead of
+    // being frozen at the route's first point.
+    record.dto.location = {
+      latitude: Number(latitude.toFixed(6)),
+      longitude: Number(longitude.toFixed(6)),
+    };
     return {
       vehicleId,
       driverId: record.dto.driverId ?? "",
@@ -733,7 +740,7 @@ export class DemoStore {
   fleetState(): FleetState {
     const now = Date.now();
     const vehicles: VehicleDto[] = [...this.vehicles.values()].map((record) => {
-      const point = record.route[0];
+      const point = record.dto.location ?? record.route[0];
       const stale = now - Date.parse(record.lastCapturedAt) > STALE_AFTER_MS;
       return {
         ...record.dto,
@@ -741,6 +748,11 @@ export class DemoStore {
         stale,
       };
     });
+    const routes = [...this.vehicles.entries()].map(([vehicleId, record]) => ({
+      vehicleId,
+      driverId: record.dto.driverId,
+      points: record.route.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+    }));
     const publishedPlan =
       this.lastRun && this.lastRun.published ? this.lastRun : undefined;
     return {
@@ -752,6 +764,7 @@ export class DemoStore {
       jobs: [...this.jobs.values()].map((j) => j.dto),
       alerts: this.alerts,
       serviceZones: this.serviceZones,
+      routes,
       serverTime: new Date().toISOString(),
       ...(publishedPlan ? { publishedPlan } : {}),
     };
