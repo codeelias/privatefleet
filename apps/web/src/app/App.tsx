@@ -14,6 +14,8 @@ import type {
 } from "@privatefleet/contracts";
 import { DispatchBoard } from "../features/dispatch-board/Board";
 import { JobCard } from "../features/dispatch/JobCard";
+import { AlertsScreen } from "../features/alerts/AlertsScreen";
+import { TrackingHub } from "../features/customer-tracking/TrackingHub";
 import { AssignmentModal } from "../features/live-map/AssignmentModal";
 import { MapCanvas } from "../features/live-map/MapCanvas";
 import { OptimizationScreen } from "../features/optimization/OptimizationScreen";
@@ -53,6 +55,7 @@ const EMPTY_STATE: FleetState = {
   vehicles: [],
   jobs: [],
   alerts: [],
+  serviceZones: [],
   serverTime: new Date().toISOString(),
 };
 
@@ -134,12 +137,13 @@ export function App() {
     }
   }
 
+  const openAlerts = state.alerts.filter((a) => !a.acknowledged);
   const activeVehicles = state.vehicles.filter((v) => !v.stale).length;
   const onRoute = state.vehicles.filter((v) => v.status === "on_route").length;
   const inProgress = state.jobs.filter((j) => j.status !== "unassigned").length;
   const unassigned = state.jobs.filter((j) => j.status === "unassigned");
   const urgent = unassigned.filter((j) => j.priority === "stat" || j.priority === "urgent").length;
-  const atRisk = state.alerts.length;
+  const atRisk = openAlerts.length;
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
@@ -210,6 +214,14 @@ export function App() {
               <DispatchBoard state={state} />
             ) : screen === "optimise" ? (
               <OptimizationScreen state={state} />
+            ) : screen === "alerts" ? (
+              <AlertsScreen
+                state={state}
+                onReassign={(jobId) => openAssignment(jobId)}
+                onRefresh={() => void queryClient.invalidateQueries({ queryKey: ["fleet"] })}
+              />
+            ) : screen === "tracking" ? (
+              <TrackingHub state={state} />
             ) : screen === "live" ? (
               <>
                 {/* KPI strip + demo scenarios */}
@@ -253,11 +265,11 @@ export function App() {
                       )}
                     </Panel>
                     <Panel title="Needs attention">
-                      {state.alerts.length === 0 ? (
+                      {openAlerts.length === 0 ? (
                         <p className="text-sm text-text-secondary">All clear.</p>
                       ) : (
                         <ul className="space-y-2 text-xs text-text-secondary">
-                          {state.alerts.map((alert) => (
+                          {openAlerts.map((alert) => (
                             <li key={alert.id} className="flex items-start gap-2">
                               <StatusChip
                                 tone={alert.severity === "urgent" ? "danger" : "warning"}

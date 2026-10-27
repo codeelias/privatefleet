@@ -16,6 +16,7 @@ import type {
   OptimizationProposal,
   OptimizedStop,
   ScenarioName,
+  ServiceZone,
   VehicleDto,
   VehiclePosition,
 } from "@privatefleet/contracts";
@@ -48,6 +49,7 @@ export class DemoStore {
   private vehicles = new Map<string, VehicleRecord>();
   private jobs = new Map<string, JobRecord>();
   private alerts: AlertDto[] = [];
+  private serviceZones: ServiceZone[] = [];
   private outbox: EventEnvelope[] = [];
   private receipts = new Map<string, AssignResponse>();
   private telemetrySequence = 0;
@@ -63,6 +65,7 @@ export class DemoStore {
     this.vehicles.clear();
     this.jobs.clear();
     this.alerts = [];
+    this.serviceZones = [];
     this.outbox = [];
     this.receipts.clear();
     this.lastRun = undefined;
@@ -120,11 +123,83 @@ export class DemoStore {
     }
 
     if (scenario === "morning-rush") {
-      this.alerts.push(this.alert("at_risk", "J-198 likely to arrive 8 minutes late", "J-198"));
+      this.alerts.push(
+        this.seedAlert({
+          severity: "urgent",
+          title: "J-198 may miss the pickup window",
+          entity: "Alex Brooks - VAN-04",
+          location: "St Thomas' Hospital",
+          freshness: "updated 24 sec ago",
+          recommendedAction: "Reassign to a driver near St Thomas'",
+          reference: "J-198",
+        }),
+        this.seedAlert({
+          severity: "at_risk",
+          title: "Sarah has been stationary for 15 minutes",
+          entity: "Sarah Reed - VAN-02",
+          location: "Camden clinic",
+          freshness: "updated 44 sec ago",
+          recommendedAction: "Call driver to check for a loading delay",
+        }),
+        this.seedAlert({
+          severity: "info",
+          title: "Vehicle CAR-08 has stopped reporting",
+          entity: "J. Singh - CAR-08",
+          location: "last known near Farringdon",
+          freshness: "last update 2 min 10 sec ago",
+          recommendedAction: "Mark stale and notify the driver",
+        }),
+      );
     }
     if (scenario === "emergency") {
-      this.alerts.push(this.alert("urgent", "J-208 STAT request received - needs a driver now", "J-208"));
+      this.alerts.push(
+        this.seedAlert({
+          severity: "urgent",
+          title: "J-208 STAT request received - needs a driver now",
+          entity: "STAT intake",
+          location: "Farringdon",
+          freshness: "received just now",
+          recommendedAction: "Drag J-208 onto the nearest available driver",
+          reference: "J-208",
+        }),
+        this.seedAlert({
+          severity: "at_risk",
+          title: "Vehicle CAR-08 has stopped reporting",
+          entity: "J. Singh - CAR-08",
+          location: "last known near Farringdon",
+          freshness: "last update 2 min 10 sec ago",
+          recommendedAction: "Mark stale and notify the driver",
+        }),
+      );
     }
+    if (scenario === "proof") {
+      this.alerts.push(
+        this.seedAlert({
+          severity: "at_risk",
+          title: "J-198 ETA drift +8 min",
+          entity: "Alex Brooks - VAN-04",
+          location: "St Thomas' Hospital",
+          freshness: "updated 24 sec ago",
+          recommendedAction: "Notify the customer of the revised ETA",
+          reference: "J-198",
+        }),
+      );
+    }
+
+    this.serviceZones =
+      scenario === "emergency"
+        ? [
+            { id: randomUUID(), name: "St Thomas' Hospital", status: "ok", vehiclesInside: 2, note: "2 vehicles inside" },
+            { id: randomUUID(), name: "Camden Clinic", status: "ok", vehiclesInside: 1, note: "1 vehicle inside" },
+            { id: randomUUID(), name: "London Bridge Dock", status: "unexpected_exit", vehiclesInside: 0, note: "Tom Cole exited the service zone" },
+            { id: randomUUID(), name: "Farringdon Depot", status: "no_arrivals", vehiclesInside: 0, note: "No recent arrivals" },
+          ]
+        : [
+            { id: randomUUID(), name: "St Thomas' Hospital", status: "ok", vehiclesInside: 2, note: "2 vehicles inside" },
+            { id: randomUUID(), name: "Camden Clinic", status: "ok", vehiclesInside: 1, note: "1 vehicle inside" },
+            { id: randomUUID(), name: "London Bridge Dock", status: "ok", vehiclesInside: 3, note: "3 vehicles inside" },
+            { id: randomUUID(), name: "Farringdon Depot", status: "no_arrivals", vehiclesInside: 0, note: "No recent arrivals" },
+          ];
   }
 
   get currentScenario(): ScenarioName {
@@ -135,19 +210,62 @@ export class DemoStore {
     return [...this.vehicles.keys()];
   }
 
-  private alert(
-    severity: AlertDto["severity"],
-    title: string,
-    reference: string,
-  ): AlertDto {
-    const job = [...this.jobs.values()].find((j) => j.dto.reference === reference);
+  private seedAlert(input: {
+    severity: AlertDto["severity"];
+    title: string;
+    entity: string;
+    location: string;
+    freshness: string;
+    recommendedAction: string;
+    reference?: string;
+  }): AlertDto {
+    const job = input.reference
+      ? [...this.jobs.values()].find((j) => j.dto.reference === input.reference)
+      : undefined;
+    const now = new Date().toISOString();
     return {
       id: randomUUID(),
-      severity,
-      title,
+      severity: input.severity,
+      title: input.title,
       relatedJobId: job?.dto.id,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      entity: input.entity,
+      location: input.location,
+      freshness: input.freshness,
+      recommendedAction: input.recommendedAction,
+      acknowledged: false,
+      audit: [{ at: now, message: "Alert automatically created" }],
     };
+  }
+
+  actOnAlert(alertId: string, action: "acknowledge" | "resolve"): AlertDto {
+    const alert = this.alerts.find((a) => a.id === alertId);
+    if (!alert) {
+      throw new Error("ALERT_NOT_FOUND");
+    }
+    const now = new Date().toISOString();
+    if (action === "acknowledge") {
+      alert.acknowledged = true;
+      alert.audit.push({ at: now, message: "Alert acknowledged by dispatcher" });
+      this.pushAlertEvent(alert, "alert.acknowledged");
+      return alert;
+    }
+    this.alerts = this.alerts.filter((a) => a.id !== alertId);
+    this.pushAlertEvent(alert, "alert.resolved");
+    return alert;
+  }
+
+  private pushAlertEvent(alert: AlertDto, type: string): void {
+    this.outbox.push({
+      eventId: randomUUID(),
+      schemaVersion: EVENT_SCHEMA_VERSION,
+      tenantId: DEMO_TENANT_ID,
+      aggregateType: "alert",
+      aggregateId: alert.id,
+      type,
+      occurredAt: new Date().toISOString(),
+      payload: { alertId: alert.id, title: alert.title, severity: alert.severity },
+    });
   }
 
   /** Deterministic demo projection - labelled simulated, never fake solver math. */
@@ -433,6 +551,7 @@ export class DemoStore {
       vehicles,
       jobs: [...this.jobs.values()].map((j) => j.dto),
       alerts: this.alerts,
+      serviceZones: this.serviceZones,
       serverTime: new Date().toISOString(),
       ...(publishedPlan ? { publishedPlan } : {}),
     };

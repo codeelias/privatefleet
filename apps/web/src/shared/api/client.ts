@@ -50,4 +50,8 @@ export const api = {
     request<OptimizationProposal>(`/v1/optimization/${runId}/approve`, {
       method: "POST",
     }),
+  acknowledgeAlert: (alertId: string) =>
+    request(`/v1/alerts/${alertId}/acknowledge`, { method: "POST" }),
+  resolveAlert: (alertId: string) =>
+    request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
 };

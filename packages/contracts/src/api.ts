@@ -14,6 +14,12 @@ export const SCENARIO_NAMES = ["morning-rush", "emergency", "proof"] as const;
 export const ScenarioNameSchema = z.enum(SCENARIO_NAMES);
 export type ScenarioName = z.infer<typeof ScenarioNameSchema>;
 
+export const AlertAuditEntrySchema = z.object({
+  at: z.string().datetime(),
+  message: z.string(),
+});
+export type AlertAuditEntry = z.infer<typeof AlertAuditEntrySchema>;
+
 export const AlertDtoSchema = z.object({
   id: IdSchema,
   severity: z.enum(["info", "at_risk", "urgent"]),
@@ -21,8 +27,23 @@ export const AlertDtoSchema = z.object({
   relatedJobId: IdSchema.optional(),
   relatedVehicleId: IdSchema.optional(),
   createdAt: z.string().datetime(),
+  entity: z.string(),
+  location: z.string(),
+  freshness: z.string(),
+  recommendedAction: z.string(),
+  acknowledged: z.boolean(),
+  audit: z.array(AlertAuditEntrySchema),
 });
 export type AlertDto = z.infer<typeof AlertDtoSchema>;
+
+export const ServiceZoneSchema = z.object({
+  id: IdSchema,
+  name: z.string(),
+  status: z.enum(["ok", "unexpected_exit", "no_arrivals"]),
+  vehiclesInside: z.number().int().nonnegative(),
+  note: z.string(),
+});
+export type ServiceZone = z.infer<typeof ServiceZoneSchema>;
 
 export const OptimizedStopSchema = z.object({
   jobId: IdSchema,
@@ -73,6 +94,7 @@ export const FleetStateSchema = z.object({
   vehicles: z.array(VehicleDtoSchema),
   jobs: z.array(JobDtoSchema),
   alerts: z.array(AlertDtoSchema),
+  serviceZones: z.array(ServiceZoneSchema),
   serverTime: z.string().datetime(),
   publishedPlan: OptimizationProposalSchema.optional(),
 });

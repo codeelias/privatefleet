@@ -35,6 +35,10 @@ const ERROR_MAP: Record<string, { status: number; uiMessage: string }> = {
     status: 404,
     uiMessage: "That optimisation proposal is gone. Run a new optimisation and try again.",
   },
+  ALERT_NOT_FOUND: {
+    status: 404,
+    uiMessage: "That alert was already handled. Refresh the list.",
+  },
 };
 
 export function buildApp(config: AppConfig): {
