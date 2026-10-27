@@ -86,6 +86,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [mapFailed, setMapFailed] = useState(false);
+  const [mapStatus, setMapStatus] = useState("loading tiles");
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -105,15 +106,44 @@ export function MapCanvas({ state }: { state: FleetState }) {
       // and the demo remains fully usable (docs: demo resilience).
       console.error("MapLibre init failed - schematic fallback active", err);
       setMapFailed(true);
+      setMapStatus("no WebGL - schematic view");
       return;
     }
     map.on("error", (event) => {
       console.error("MapLibre runtime error - schematic fallback active", event.error);
       setMapFailed(true);
+      setMapStatus("tile error - schematic view");
+    });
+    map.on("load", () => {
+      setMapStatus("tiles loaded");
+    });
+    map.on("idle", () => {
+      const canvas = map.getCanvas();
+      setMapStatus(`tiles rendering (${canvas.width}x${canvas.height})`);
+    });
+    // Zero-size creation race: ensure the canvas matches its container
+    // after the first layout, and on any later resize (HMR, drawers).
+    const raf = requestAnimationFrame(() => map.resize());
+    const observer = new ResizeObserver(() => map.resize());
+    observer.observe(containerRef.current);
+    // The dark style references a missing sprite image ("wood-pattern");
+    // substitute a neutral placeholder so the console stays clean.
+    map.on("styleimagemissing", (event) => {
+      const placeholder = document.createElement("canvas");
+      placeholder.width = 2;
+      placeholder.height = 2;
+      const context = placeholder.getContext("2d");
+      if (context) {
+        context.fillStyle = "#334155";
+        context.fillRect(0, 0, 2, 2);
+        map.addImage(event.id, context.getImageData(0, 0, 2, 2));
+      }
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     mapRef.current = map;
     return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
       map.remove();
       mapRef.current = null;
     };
@@ -134,7 +164,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
             }}
             aria-hidden="true"
           />
-          <div ref={containerRef} className="absolute inset-0" />
+          <div ref={containerRef} className="absolute inset-0 bg-[#0B1220]" />
           {jobs.map((job) => {
             const pickup = job.stops.find((s) => s.stopType === "pickup");
             if (!pickup) {
@@ -177,9 +207,13 @@ export function MapCanvas({ state }: { state: FleetState }) {
           <p className="absolute bottom-2 right-3 z-10 text-[10px] text-text-secondary">
             Grey ghost pins show last known position - never imply a fresh GPS fix.
           </p>
-          {mapFailed && (
+          {mapFailed ? (
             <p className="absolute bottom-2 left-3 z-10 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
               Map offline - schematic view active. Dispatch stays fully usable.
+            </p>
+          ) : (
+            <p className="absolute bottom-2 left-3 z-10 text-[10px] text-text-secondary">
+              {mapStatus}
             </p>
           )}
         </div>
