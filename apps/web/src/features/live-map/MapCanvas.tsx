@@ -21,13 +21,33 @@ import "leaflet/dist/leaflet.css";
 import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
 
 const LONDON = { lng: -0.107, lat: 51.517 };
-// Key-free providers only (see ADR-0010).
+// MapTiler is preferred when a key is configured (VITE_MAPTILER_KEY);
+// otherwise the key-free providers below keep the demo alive.
+const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_KEY as string | undefined) ?? "";
+const MAPTILER_ATTRIBUTION =
+  '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; OpenStreetMap contributors';
+const OSM_RASTER = {
+  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  attribution: "&copy; OpenStreetMap contributors",
+  name: "OSM",
+} as const;
+const MAPTILER_RASTER = {
+  url: `https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`,
+  attribution: MAPTILER_ATTRIBUTION,
+  name: "MapTiler basic",
+} as const;
 const VECTOR_STYLES = [
+  ...(MAPTILER_KEY
+    ? [
+        {
+          url: `https://api.maptiler.com/maps/basic-v2/style.json?key=${MAPTILER_KEY}`,
+          name: "MapTiler basic",
+        },
+      ]
+    : []),
   { url: "https://tiles.openfreemap.org/styles/bright", name: "OpenFreeMap bright" },
   { url: "https://tiles.openfreemap.org/styles/liberty", name: "OpenFreeMap liberty" },
 ] as const;
-const RASTER_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const RASTER_ATTRIBUTION = "&copy; OpenStreetMap contributors";
 
 // Panning is restricted to Greater London (south-west / north-east).
 const LONDON_BOUNDS: [[number, number], [number, number]] = [
@@ -115,6 +135,11 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [vectorFailed, setVectorFailed] = useState(false);
   const [vectorProvider, setVectorProvider] = useState<string>(VECTOR_STYLES[0].name);
+  const [rasterProvider, setRasterProvider] = useState<string>(
+    MAPTILER_KEY ? MAPTILER_RASTER.name : OSM_RASTER.name,
+  );
+  const [mapTilerStatus, setMapTilerStatus] = useState<number | null>(null);
+  const mapTilerStatusRef = useRef<number | null>(null);
   const [tileCount, setTileCount] = useState(0);
   const [tilesFailed, setTilesFailed] = useState(false);
   const [ready, setReady] = useState(false);
@@ -142,23 +167,63 @@ export function MapCanvas({ state }: { state: FleetState }) {
       maxBoundsViscosity: 0.8,
     });
     map.attributionControl.setPrefix(false);
-    const layer = L.tileLayer(RASTER_URL, {
-      maxZoom: 19,
-      attribution: RASTER_ATTRIBUTION,
-      crossOrigin: true,
-    });
     let loaded = 0;
-    layer.on("tileload", () => {
-      loaded += 1;
-      setTileCount(loaded);
-      setTilesFailed(false);
-    });
-    layer.on("tileerror", () => {
-      if (loaded === 0) {
-        setTilesFailed(true);
+    let swapped = false;
+    let cancelled = false;
+    let active: L.TileLayer | undefined;
+
+    const attach = (provider: { url: string; attribution: string; name: string }, primary: boolean): void => {
+      if (cancelled) {
+        return;
       }
-    });
-    layer.addTo(map);
+      const layer = L.tileLayer(provider.url, {
+        maxZoom: 19,
+        attribution: provider.attribution,
+        crossOrigin: true,
+      });
+      layer.on("tileload", () => {
+        loaded += 1;
+        setTileCount(loaded);
+        setTilesFailed(false);
+        setRasterProvider(provider.name);
+      });
+      layer.on("tileerror", () => {
+        if (primary && MAPTILER_KEY && !swapped) {
+          swapped = true;
+          layer.remove();
+          loaded = 0;
+          setRasterProvider(`${OSM_RASTER.name} fallback`);
+          attach(OSM_RASTER, false);
+        } else if (loaded === 0) {
+          setTilesFailed(true);
+        }
+      });
+      layer.addTo(map);
+      active = layer;
+    };
+
+    // Validate a configured key BEFORE showing MapTiler tiles: a
+    // restricted key answers 403 with a placeholder PNG that <img>
+    // still decodes, which would silently put a "get a valid key"
+    // watermark on the demo map.
+    if (MAPTILER_KEY) {
+      fetch(`https://api.maptiler.com/maps/basic-v2/0/0/0.png?key=${MAPTILER_KEY}`)
+        .then((res) => {
+          mapTilerStatusRef.current = res.status;
+          setMapTilerStatus(res.status);
+        })
+        .catch(() => {
+          mapTilerStatusRef.current = 0;
+          setMapTilerStatus(0);
+        })
+        .finally(() => {
+          const usable = mapTilerStatusRef.current === 200;
+          attach(usable ? MAPTILER_RASTER : OSM_RASTER, usable);
+        });
+    } else {
+      attach(OSM_RASTER, false);
+    }
+    void active;
     const raf = requestAnimationFrame(() => map.invalidateSize());
     const observer = new ResizeObserver(() => map.invalidateSize());
     observer.observe(container);
@@ -167,6 +232,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
     L.control.zoom({ position: "bottomright" }).addTo(map);
     leafletRef.current = map;
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
       observer.disconnect();
       polylinesRef.current = [];
@@ -215,9 +281,12 @@ export function MapCanvas({ state }: { state: FleetState }) {
       const message = event.error?.message ?? String(event.error);
       console.warn("MapLibre error event:", message);
       if (!map.isStyleLoaded()) {
-        if (styleIndexRef.current === 0) {
-          styleIndexRef.current = 1;
-          map.setStyle(VECTOR_STYLES[1].url);
+        if (styleIndexRef.current < VECTOR_STYLES.length - 1) {
+          styleIndexRef.current += 1;
+          const next = VECTOR_STYLES[styleIndexRef.current];
+          if (next) {
+            map.setStyle(next.url);
+          }
         } else {
           setVectorFailed(true);
         }
@@ -297,7 +366,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
     : tilesFailed
       ? "Tiles failed to load - check network"
       : tileCount > 0
-        ? `raster tiles loaded (${tileCount} tiles, OSM)`
+        ? `raster tiles loaded (${tileCount} tiles, ${rasterProvider})`
         : "loading raster tiles";
 
   return (
@@ -366,6 +435,12 @@ export function MapCanvas({ state }: { state: FleetState }) {
           ) : (
             <p className="absolute bottom-2 left-3 z-30 text-[10px] text-text-secondary">
               {status}
+            </p>
+          )}
+          {import.meta.env.DEV && mapTilerStatus !== null && mapTilerStatus !== 200 && (
+            <p className="absolute top-2 left-3 z-30 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
+              MapTiler key rejected ({mapTilerStatus}) - OSM tiles in use. Add
+              localhost:5173 to the key's allowed origins in MapTiler Cloud.
             </p>
           )}
         </div>

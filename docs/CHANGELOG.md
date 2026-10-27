@@ -9,6 +9,12 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.18 - MapTiler integration + key guard (2026-10-27)
+- MapTiler wired through `VITE_MAPTILER_KEY` (apps/web/.env.local, gitignored) for both engines: vector style `basic-v2/style.json` (with OpenFreeMap bright/liberty retries, then raster) and Leaflet raster `basic-v2/{z}/{x}/{y}.png`.
+- Diagnosis: the configured key answers 403 "Key usage restricted" with a **placeholder PNG** as the body, so `<img>` tiles still decode and render a watermark. A pre-flight `fetch` now validates the key before any MapTiler tile is attached; a non-200 key falls straight back to OSM with a dev-only amber notice naming the fix. Verified: 0 MapTiler images, 13 OSM tiles, status "raster tiles loaded (N tiles, OSM)".
+- Owner action to enable MapTiler: MapTiler Cloud > Keys > "privatefleet" > allow http://localhost:5173 (and 127.0.0.1 / LAN IP), or clear origin restrictions; no code change required afterwards.
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.17 - geographic map: correct locations, routes, and movement (2026-10-27)
 - Fixed two real bugs: `advanceVehicle` computed interpolated positions but never stored them, and `fleetState` reported `route[0]` for every vehicle - so all GPS positions were frozen at the route start. The store now keeps `dto.location` in step with the simulated fix.
 - `FleetState.routes` added to the contracts (vehicleId, driverId, GeoPoint[]); the API publishes each vehicle's route and the web map draws them as polylines (Leaflet `path.leaflet-interactive`, MapLibre geojson line layer).
