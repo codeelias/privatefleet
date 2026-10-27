@@ -12,3 +12,5 @@ Thumbs.db
 coverage/
 .figma/file.json
 .figma/text-dump.txt
+test-results/
+playwright-report/
