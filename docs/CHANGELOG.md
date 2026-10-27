@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.16 - key-free tile providers (CARTO watermark removed) (2026-10-27)
+- CARTO's raster service now returns "API KEY REQUIRED" watermarks baked into the tiles; every CARTO request has been removed from the app.
+- Default demo engine (Leaflet raster): OpenStreetMap standard tiles (`tile.openstreetmap.org`), verified 15 tiles loaded, zero CARTO requests, screenshot measures 3840 unique colours / brightness 206 / 97% lit - a bright, detailed London map. Demo-scale use is within OSM's tile policy; a production provider is an ADR-0010 revisit.
+- Vector engine (`?map=vector`, MapLibre): MapToolkit dark style (`styles.maptoolkit.org/dark.json`), verified style 200, sprites 200, `.mvt` tiles 200 - free for small commercial projects, no key. One-shot retry to OpenFreeMap liberty if the style fails, then the raster engine.
+- Removed the CARTO-specific brightness filter; OSM tiles are naturally legible.
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.15 - map visibility root cause fixed (2026-10-27)
 - The map was rendering all along but CARTO Dark Matter's streets are nearly invisible: the actual tile file measured 16 unique colours and brightness 40, so the map card averaged brightness 42 - indistinguishable from the dark grid fallback. Proven by downloading the exact tile the app renders and pixel-analysing it.
 - Fix: Leaflet is now the demo default (no WebGL dependency, CARTO Dark Matter at zoom 13) with a CSS brightness/contrast/saturation lift on the tile images; map card brightness rose 42.7 -> 99.4 with 97.9% lit pixels. Also fixed Leaflet's light-grey (#ddd) container background and themed its controls/attribution for the dark command center.

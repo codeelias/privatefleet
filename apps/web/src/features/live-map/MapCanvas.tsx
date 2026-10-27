@@ -19,9 +19,17 @@ import "leaflet/dist/leaflet.css";
 import type { FleetState, VehicleDto } from "@privatefleet/contracts";
 
 const LONDON = { lng: -0.107, lat: 51.517 };
-const VECTOR_STYLE = "https://tiles.openfreemap.org/styles/dark";
-const RASTER_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
-const RASTER_ATTRIBUTION = "&copy; OpenStreetMap contributors &copy; CARTO";
+// Key-free providers only:
+// - Vector: MapToolkit dark style (free for small commercial projects),
+//   with OpenFreeMap liberty as a one-shot retry if the style fails.
+// - Raster: OpenStreetMap standard tiles (acceptable at demo scale per
+//   their tile usage policy; revisit for production - ADR-0010).
+const VECTOR_STYLES = [
+  { url: "https://styles.maptoolkit.org/dark.json", name: "MapToolkit dark" },
+  { url: "https://tiles.openfreemap.org/styles/liberty", name: "OpenFreeMap liberty" },
+] as const;
+const RASTER_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const RASTER_ATTRIBUTION = "&copy; OpenStreetMap contributors";
 
 const BOUNDS = {
   minLat: 51.49,
@@ -100,8 +108,10 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const vectorRef = useRef<maplibregl.Map | null>(null);
   const leafletRef = useRef<L.Map | null>(null);
   const [vectorFailed, setVectorFailed] = useState(false);
+  const [vectorProvider, setVectorProvider] = useState<string>(VECTOR_STYLES[0].name);
   const [tileCount, setTileCount] = useState(0);
   const [tilesFailed, setTilesFailed] = useState(false);
+  const styleIndexRef = useRef(0);
   const useVector = forceVector() && !vectorFailed;
 
   // Raster engine (default): Leaflet + CARTO Dark Matter. DOM images,
@@ -124,8 +134,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
     });
     map.attributionControl.setPrefix(false);
     const layer = L.tileLayer(RASTER_URL, {
-      maxZoom: 20,
-      subdomains: "abcd",
+      maxZoom: 19,
       attribution: RASTER_ATTRIBUTION,
       crossOrigin: true,
     });
@@ -163,10 +172,10 @@ export function MapCanvas({ state }: { state: FleetState }) {
     try {
       map = new maplibregl.Map({
         container: containerRef.current,
-        style: VECTOR_STYLE,
+        style: VECTOR_STYLES[0].url,
         center: [LONDON.lng, LONDON.lat],
         zoom: 11.5,
-        attributionControl: false,
+        attributionControl: { compact: true },
       });
     } catch (err) {
       console.error("MapLibre init failed - raster fallback engaged", err);
@@ -177,8 +186,18 @@ export function MapCanvas({ state }: { state: FleetState }) {
       const message = event.error?.message ?? String(event.error);
       console.warn("MapLibre error event:", message);
       if (!map.isStyleLoaded()) {
-        setVectorFailed(true);
+        if (styleIndexRef.current === 0) {
+          // One retry with the secondary key-free style before giving up.
+          styleIndexRef.current = 1;
+          map.setStyle(VECTOR_STYLES[1].url);
+        } else {
+          setVectorFailed(true);
+        }
       }
+    });
+    map.on("load", () => {
+      const current = VECTOR_STYLES[styleIndexRef.current] ?? VECTOR_STYLES[0];
+      setVectorProvider(current.name);
     });
     const raf = requestAnimationFrame(() => map.resize());
     const observer = new ResizeObserver(() => map.resize());
@@ -206,11 +225,11 @@ export function MapCanvas({ state }: { state: FleetState }) {
 
   const jobs = state.jobs.filter((j) => j.status === "unassigned");
   const status = useVector
-    ? "vector tiles (OpenFreeMap)"
+    ? `vector map (${vectorProvider})`
     : tilesFailed
       ? "Tiles failed to load - check network"
       : tileCount > 0
-        ? `raster tiles loaded (${tileCount} tiles, CARTO dark)`
+        ? `raster tiles loaded (${tileCount} tiles, OSM)`
         : "loading raster tiles";
 
   return (
