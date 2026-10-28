@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Auth service (Phase 2): tenant registration, login, rotating refresh
  * tokens and access JWTs. Runs as the non-owner runtime role; identity
  * bootstrap uses SECURITY DEFINER functions so RLS stays enforced on

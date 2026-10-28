@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Phase 2 schema (docs/03, ADR-0005): tenancy-first Postgres with RLS.
  * Every operational table carries tenant_id; ids stay uuid; PostGIS
  * geometry is added by post-migration SQL (raw SQL is the approved

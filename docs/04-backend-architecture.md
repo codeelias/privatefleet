@@ -1,4 +1,4 @@
-﻿# 04 - Backend Architecture
+# 04 - Backend Architecture
 
 **Status:** Draft v1 - for approval.
 **Decisions:** [ADR-0002](adr/0002-modular-monolith.md), [ADR-0004](adr/0004-fastify.md), [ADR-0005](adr/0005-drizzle-postgis.md), [ADR-0008](adr/0008-realtime-outbox.md).

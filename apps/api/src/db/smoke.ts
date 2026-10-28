@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Postgres-mode smoke: boots the real app, logs in with the seeded
  * owner, reads the fleet snapshot and performs an idempotent assign.
  * Usage (after `pnpm db:seed`):

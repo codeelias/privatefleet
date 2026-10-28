@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Phase 2 gate tests: auth lifecycle and cross-tenant isolation.
  * Runs against the local Postgres with the non-owner app role so RLS
  * is actually exercised (docs/12, Phase 2 exit gate).

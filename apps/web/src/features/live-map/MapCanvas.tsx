@@ -52,7 +52,7 @@ function routeGeoJson(state: FleetState): GeoJSON.FeatureCollection {
     type: "FeatureCollection",
     features: state.routes.map((route) => ({
       type: "Feature",
-      properties: { vehicleId: route.vehicleId },
+      properties: { vehicleId: route.vehicleId, driverId: route.driverId ?? "" },
       geometry: {
         type: "LineString",
         coordinates: route.points.map((p) => [p.longitude, p.latitude]),
@@ -79,11 +79,15 @@ function VehiclePin({
   driverName,
   x,
   y,
+  selected,
+  onSelect,
 }: {
   vehicle: VehicleDto;
   driverName: string;
   x: number;
   y: number;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `pin-${vehicle.id}`,
@@ -92,9 +96,20 @@ function VehiclePin({
   return (
     <div
       ref={setNodeRef}
-      className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 ${
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      aria-label={`Select ${driverName} to highlight their route`}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 cursor-pointer ${
         vehicle.stale ? "stale-ghost" : ""
-      } ${isOver ? "scale-125" : ""}`}
+      } ${isOver ? "scale-125" : ""} ${selected ? "ring-2 ring-brand-primary ring-offset-2 ring-offset-command-bg rounded-full" : ""}`}
       style={{ left: `${x}px`, top: `${y}px`, transition: "left 1.8s linear, top 1.8s linear" }}
       title={`${driverName} - ${vehicle.registration} - ${
         vehicle.stale ? "last known" : vehicle.status
@@ -132,6 +147,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const [tilesFailed, setTilesFailed] = useState(false);
   const [ready, setReady] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const styleIndexRef = useRef(0);
   const useVector = useVectorEngine() && !vectorFailed;
 
@@ -234,20 +250,26 @@ export function MapCanvas({ state }: { state: FleetState }) {
     };
   }, [useVector]);
 
-  // Route polylines for the raster engine.
+  // Route polylines for the raster engine; the selected driver's route
+  // is highlighted while the others stay dimmed.
   useEffect(() => {
     const map = leafletRef.current;
     if (!map || useVector) {
       return;
     }
     polylinesRef.current.forEach((line) => line.remove());
-    polylinesRef.current = state.routes.map((route) =>
-      L.polyline(
+    polylinesRef.current = state.routes.map((route) => {
+      const selected = selectedDriverId !== null && route.driverId === selectedDriverId;
+      return L.polyline(
         route.points.map((p) => [p.latitude, p.longitude] as [number, number]),
-        { color: "#4F8CFF", weight: 3, opacity: 0.55 },
-      ).addTo(map),
-    );
-  }, [state.routes, useVector, ready]);
+        {
+          color: selected ? "#38BDF8" : "#4F8CFF",
+          weight: selected ? 5 : 3,
+          opacity: selected ? 0.95 : 0.28,
+        },
+      ).addTo(map);
+    });
+  }, [state.routes, useVector, ready, selectedDriverId]);
 
   // --- Vector engine (MapLibre) ----------------------------------------
   useEffect(() => {
@@ -303,7 +325,18 @@ export function MapCanvas({ state }: { state: FleetState }) {
         paint: {
           "line-color": "#4F8CFF",
           "line-width": 3,
-          "line-opacity": 0.55,
+          "line-opacity": 0.25,
+        },
+      });
+      map.addLayer({
+        id: "vehicle-routes-selected",
+        type: "line",
+        source: "vehicle-routes",
+        filter: ["==", ["get", "driverId"], ""],
+        paint: {
+          "line-color": "#38BDF8",
+          "line-width": 5,
+          "line-opacity": 0.95,
         },
       });
       setReady(true);
@@ -322,7 +355,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
     };
   }, [useVector]);
 
-  // Update vector route data when the fleet state changes.
+  // Update vector route data + selection highlight.
   useEffect(() => {
     const map = vectorRef.current;
     if (!map || !ready) {
@@ -332,7 +365,15 @@ export function MapCanvas({ state }: { state: FleetState }) {
     if (source) {
       source.setData(routeGeoJson(state));
     }
-  }, [state, ready]);
+    const selectedLayer = map.getLayer("vehicle-routes-selected");
+    if (selectedLayer) {
+      map.setFilter("vehicle-routes-selected", [
+        "==",
+        ["get", "driverId"],
+        selectedDriverId ?? "",
+      ]);
+    }
+  }, [state, ready, selectedDriverId]);
 
   // Project geo points to container pixels for the overlay layer.
   function project(point: GeoPoint | undefined): { x: number; y: number } | null {
@@ -358,6 +399,10 @@ export function MapCanvas({ state }: { state: FleetState }) {
   // revision forces a re-projection after pan/zoom; ready gates overlays.
   void revision;
   const jobs = state.jobs.filter((j) => j.status === "unassigned");
+  const selectedRouteMissing =
+    selectedDriverId !== null &&
+    !state.routes.some((r) => r.driverId === selectedDriverId && r.points.length >= 2);
+  const routeGeometryMissing = state.routes.length === 0 || selectedRouteMissing;
   const status = useVector
     ? `vector map (${vectorProvider})`
     : tilesFailed
@@ -419,12 +464,24 @@ export function MapCanvas({ state }: { state: FleetState }) {
                 driverName={driver?.fullName ?? "Driver"}
                 x={pos.x}
                 y={pos.y}
+                selected={selectedDriverId !== null && vehicle.driverId === selectedDriverId}
+                onSelect={() =>
+                  setSelectedDriverId((prev) =>
+                    prev === vehicle.driverId ? null : (vehicle.driverId ?? null),
+                  )
+                }
               />
             );
           })}
           <p className="absolute bottom-2 right-3 z-30 text-[10px] text-text-secondary">
             Grey ghost pins show last known position - never imply a fresh GPS fix.
           </p>
+          {routeGeometryMissing && (
+            <p className="absolute bottom-9 left-3 z-30 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
+              Route geometry unavailable - showing vehicle positions only. Demo
+              routes require the seeded scenario.
+            </p>
+          )}
           {tilesFailed ? (
             <p className="absolute bottom-2 left-3 z-30 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
               {status}
@@ -445,3 +502,4 @@ export function MapCanvas({ state }: { state: FleetState }) {
     </section>
   );
 }
+

@@ -1,4 +1,4 @@
-﻿# 12 - Testing & Quality
+# 12 - Testing & Quality
 
 **Status:** Draft v1 - for approval.
 **Related:** [03.4](03-monorepo-layout.md) (tooling), [08](08-domain-model-and-events.md) (what to test), [14](14-roadmap-and-gates.md) (gates).

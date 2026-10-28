@@ -1,4 +1,4 @@
-﻿# ADR-0003 - Contracts-first shared package (zod + TypeScript)
+# ADR-0003 - Contracts-first shared package (zod + TypeScript)
 
 **Status:** accepted (2026-10-27)
 

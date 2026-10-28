@@ -1,4 +1,4 @@
-﻿# UI/UX Engineering Handoff - Integrated
+# UI/UX Engineering Handoff - Integrated
 
 **Source:** user-provided handoff document ("Fleet Operations SaaS - UI/UX Handoff") + the Figma master design (`fnFeIyZr87XvelShaqyIVz`), extracted into [design-extract.md](design-extract.md).
 **Status:** Draft v1.4 - integrated into the documentation package. This document is normative for Phase 1; where it conflicts with the Figma extraction or earlier documents, see [Section 11 Reconciliation](#11-reconciliation-deltas) and [Section 12 Open questions](#12-open-questions-for-sign-off).

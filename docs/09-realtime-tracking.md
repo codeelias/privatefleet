@@ -1,4 +1,4 @@
-﻿# 09 - Real-Time Tracking
+# 09 - Real-Time Tracking
 
 **Status:** Draft v1 - for approval.
 **Decisions:** [ADR-0008](adr/0008-realtime-outbox.md).

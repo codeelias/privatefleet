@@ -1,4 +1,4 @@
-﻿# PrivateFleet - Engineering Documentation
+# PrivateFleet - Engineering Documentation
 
 Working title for the white-label fleet dispatch & tracking platform.
 

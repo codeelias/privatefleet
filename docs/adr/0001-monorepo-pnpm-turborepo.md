@@ -1,4 +1,4 @@
-﻿# ADR-0001 - Monorepo with pnpm workspaces + Turborepo
+# ADR-0001 - Monorepo with pnpm workspaces + Turborepo
 
 **Status:** accepted (2026-10-27)
 

@@ -1,4 +1,4 @@
-﻿# 06 - Driver App Architecture
+# 06 - Driver App Architecture
 
 **Status:** Draft v1 - for approval.
 **Decisions:** [ADR-0009](adr/0009-expo-driver-app.md).

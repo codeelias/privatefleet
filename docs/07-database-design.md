@@ -1,4 +1,4 @@
-﻿# 07 - Database Design
+# 07 - Database Design
 
 **Status:** Draft v1 - for approval.
 **Decisions:** [ADR-0005](adr/0005-drizzle-postgis.md).

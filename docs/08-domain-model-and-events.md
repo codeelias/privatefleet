@@ -1,4 +1,4 @@
-﻿# 08 - Domain Model & Events
+# 08 - Domain Model & Events
 
 **Status:** Draft v1 - for approval.
 **Related:** [07](07-database-design.md) (schema), [04](04-backend-architecture.md) (where this lives), [09](09-realtime-tracking.md) (delivery).

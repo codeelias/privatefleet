@@ -1,4 +1,4 @@
-﻿# 02 - Architecture Overview
+# 02 - Architecture Overview
 
 **Status:** Draft v1 - for approval.
 **Depends on:** [01 - Vision & Principles](01-vision-and-principles.md).

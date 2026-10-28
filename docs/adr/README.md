@@ -1,4 +1,4 @@
-﻿# Architecture Decision Records
+# Architecture Decision Records
 
 Each record captures a significant, hard-to-reverse decision: context, decision, consequences, and alternatives considered. Statuses: `proposed` (open in a PR) -> `accepted` / `superseded`.
 

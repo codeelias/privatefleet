@@ -4,7 +4,7 @@
  * wait for the port before connecting. No-op on CI (Linux) where the
  * service is managed externally.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import net from "node:net";
 
 function sleep(ms: number): Promise<void> {
@@ -48,6 +48,14 @@ export async function ensureDatabase(url: string): Promise<void> {
       ],
       { stdio: "ignore", timeout: 90_000 },
     );
+    // WSL shuts a distro down when its launching session ends, which would
+    // kill Postgres mid-test. Detach a keeper process for this runtime.
+    const keeper = spawn(
+      "wsl",
+      ["-d", distro, "-u", "root", "--", "bash", "-c", "exec sleep 100000"],
+      { detached: true, stdio: "ignore" },
+    );
+    keeper.unref();
   }
   for (let attempt = 0; attempt < 30; attempt += 1) {
     if (await canConnect(url)) {
@@ -59,3 +67,4 @@ export async function ensureDatabase(url: string): Promise<void> {
     `database unreachable at ${new URL(url).host}: is Postgres running? (pnpm db:up)`,
   );
 }
+

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Phase 2 fleet routes: same URLs and response shapes as the demo
  * surface, now authenticated, tenant-scoped and idempotent. Every
  * command writes job_events + outbox in the same transaction and

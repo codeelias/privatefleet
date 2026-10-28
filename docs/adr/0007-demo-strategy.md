@@ -1,4 +1,4 @@
-﻿# ADR-0007 - Demo = production API with in-memory repos + simulator
+# ADR-0007 - Demo = production API with in-memory repos + simulator
 
 **Status:** accepted (2026-10-27)
 

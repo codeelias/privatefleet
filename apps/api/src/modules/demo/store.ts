@@ -28,6 +28,7 @@ import {
   JOB_SEEDS,
   SIMULATOR_ROUTES,
 } from "./data.js";
+import { ROUTE_GEOMETRY } from "./route-geometry.js";
 
 const STALE_AFTER_MS = 60_000;
 
@@ -131,7 +132,9 @@ export class DemoStore {
           driverId: seed.id,
           stale: false,
         },
-        route: SIMULATOR_ROUTES[seed.vehicleId] ?? [seed.start],
+        // Precomputed road-following demo geometry (OSRM fixtures); the
+        // simulator and the rendered route share this exact path.
+        route: ROUTE_GEOMETRY[seed.vehicleId] ?? SIMULATOR_ROUTES[seed.vehicleId] ?? [seed.start],
         routeIndex: 0,
         sequenceNo: 0,
         lastCapturedAt: now,
@@ -706,7 +709,10 @@ export class DemoStore {
       return undefined;
     }
     const route = record.route;
-    record.routeIndex = (record.routeIndex + 0.02) % (route.length - 1);
+    // One loop per ~450 ticks (15 minutes at a 2s cadence). routeIndex is
+    // in point units, so the step scales with geometry density.
+    const step = Math.max(0.05, (route.length - 1) / 450);
+    record.routeIndex = (record.routeIndex + step) % (route.length - 1);
     const from = route[Math.floor(record.routeIndex)];
     const to = route[Math.floor(record.routeIndex) + 1];
     if (!from || !to) {
@@ -770,3 +776,6 @@ export class DemoStore {
     };
   }
 }
+
+
+

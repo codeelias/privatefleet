@@ -1,4 +1,4 @@
-﻿# ADR-0006 - React web stack (Vite, TanStack, Zustand, Tailwind, MapLibre)
+# ADR-0006 - React web stack (Vite, TanStack, Zustand, Tailwind, MapLibre)
 
 **Status:** accepted (2026-10-27)
 

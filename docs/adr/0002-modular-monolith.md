@@ -1,4 +1,4 @@
-﻿# ADR-0002 - Modular monolith over microservices
+# ADR-0002 - Modular monolith over microservices
 
 **Status:** accepted (2026-10-27)
 

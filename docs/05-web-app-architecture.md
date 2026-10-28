@@ -1,4 +1,4 @@
-﻿# 05 - Web App Architecture (Dispatcher Dashboard)
+# 05 - Web App Architecture (Dispatcher Dashboard)
 
 **Status:** Draft v1 - for approval.
 **Decisions:** [ADR-0006](adr/0006-react-stack.md), [ADR-0010](adr/0010-map-tiles.md).

@@ -1,4 +1,4 @@
-﻿# 03 - Monorepo Layout
+# 03 - Monorepo Layout
 
 **Status:** Draft v1 - for approval.
 **Decisions:** [ADR-0001](adr/0001-monorepo-pnpm-turborepo.md) (monorepo), [ADR-0002](adr/0002-modular-monolith.md) (modular monolith), [ADR-0003](adr/0003-contracts-first.md) (contracts package).

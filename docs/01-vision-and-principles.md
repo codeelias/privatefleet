@@ -1,4 +1,4 @@
-﻿# 01 - Vision & Principles
+# 01 - Vision & Principles
 
 **Status:** Draft v1 - for approval.
 **Applies to:** every document in this package.

@@ -1,4 +1,4 @@
-﻿# ADR-0004 - Fastify for the API
+# ADR-0004 - Fastify for the API
 
 **Status:** accepted (2026-10-27)
 

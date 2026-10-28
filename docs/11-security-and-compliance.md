@@ -1,4 +1,4 @@
-﻿# 11 - Security & Compliance
+# 11 - Security & Compliance
 
 **Status:** Draft v1 - for approval.
 **Related:** [07.6](07-database-design.md) (RLS), [09.4](09-realtime-tracking.md) (socket authz), [06.4](06-driver-app-architecture.md) (offline commands).

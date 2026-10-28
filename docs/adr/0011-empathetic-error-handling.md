@@ -1,4 +1,4 @@
-﻿# ADR-0011 - Empathetic Error Handling
+# ADR-0011 - Empathetic Error Handling
 
 **Status:** accepted (2026-10-27)
 

@@ -1,4 +1,4 @@
-﻿# 10 - Optimization Integration (OSRM + VROOM)
+# 10 - Optimization Integration (OSRM + VROOM)
 
 **Status:** Draft v1 - for approval.
 **Related:** [07](07-database-design.md) (`optimization_runs`), [08](08-domain-model-and-events.md) (route publication), [14](14-roadmap-and-gates.md) (Phase 5; deterministic seeds in Phase 1).

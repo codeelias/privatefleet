@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Seeds a tenant with the Phase 1 demo dataset so the Phase 2 backend
  * has realistic data for development and integration tests. Runs as the
  * migrator role (RLS bypassed) - never as the runtime app role.
@@ -14,6 +14,8 @@ export interface SeedOptions {
   tenantName: string;
   email: string;
   password: string;
+  /** Deterministic slug for repeatable environments (E2E, staging). */
+  slug?: string;
 }
 
 export interface SeedResult {
@@ -41,10 +43,22 @@ export async function seedTenant(
 ): Promise<SeedResult> {
   const tenantId = randomUUID();
   const userId = randomUUID();
-  const slug = `${slugify(options.tenantName)}-${randomUUID().slice(0, 6)}`;
+  const slug = options.slug ?? `${slugify(options.tenantName)}-${randomUUID().slice(0, 6)}`;
   const passwordHash = await argonHash(options.password);
 
   const sql = handle.sql;
+  if (options.slug) {
+    const existing = (await sql`SELECT id FROM tenants WHERE slug = ${options.slug}`) as unknown as Array<{
+      id: string;
+    }>;
+    for (const tenant of existing) {
+      await sql`DELETE FROM outbox WHERE tenant_id = ${tenant.id}`;
+      await sql`DELETE FROM idempotency_keys WHERE tenant_id = ${tenant.id}`;
+      await sql`DELETE FROM refresh_tokens WHERE tenant_id = ${tenant.id}`;
+      await sql`DELETE FROM demo_scenarios WHERE tenant_id = ${tenant.id}`;
+      await sql`DELETE FROM tenants WHERE id = ${tenant.id}`;
+    }
+  }
   await sql`
     INSERT INTO tenants (id, name, slug, theme)
     VALUES (${tenantId}, ${options.tenantName}, ${slug},
@@ -144,5 +158,7 @@ if (process.argv[1] && process.argv[1].endsWith("seed.ts")) {
     process.exitCode = 1;
   });
 }
+
+
 
 

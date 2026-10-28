@@ -20,6 +20,8 @@ import { AssignmentModal } from "../features/live-map/AssignmentModal";
 import { MapCanvas } from "../features/live-map/MapCanvas";
 import { OptimizationScreen } from "../features/optimization/OptimizationScreen";
 import { api } from "../shared/api/client";
+import { LoginScreen } from "../features/auth/LoginScreen";
+import { useSession } from "../shared/auth/useSession";
 import { createFleetSocket } from "../shared/realtime/socket";
 import { KpiCard } from "../shared/ui/KpiCard";
 import { Panel } from "../shared/ui/Panel";
@@ -69,7 +71,13 @@ function todayLabel(): string {
   }).format(new Date());
 }
 
-export function App() {
+function Dashboard({
+  tenantName,
+  onSignOut,
+}: {
+  tenantName?: string;
+  onSignOut?: (() => void) | undefined;
+}) {
   const queryClient = useQueryClient();
   const [screen, setScreen] = useState<ScreenId>("live");
   const [assignJobId, setAssignJobId] = useState<string | null>(null);
@@ -176,12 +184,23 @@ export function App() {
               <p className="text-[11px] font-bold uppercase tracking-widest text-text-secondary">
                 Fleet Operations
               </p>
-              <p className="text-sm font-bold">Northstar</p>
+              <p data-testid="tenant-name" className="text-sm font-bold">
+                {tenantName ?? "Northstar"}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-4">
             <span className="hidden text-sm text-text-secondary sm:block">{todayLabel()}</span>
             <StatusChip tone="success" label="Live" pulse />
+            {onSignOut && (
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="rounded-lg border border-command-border px-3 py-1.5 text-xs font-semibold text-text-secondary hover:text-text-primary"
+              >
+                Sign out
+              </button>
+            )}
           </div>
         </header>
 
@@ -404,5 +423,35 @@ function VehicleDetails({ state, vehicleId }: { state: FleetState; vehicleId: st
         </p>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Composition gate (docs/05.4): demo mode opens the fleet interface
+ * directly (ADR-0007); production mode requires a valid session and
+ * renders the login screen otherwise.
+ */
+export function App() {
+  const { state, login, logout } = useSession();
+
+  if (state.kind === "booting") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-command-bg text-text-secondary">
+        <p role="status">Loading workspace...</p>
+      </main>
+    );
+  }
+
+  if (state.kind === "anonymous") {
+    return <LoginScreen onLogin={login} />;
+  }
+
+  const authenticated = state.kind === "authenticated";
+  return (
+    <Dashboard
+      {...(authenticated ? { tenantName: state.session.tenant.name } : {})}
+      {...(authenticated ? { onSignOut: () => void logout() } : {})}
+    />
   );
 }

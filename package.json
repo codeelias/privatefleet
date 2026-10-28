@@ -10,6 +10,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "e2e": "pnpm --filter @privatefleet/e2e test",
+    "e2e:auth": "pnpm --filter @privatefleet/e2e exec playwright test -c playwright.auth.config.ts",
     "roi": "tsx scripts/generate-roi.ts",
     "db:up": "pwsh -NoProfile -File scripts/db-up.ps1",
     "db:migrate": "pnpm --filter @privatefleet/api db:migrate",
@@ -20,4 +21,5 @@
     "turbo": "^2.3.3"
   }
 }
+
 

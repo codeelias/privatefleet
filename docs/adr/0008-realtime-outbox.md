@@ -1,4 +1,4 @@
-﻿# ADR-0008 - Outbox for business events; telemetry fast path
+# ADR-0008 - Outbox for business events; telemetry fast path
 
 **Status:** accepted (2026-10-27)
 

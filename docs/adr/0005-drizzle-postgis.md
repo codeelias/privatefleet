@@ -1,4 +1,4 @@
-﻿# ADR-0005 - Drizzle ORM + raw SQL for PostGIS
+# ADR-0005 - Drizzle ORM + raw SQL for PostGIS
 
 **Status:** accepted (2026-10-27)
 

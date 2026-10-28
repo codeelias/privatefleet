@@ -1,4 +1,4 @@
-﻿# Figma Design Extract - Fleet Operations UI/UX Master Design
+# Figma Design Extract - Fleet Operations UI/UX Master Design
 
 **Source:** `Fleet Operations - UI UX Master Design` (Figma file `fnFeIyZr87XvelShaqyIVz`, version `2415061949869325185`), extracted via the Figma REST API.
 **Raw artifacts:** `.figma/file.json` (full API response) and `.figma/text-dump.txt` (generated text extraction) - kept as scratch for re-extraction; this file is the curated, reviewable version.
