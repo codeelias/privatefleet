@@ -9,6 +9,16 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.21 - Phase 2 foundation: Postgres, RLS, auth (2026-10-28)
+- Local infrastructure: PostgreSQL 16 + PostGIS 3.4 provisioned in WSL Ubuntu-24.04 (`scripts/db-up.ps1`, `pnpm db:up`); two connection roles per the approved RLS design - `privatefleet` (owner, migrations/seeds) and `privatefleet_app` (non-owner, runtime, so RLS is actually enforced). `ensure-db` self-heals the WSL idle shutdown at every DB entry point (migrate, tests).
+- Schema (Drizzle, ADR-0005): tenants, users, drivers, vehicles, jobs, job_stops, job_events, alerts, outbox, refresh_tokens, idempotency_keys, demo_scenarios - tenant_id on every operational table, composite unique keys (tenant+reference, tenant+email, tenant+key).
+- Post-migration SQL: generated PostGIS geometry columns + GiST indexes for vehicles and stops, RLS policies for all tenant tables (USING + WITH CHECK), and SECURITY DEFINER auth bootstrap functions with a minimal surface (tenant by slug, user by email/id, refresh lookup).
+- Auth module: register (tenant + owner), login (tenantSlug + email + argon2id), refresh with rotation and replay rejection, logout, JWT access tokens (HS256, 15 min, iss privatefleet) and `/v1/auth/me` behind a bearer guard. `/readyz` and `/v1/meta` now report repositoryMode.
+- Demo mode is untouched and remains the default (`REPOSITORY_MODE=demo`); postgres mode activates with env vars documented in `apps/api/.env.example` (loaded via Node 22 loadEnvFile).
+- Phase 2 gate progress: 5/5 integration tests pass against real Postgres with the app role - registration claims, wrong-password 401, refresh rotation + replay rejection, /me guard, and cross-tenant RLS probes (invisible foreign rows, blocked WITH CHECK insert). Repository/lifecycle/idempotency tests and CI Postgres service are the next stage.
+- Note: `withTenant` runs real Drizzle transactions with `app.tenant_id`; Drizzle passes text params verbatim, so timestamps are sent as ISO strings (Date params break postgres.js Bind).
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.20 - MapTiler key kept inactive until unrestricted (2026-10-28)
 - The configured MapTiler key answers 403 "Key usage restricted" for localhost; the key line in gitignored `apps/web/.env.local` is now commented out, so the demo makes zero MapTiler requests (no 403 console noise, no pre-flight probe). Verified: 0 maptiler requests, 15 OSM tiles, no key warning badge, vector path goes straight to OpenFreeMap bright.
 - Re-enable by fixing the key's allowed HTTP origins in MapTiler Cloud and uncommenting the line - the app validates before use either way.

@@ -1,3 +1,4 @@
+import "./env.js";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { startSimulator } from "./modules/demo/simulator.js";
@@ -11,7 +12,14 @@ try {
     startSimulator(demo.store, demo.bus);
     app.log.info("demo simulator started (2s tick)");
   }
+  app.log.info({ repositoryMode: config.repositoryMode }, "api ready");
 } catch (err) {
   app.log.error(err);
   process.exit(1);
+}
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    void app.close().then(() => process.exit(0));
+  });
 }

@@ -1,0 +1,101 @@
+-- Post-migration SQL (idempotent): PostGIS columns/indexes + RLS.
+-- Applied after drizzle migrations by src/db/apply-post-migration.ts.
+-- Secrets/roles are created by scripts/db-setup.sql (superuser).
+
+-- --- PostGIS: generated geometry from lat/lng, spatial indexes -------
+ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)
+  GENERATED ALWAYS AS (
+    CASE
+      WHEN latitude IS NOT NULL AND longitude IS NOT NULL
+      THEN ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)
+    END
+  ) STORED;
+
+ALTER TABLE job_stops ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)
+  GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)) STORED;
+
+CREATE INDEX IF NOT EXISTS vehicles_location_gix ON vehicles USING GIST (location);
+CREATE INDEX IF NOT EXISTS job_stops_location_gix ON job_stops USING GIST (location);
+CREATE INDEX IF NOT EXISTS vehicles_tenant_status_idx ON vehicles (tenant_id, status);
+CREATE INDEX IF NOT EXISTS outbox_unpublished_scan_idx ON outbox (created_at) WHERE published_at IS NULL;
+
+-- --- Row Level Security ----------------------------------------------
+-- Runtime connects as privatefleet_app (non-owner), so these policies
+-- apply; the migrator role owns the tables and is used only for DDL/seed.
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenants_tenant_isolation ON tenants;
+CREATE POLICY tenants_tenant_isolation ON tenants
+  USING (id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'users', 'vehicles', 'drivers', 'jobs', 'job_stops', 'job_events',
+    'alerts', 'outbox', 'refresh_tokens', 'idempotency_keys', 'demo_scenarios'
+  ]
+  LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', t || '_tenant_isolation', t);
+    EXECUTE format(
+      'CREATE POLICY %I ON %I USING (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid) WITH CHECK (tenant_id = nullif(current_setting(''app.tenant_id'', true), '''')::uuid)',
+      t || '_tenant_isolation', t
+    );
+  END LOOP;
+END
+$$;
+
+-- --- Grants for the runtime role -------------------------------------
+GRANT USAGE ON SCHEMA public TO privatefleet_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO privatefleet_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO privatefleet_app;
+
+-- --- Auth bootstrap functions (SECURITY DEFINER) ---------------------
+-- Login must resolve a tenant/user before a tenant context exists.
+-- These functions expose only the minimum identity surface; every
+-- operational table stays behind RLS.
+CREATE OR REPLACE FUNCTION auth_tenant_by_slug(p_slug text)
+RETURNS TABLE (id uuid, name text, slug text, theme jsonb)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT t.id, t.name, t.slug, t.theme FROM tenants t WHERE t.slug = p_slug LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION auth_user_by_email(p_tenant uuid, p_email text)
+RETURNS TABLE (id uuid, tenant_id uuid, email text, password_hash text, role user_role)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role
+  FROM users u WHERE u.tenant_id = p_tenant AND u.email = p_email LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION auth_user_by_id(p_user uuid)
+RETURNS TABLE (id uuid, tenant_id uuid, email text, password_hash text, role user_role)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT u.id, u.tenant_id, u.email, u.password_hash, u.role
+  FROM users u WHERE u.id = p_user LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION auth_refresh_lookup(p_hash text)
+RETURNS TABLE (id uuid, tenant_id uuid, user_id uuid, expires_at timestamptz, revoked_at timestamptz)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT r.id, r.tenant_id, r.user_id, r.expires_at, r.revoked_at
+  FROM refresh_tokens r WHERE r.token_hash = p_hash LIMIT 1;
+$$;
+
+GRANT EXECUTE ON FUNCTION auth_tenant_by_slug(text) TO privatefleet_app;
+GRANT EXECUTE ON FUNCTION auth_user_by_email(uuid, text) TO privatefleet_app;
+GRANT EXECUTE ON FUNCTION auth_user_by_id(uuid) TO privatefleet_app;
+GRANT EXECUTE ON FUNCTION auth_refresh_lookup(text) TO privatefleet_app;

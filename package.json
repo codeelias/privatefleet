@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "privatefleet",
   "private": true,
   "packageManager": "pnpm@12.15.0",
@@ -10,10 +10,14 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "e2e": "pnpm --filter @privatefleet/e2e test",
-    "roi": "tsx scripts/generate-roi.ts"
+    "roi": "tsx scripts/generate-roi.ts",
+    "db:up": "pwsh -NoProfile -File scripts/db-up.ps1",
+    "db:migrate": "pnpm --filter @privatefleet/api db:migrate",
+    "db:seed": "pnpm --filter @privatefleet/api exec tsx src/db/seed.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.2",
     "turbo": "^2.3.3"
   }
 }
+

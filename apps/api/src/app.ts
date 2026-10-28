@@ -9,13 +9,21 @@
 import Fastify from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "./config.js";
+import { closeDb, createDb, type DbHandle } from "./db/client.js";
 import { createRealtimeBus, type RealtimeBus } from "./lib/realtime.js";
+import { AuthError, AuthService } from "./modules/auth/service.js";
+import { registerAuthRoutes } from "./modules/auth/routes.js";
 import { registerDemoRoutes } from "./modules/demo/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
 export interface DemoContext {
   store: DemoStore;
   bus: RealtimeBus;
+}
+
+export interface PostgresContext {
+  db: DbHandle;
+  auth: AuthService;
 }
 
 const ERROR_MAP: Record<string, { status: number; uiMessage: string }> = {
@@ -56,8 +64,9 @@ const ERROR_MAP: Record<string, { status: number; uiMessage: string }> = {
 export function buildApp(config: AppConfig): {
   app: ReturnType<typeof Fastify>;
   demo: DemoContext | undefined;
+  postgres: PostgresContext | undefined;
 } {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: { level: config.logLevel } });
 
   app.setErrorHandler((err, _request, reply) => {
     if (err instanceof z.ZodError) {
@@ -71,6 +80,24 @@ export function buildApp(config: AppConfig): {
         code: "VALIDATION_ERROR",
         detail: `${path}: ${message}`,
         uiMessage: `Check the highlighted fields and try again (${path}).`,
+      });
+    }
+    if (err instanceof AuthError) {
+      const status =
+        err.code === "TENANT_NOT_FOUND" ? 404 : err.code === "REFRESH_INVALID" ? 401 : 401;
+      const uiMessage =
+        err.code === "TENANT_NOT_FOUND"
+          ? "That workspace was not found. Check the name and try again."
+          : err.code === "REFRESH_INVALID"
+            ? "Your session has expired. Please sign in again."
+            : "Email or password is incorrect.";
+      return reply.status(status).send({
+        type: `https://privatefleet.example/errors/${err.code.toLowerCase()}`,
+        title: status === 404 ? "Not found" : "Authentication failed",
+        status,
+        code: err.code,
+        detail: err.message,
+        uiMessage,
       });
     }
     const code = err instanceof Error ? err.message : "";
@@ -101,6 +128,7 @@ export function buildApp(config: AppConfig): {
   app.get("/readyz", async () => ({
     status: "ok",
     demoMode: config.demoMode,
+    repositoryMode: config.repositoryMode,
     version: config.version,
   }));
 
@@ -108,15 +136,29 @@ export function buildApp(config: AppConfig): {
     name: config.name,
     version: config.version,
     demoMode: config.demoMode,
+    repositoryMode: config.repositoryMode,
   }));
 
   let demo: DemoContext | undefined;
-  if (config.demoMode) {
+  let postgres: PostgresContext | undefined;
+
+  if (config.repositoryMode === "postgres") {
+    if (!config.databaseUrl) {
+      throw new Error("postgres repository mode requires DATABASE_URL");
+    }
+    const db = createDb(config.databaseUrl);
+    const auth = new AuthService(config, db);
+    registerAuthRoutes(app, auth);
+    app.addHook("onClose", async () => {
+      await closeDb(db);
+    });
+    postgres = { db, auth };
+  } else {
     const store = new DemoStore("morning-rush");
     const bus = createRealtimeBus(app.server);
     registerDemoRoutes(app, store, bus);
     demo = { store, bus };
   }
 
-  return { app, demo };
+  return { app, demo, postgres };
 }

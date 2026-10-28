@@ -94,6 +94,57 @@ export const RoutePathSchema = z.object({
 });
 export type RoutePath = z.infer<typeof RoutePathSchema>;
 
+// --- Phase 2 auth contracts (docs/04, ADR-0005 auth decision) ---------
+
+export const TenantSummarySchema = z.object({
+  id: IdSchema,
+  slug: z.string(),
+  name: z.string(),
+});
+export type TenantSummary = z.infer<typeof TenantSummarySchema>;
+
+export const AuthUserSchema = z.object({
+  id: IdSchema,
+  email: z.string().email(),
+  role: z.enum(["owner", "dispatcher", "admin"]),
+});
+export type AuthUser = z.infer<typeof AuthUserSchema>;
+
+export const AuthTokensSchema = z.object({
+  accessToken: z.string(),
+  refreshToken: z.string(),
+  expiresIn: z.number().int().positive(),
+  tokenType: z.literal("Bearer"),
+});
+export type AuthTokens = z.infer<typeof AuthTokensSchema>;
+
+export const AuthSessionSchema = z.object({
+  tenant: TenantSummarySchema,
+  user: AuthUserSchema,
+  tokens: AuthTokensSchema,
+});
+export type AuthSession = z.infer<typeof AuthSessionSchema>;
+
+export const RegisterRequestSchema = z.object({
+  tenantName: z.string().min(2).max(120),
+  email: z.string().email(),
+  password: z.string().min(10).max(200),
+});
+export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
+
+export const LoginRequestSchema = z.object({
+  tenantSlug: z.string().min(1).max(120),
+  email: z.string().email(),
+  password: z.string().min(1).max(200),
+});
+export type LoginRequest = z.infer<typeof LoginRequestSchema>;
+
+export const RefreshRequestSchema = z.object({
+  refreshToken: z.string().min(20),
+});
+export type RefreshRequest = z.infer<typeof RefreshRequestSchema>;
+
+
 export const FleetStateSchema = z.object({
   tenantId: IdSchema,
   scenario: ScenarioNameSchema.optional(),
