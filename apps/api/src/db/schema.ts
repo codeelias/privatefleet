@@ -101,6 +101,10 @@ export const vehicles = pgTable(
     vehicleType: text("vehicle_type").notNull(),
     status: vehicleStatusEnum("status").notNull().default("available"),
     driverId: uuid("driver_id"),
+    /** VROOM capacity units; null means no capacity constraint defined. */
+    capacityUnits: integer("capacity_units"),
+    /** Vehicle capabilities; VROOM skills (empty means unconstrained). */
+    requiredCapabilities: text("required_capabilities").array(),
     latitude: doublePrecision("latitude"),
     longitude: doublePrecision("longitude"),
     capturedAt: timestamp("captured_at", { withTimezone: true }),
@@ -247,6 +251,10 @@ export const jobs = pgTable(
     priority: jobPriorityEnum("priority").notNull().default("standard"),
     status: jobStatusEnum("status").notNull().default("unassigned"),
     assignedDriverId: uuid("assigned_driver_id"),
+    /** Job capabilities required; VROOM skills (empty means none). */
+    requiredCapabilities: text("required_capabilities").array(),
+    /** Per-stop service duration in seconds; null means engine default. */
+    serviceSeconds: integer("service_seconds"),
     assignedVehicleId: uuid("assigned_vehicle_id"),
     version: integer("version").notNull().default(0),
     createdAt,

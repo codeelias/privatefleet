@@ -91,8 +91,10 @@ export const LiveProposalStopSchema = z.object({
   jobId: IdSchema,
   jobRef: z.string(),
   stopId: IdSchema,
-  stopType: z.enum(["pickup", "dropoff"]),
+  stopType: z.enum(["pickup", "dropoff", "service"]),
   address: z.string(),
+  /** Solver-provided arrival time; absent when the solver gave none. */
+  arrivalAt: z.string().datetime().optional(),
 });
 export type LiveProposalStop = z.infer<typeof LiveProposalStopSchema>;
 
@@ -149,6 +151,9 @@ export const FleetOptimizationProposalSchema = z.object({
   matrixSize: z.number().int().nonnegative(),
   vehicleCount: z.number().int().nonnegative(),
   shipmentCount: z.number().int().nonnegative(),
+  singleStopJobCount: z.number().int().nonnegative(),
+  totalDistanceMetres: z.number().nonnegative(),
+  totalDurationSeconds: z.number().nonnegative(),
   vehicles: z.array(FleetProposedRouteSchema),
   unassigned: z.array(
     z.object({ jobId: IdSchema, reason: z.string().optional() }),

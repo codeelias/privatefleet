@@ -42,11 +42,20 @@ const fakeClients: RoutingClients = {
     distanceMetres: 5_000,
     durationSeconds: 600,
   }),
-  solve: async (_vehicles, shipments) => ({
-    orderByVehicle: new Map([[1, shipments.map((shipment) => shipment.id)]]),
-    unassigned: [],
-    routes: [{ vehicleId: 1, distanceMetres: 5_000, durationSeconds: 600 }],
-  }),
+  solve: async (_vehicles, shipments) => {
+    const orders = shipments.map((shipment) => ({
+      kind: "shipment" as const,
+      id: shipment.id,
+    }));
+    return {
+      orderByVehicle: new Map([[1, shipments.map((shipment) => shipment.id)]]),
+      ordersByVehicle: new Map([[1, orders]]),
+      arrivalsByVehicle: new Map(),
+      unassigned: [],
+      unassignedReasons: new Map(),
+      routes: [{ vehicleId: 1, distanceMetres: 5_000, durationSeconds: 600 }],
+    };
+  },
 };
 
 beforeAll(async () => {

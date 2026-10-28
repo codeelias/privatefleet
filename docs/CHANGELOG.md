@@ -9,6 +9,14 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.45 - Domain constraints and single-stop jobs in fleet optimisation (2026-10-28)
+- Migration 0006: `vehicles.capacity_units`, `vehicles.required_capabilities`, `jobs.required_capabilities`, `jobs.service_seconds` (tenant-scoped; null/empty means unconstrained, no silent defaults).
+- VROOM adapter now supports single-stop **jobs** alongside paired shipments, vehicle/job skills, capacity, service durations and integer matrices; solution parsing preserves interleaved solved order and solver-provided arrival times.
+- `planFleet` handles jobs + shipments in one matrix solve with deduped locations and per-vehicle geometry in exact solved order.
+- Fleet service: single-stop jobs are optimised (no longer `MISSING_PICKUP_OR_DROPOFF`); paired work requiring capabilities no vehicle has is explicitly `MISSING_SKILL`; capacity mode requires all vehicles configured (partial config -> `CONSTRAINTS_INCOMPLETE`); zero capacity paired work -> `CAPACITY_EXCEEDED`; solver-unassigned work carries its reason; constraint values are part of the input hash/cache identity.
+- Verification: API 47/47 including new single-stop, skill and capacity tests; real fleet gate with real OSRM/VROOM now returns **0 unassigned** (single-stop jobs placed), 3 vehicles / 12 shipments / 9 matrix locations / 3 routes / version 2 / 24 route_stops; typecheck 6/6, lint 6/6, build 5/5.
+- Not yet: dispatcher UI rendering of fleet proposals (next increment); ETA display is prepared in the contract but not surfaced in the workbench; native background tracking remains queued.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.44 - Fleet-wide multi-vehicle planning with atomic publication (2026-10-28)
 - `planFleet`: one VROOM solve over many vehicles/shipments, deduplicated matrix locations, integer ids/matrices, per-vehicle road geometry in solved order, explicit unassigned work.
 - Fleet proposal service + endpoints (`POST /v1/optimization/fleet-run`, `POST /v1/optimization/fleet/:runId/approve`): persisted run with full solved snapshot (assignments, expected fleet version, dataset id), assignment-aware input hash.
@@ -386,6 +394,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

@@ -13,7 +13,12 @@ import type {
 } from "@privatefleet/contracts";
 import { EVENT_SCHEMA_VERSION } from "@privatefleet/contracts";
 import { withTenant, type DbHandle } from "../../db/client.js";
-import { planFleet, type ShipmentInput, type VehicleInput } from "../routing/plan.js";
+import {
+  planFleet,
+  type ShipmentInput,
+  type SingleJobInput,
+  type VehicleInput,
+} from "../routing/plan.js";
 import type { RoutingClients } from "../routing/types.js";
 import { OptimizationError } from "./service.js";
 
@@ -41,6 +46,9 @@ interface FleetStoredResult {
   matrixSize: number;
   vehicleCount: number;
   shipmentCount: number;
+  singleStopJobCount: number;
+  totalDistanceMetres: number;
+  totalDurationSeconds: number;
   inputHash: string;
   vehicles: FleetRouteRecord[];
   unassigned: Array<{ jobId: string; reason?: string }>;
@@ -52,6 +60,8 @@ interface DriverVehicleRow {
   driver_id: string;
   full_name: string;
   vehicle_id: string;
+  capacity_units: number | null;
+  required_capabilities: string[] | null;
   latitude: number | null;
   longitude: number | null;
 }
@@ -69,6 +79,8 @@ interface EligibleStopRow {
   longitude: number;
   window_start: Date | string;
   window_end: Date | string;
+  required_capabilities: string[] | null;
+  service_seconds: number | null;
 }
 
 interface JobGroup {
@@ -114,7 +126,8 @@ export async function createFleetProposal(
 
     const selected = options.driverIds?.length ? options.driverIds : null;
     const vehicleRows = (await db.execute(sql`
-      SELECT d.id AS driver_id, d.full_name, v.id AS vehicle_id, v.latitude, v.longitude
+      SELECT d.id AS driver_id, d.full_name, v.id AS vehicle_id,
+             v.capacity_units, v.required_capabilities, v.latitude, v.longitude
       FROM drivers d
       JOIN vehicles v ON v.id = d.vehicle_id
       ${selected ? sql`WHERE d.id IN (${inList(selected)})` : sql``}
@@ -124,7 +137,8 @@ export async function createFleetProposal(
     const stopRows = (await db.execute(sql`
       SELECT j.id AS job_id, j.reference, j.status, j.assigned_driver_id,
              js.id AS stop_id, js.stop_type, js.sequence, js.address,
-             js.latitude, js.longitude, js.window_start, js.window_end
+             js.latitude, js.longitude, js.window_start, js.window_end,
+             j.required_capabilities, j.service_seconds
       FROM jobs j
       JOIN job_stops js ON js.job_id = j.id
       WHERE j.status IN ('unassigned', 'assigned')
@@ -150,19 +164,56 @@ export async function createFleetProposal(
     }
 
     const unassigned: Array<{ jobId: string; reason?: string }> = [];
-    const complete: JobGroup[] = [];
+    const paired: JobGroup[] = [];
+    const singleStop: JobGroup[] = [];
     for (const group of jobs.values()) {
       if (group.pickup && group.dropoff) {
-        complete.push(group);
+        paired.push(group);
+      } else if (group.pickup ?? group.dropoff) {
+        // A legitimate single-stop service job, not malformed work.
+        singleStop.push(group);
       } else {
-        unassigned.push({ jobId: group.jobId, reason: "MISSING_PICKUP_OR_DROPOFF" });
+        unassigned.push({ jobId: group.jobId, reason: "MISSING_STOP" });
       }
     }
-    if (complete.length === 0) {
+    if (paired.length === 0 && singleStop.length === 0) {
       throw new OptimizationError("NO_ASSIGNED_STOPS");
     }
 
-    const shipments: ShipmentInput[] = complete.map((group) => ({
+    // Capacity constraints are enforced only when every selected vehicle has
+    // a defined capacity; partial configuration is rejected rather than
+    // silently ignored.
+    const anyCapacity = vehicleRows.some((row) => row.capacity_units !== null);
+    const allCapacity = vehicleRows.every((row) => row.capacity_units !== null);
+    if (anyCapacity && !allCapacity) {
+      throw new OptimizationError("CONSTRAINTS_INCOMPLETE");
+    }
+    const capacityMode = allCapacity && vehicleRows.length > 0;
+
+    // VROOM cannot enforce skills on paired shipments (it rejects skills
+    // there), so paired work requiring capabilities is only planned when
+    // every candidate vehicle has them; otherwise it is explicitly
+    // unassigned instead of risking an invalid assignment.
+    const vehicleSkills = vehicleRows.map((row) => row.required_capabilities ?? []);
+    const hasSkillOnEveryVehicle = (required: string[]): boolean =>
+      required.every((skill) => vehicleSkills.every((skills) => skills.includes(skill)));
+
+    const pairedEligible: JobGroup[] = [];
+    for (const group of paired) {
+      const required = group.pickup!.required_capabilities ?? [];
+      if (required.length > 0 && !hasSkillOnEveryVehicle(required)) {
+        unassigned.push({ jobId: group.jobId, reason: "MISSING_SKILL" });
+      } else if (capacityMode && Math.max(...vehicleRows.map((row) => row.capacity_units ?? 0)) < 1) {
+        unassigned.push({ jobId: group.jobId, reason: "CAPACITY_EXCEEDED" });
+      } else {
+        pairedEligible.push(group);
+      }
+    }
+    if (pairedEligible.length === 0 && singleStop.length === 0) {
+      throw new OptimizationError("PLAN_INFEASIBLE");
+    }
+
+    const shipments: ShipmentInput[] = pairedEligible.map((group) => ({
       id: group.jobId,
       pickup: {
         latitude: Number(group.pickup!.latitude),
@@ -176,15 +227,30 @@ export async function createFleetProposal(
       deliveryWindow: [iso(group.dropoff!.window_start), iso(group.dropoff!.window_end)],
     }));
 
+    const singleJobs: SingleJobInput[] = singleStop.map((group) => {
+      const stop = (group.pickup ?? group.dropoff)!;
+      return {
+        id: group.jobId,
+        location: { latitude: Number(stop.latitude), longitude: Number(stop.longitude) },
+        ...(stop.service_seconds !== null ? { serviceSeconds: stop.service_seconds } : {}),
+        timeWindow: [iso(stop.window_start), iso(stop.window_end)],
+        ...(stop.required_capabilities?.length
+          ? { skills: stop.required_capabilities }
+          : {}),
+        ...(capacityMode ? { amount: [1] } : {}),
+      };
+    });
+
     // Depot: current vehicle position, else the first pending pickup of a job
     // currently assigned to that driver. Vehicles with neither are excluded.
     const firstPickupByDriver = new Map<string, GeoPoint>();
-    for (const group of complete) {
-      if (group.assignedDriverId && group.pickup) {
+    for (const group of [...paired, ...singleStop]) {
+      const stop = group.pickup ?? group.dropoff;
+      if (group.assignedDriverId && stop) {
         if (!firstPickupByDriver.has(group.assignedDriverId)) {
           firstPickupByDriver.set(group.assignedDriverId, {
-            latitude: Number(group.pickup.latitude),
-            longitude: Number(group.pickup.longitude),
+            latitude: Number(stop.latitude),
+            longitude: Number(stop.longitude),
           });
         }
       }
@@ -204,7 +270,14 @@ export async function createFleetProposal(
         continue;
       }
       const id = index;
-      vehicles.push({ id, depot });
+      vehicles.push({
+        id,
+        depot,
+        ...(capacityMode ? { capacity: [row.capacity_units ?? 0] } : {}),
+        ...(row.required_capabilities?.length
+          ? { skills: row.required_capabilities }
+          : {}),
+      });
       vehicleMeta.set(id, {
         driverId: row.driver_id,
         vehicleId: row.vehicle_id,
@@ -223,9 +296,14 @@ export async function createFleetProposal(
       expectedRouteVersion,
       vehicles,
       shipments,
+      jobs: singleJobs,
+      constraints: {
+        capacityMode,
+        singleStopJobCount: singleJobs.length,
+      },
       // Assignment state is part of cache identity: a reassigned job must
       // not reuse an older proposal.
-      assignments: complete.map((group) => ({
+      assignments: [...pairedEligible, ...singleStop].map((group) => ({
         jobId: group.jobId,
         driverId: group.assignedDriverId,
         status: group.status,
@@ -243,7 +321,7 @@ export async function createFleetProposal(
       return fleetProposal(cached[0].id, cached[0].result);
     }
 
-    const plan = await planFleet(clients, { vehicles, shipments });
+    const plan = await planFleet(clients, { vehicles, shipments, jobs: singleJobs });
 
     const routes: FleetRouteRecord[] = [];
     for (const planned of plan.vehicles) {
@@ -252,27 +330,57 @@ export async function createFleetProposal(
         throw new OptimizationError("PLAN_INFEASIBLE");
       }
       const stops: LiveProposalStop[] = [];
-      for (const jobId of planned.orderedShipmentIds) {
-        const group = complete.find((candidate) => candidate.jobId === jobId);
-        if (!group?.pickup || !group.dropoff) {
-          throw new OptimizationError("PLAN_INFEASIBLE");
+      let arrivalIndex = 0;
+      for (const unit of planned.orderedUnits) {
+        if (unit.kind === "shipment") {
+          const group = pairedEligible.find((candidate) => candidate.jobId === unit.id);
+          if (!group?.pickup || !group.dropoff) {
+            throw new OptimizationError("PLAN_INFEASIBLE");
+          }
+          const pickupArrival = planned.stopArrivals[arrivalIndex];
+          const deliveryArrival = planned.stopArrivals[arrivalIndex + 1];
+          stops.push(
+            {
+              jobId: unit.id,
+              jobRef: group.reference,
+              stopId: group.pickup.stop_id,
+              stopType: "pickup",
+              address: group.pickup.address,
+              ...(pickupArrival && pickupArrival > 1_000_000_000
+                ? { arrivalAt: new Date(pickupArrival * 1000).toISOString() }
+                : {}),
+            },
+            {
+              jobId: unit.id,
+              jobRef: group.reference,
+              stopId: group.dropoff.stop_id,
+              stopType: "dropoff",
+              address: group.dropoff.address,
+              ...(deliveryArrival && deliveryArrival > 1_000_000_000
+                ? { arrivalAt: new Date(deliveryArrival * 1000).toISOString() }
+                : {}),
+            },
+          );
+          arrivalIndex += 2;
+        } else {
+          const group = singleStop.find((candidate) => candidate.jobId === unit.id);
+          const stop = group?.pickup ?? group?.dropoff;
+          if (!group || !stop) {
+            throw new OptimizationError("PLAN_INFEASIBLE");
+          }
+          const arrival = planned.stopArrivals[arrivalIndex];
+          stops.push({
+            jobId: unit.id,
+            jobRef: group.reference,
+            stopId: stop.stop_id,
+            stopType: "service",
+            address: stop.address,
+            ...(arrival && arrival > 1_000_000_000
+              ? { arrivalAt: new Date(arrival * 1000).toISOString() }
+              : {}),
+          });
+          arrivalIndex += 1;
         }
-        stops.push(
-          {
-            jobId,
-            jobRef: group.reference,
-            stopId: group.pickup.stop_id,
-            stopType: "pickup",
-            address: group.pickup.address,
-          },
-          {
-            jobId,
-            jobRef: group.reference,
-            stopId: group.dropoff.stop_id,
-            stopType: "dropoff",
-            address: group.dropoff.address,
-          },
-        );
       }
       routes.push({
         ...meta,
@@ -280,7 +388,7 @@ export async function createFleetProposal(
         geometry: planned.geometry,
         distanceMetres: planned.distanceMetres,
         durationSeconds: planned.durationSeconds,
-        jobIds: planned.orderedShipmentIds,
+        jobIds: planned.orderedUnits.map((unit) => unit.id),
       });
     }
 
@@ -293,10 +401,19 @@ export async function createFleetProposal(
       matrixSize: plan.matrixSize,
       vehicleCount: vehicles.length,
       shipmentCount: shipments.length,
+      singleStopJobCount: singleJobs.length,
+      totalDistanceMetres: routes.reduce((sum, route) => sum + route.distanceMetres, 0),
+      totalDurationSeconds: routes.reduce((sum, route) => sum + route.durationSeconds, 0),
       inputHash,
       vehicles: routes,
-      unassigned: [...unassigned, ...plan.unassigned.map((jobId) => ({ jobId }))],
-      assignments: complete.map((group) => ({
+      unassigned: [
+        ...unassigned,
+        ...plan.unassigned.map((jobId) => ({
+          jobId,
+          reason: plan.unassignedReasons.get(jobId) ?? "SOLVER_UNASSIGNED",
+        })),
+      ],
+      assignments: [...pairedEligible, ...singleStop].map((group) => ({
         jobId: group.jobId,
         driverId: group.assignedDriverId,
         status: group.status,
@@ -345,6 +462,9 @@ function fleetProposal(runId: string, result: FleetStoredResult): FleetOptimizat
     matrixSize: result.matrixSize,
     vehicleCount: result.vehicleCount,
     shipmentCount: result.shipmentCount,
+    singleStopJobCount: result.singleStopJobCount,
+    totalDistanceMetres: result.totalDistanceMetres,
+    totalDurationSeconds: result.totalDurationSeconds,
     vehicles: result.vehicles.map((route) => ({
       driverId: route.driverId,
       vehicleId: route.vehicleId,
@@ -504,6 +624,7 @@ export async function approveFleetProposal(
 
 // Keep the type import referenced for consumers of this module.
 export type { FleetStoredResult };
+
 
 
 

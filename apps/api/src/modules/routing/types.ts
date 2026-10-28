@@ -38,6 +38,17 @@ export interface VroomVehicleInput {
   endIndex: number;
   capacity?: number[];
   timeWindow?: [number, number];
+  /** VROOM skills; a job requiring a skill only fits a vehicle with it. */
+  skills?: string[];
+}
+
+export interface VroomJobInput {
+  id: string;
+  locationIndex: number;
+  serviceSeconds?: number;
+  timeWindow?: [number, number];
+  skills?: string[];
+  amount?: number[];
 }
 
 export interface VroomShipmentInput {
@@ -51,10 +62,21 @@ export interface VroomShipmentInput {
   deliveryWindow?: [number, number];
 }
 
+export type VroomUnitRef = {
+  kind: "shipment" | "job";
+  id: string;
+};
+
 export interface VroomSolution {
-  /** Ordered pickup/delivery ids per vehicle. */
+  /** Ordered shipment ids per vehicle (compatibility view). */
   orderByVehicle: Map<number, string[]>;
+  /** Exact solved stop units per vehicle, preserving interleaving. */
+  ordersByVehicle: Map<number, VroomUnitRef[]>;
+  /** Solver-provided arrival seconds per unit: key "kind:id:role". */
+  arrivalsByVehicle: Map<number, Map<string, number>>;
   unassigned: string[];
+  /** Solver descriptions for unassigned work, keyed by business id. */
+  unassignedReasons: Map<string, string>;
   routes: Array<{ vehicleId: number; distanceMetres: number; durationSeconds: number }>;
 }
 
@@ -66,6 +88,7 @@ export interface RoutingClients {
     shipments: VroomShipmentInput[],
     matrices: OsrmMatrix,
     locationCount: number,
+    jobs?: VroomJobInput[],
   ) => Promise<VroomSolution>;
 }
 

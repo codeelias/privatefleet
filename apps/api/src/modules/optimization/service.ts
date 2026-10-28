@@ -18,7 +18,8 @@ export type OptimizationErrorCode =
   | "PLAN_INFEASIBLE"
   | "RUN_NOT_FOUND"
   | "RUN_NOT_READY"
-  | "ROUTE_VERSION_STALE";
+  | "ROUTE_VERSION_STALE"
+  | "CONSTRAINTS_INCOMPLETE";
 
 export class OptimizationError extends Error {
   constructor(readonly code: OptimizationErrorCode) {

@@ -45,18 +45,34 @@ const fakeClients: RoutingClients = {
     distanceMetres: 1_000,
     durationSeconds: 300,
   }),
-  solve: async (vehicles, shipments) => {
+  solve: async (vehicles, shipments, _matrices, _count, jobs = []) => {
     const orderByVehicle = new Map<number, string[]>();
-    shipments.forEach((shipment, index) => {
+    const ordersByVehicle = new Map<
+      number,
+      Array<{ kind: "shipment" | "job"; id: string }>
+    >();
+    const units = [
+      ...shipments.map((shipment) => ({ kind: "shipment" as const, id: shipment.id })),
+      ...jobs.map((job) => ({ kind: "job" as const, id: job.id })),
+    ];
+    units.forEach((unit, index) => {
       const vehicle = vehicles[index % vehicles.length]!;
-      const list = orderByVehicle.get(vehicle.id) ?? [];
-      list.push(shipment.id);
-      orderByVehicle.set(vehicle.id, list);
+      const orders = ordersByVehicle.get(vehicle.id) ?? [];
+      orders.push(unit);
+      ordersByVehicle.set(vehicle.id, orders);
+      if (unit.kind === "shipment") {
+        const list = orderByVehicle.get(vehicle.id) ?? [];
+        list.push(unit.id);
+        orderByVehicle.set(vehicle.id, list);
+      }
     });
     return {
       orderByVehicle,
+      ordersByVehicle,
+      arrivalsByVehicle: new Map(),
       unassigned: [],
-      routes: [...orderByVehicle.keys()].map((vehicleId) => ({
+      unassignedReasons: new Map(),
+      routes: [...ordersByVehicle.keys()].map((vehicleId) => ({
         vehicleId,
         distanceMetres: 1_000,
         durationSeconds: 300,
@@ -126,15 +142,23 @@ describe("fleet optimisation", () => {
     expect(proposal.vehicleCount).toBeGreaterThanOrEqual(2);
     expect(proposal.shipmentCount).toBeGreaterThanOrEqual(4);
     expect(proposal.vehicles.length).toBeGreaterThanOrEqual(2);
-    // Single-stop seed fixtures are explicit unassigned work, not dropped.
-    expect(proposal.unassigned.length).toBeGreaterThanOrEqual(1);
+    // Single-stop seed fixtures are optimised as VROOM jobs now.
+    expect(proposal.singleStopJobCount).toBeGreaterThanOrEqual(1);
+    expect(proposal.unassigned).toHaveLength(0);
     for (const route of proposal.vehicles) {
       expect(route.geometry.length).toBeGreaterThanOrEqual(2);
-      // Every shipment appears as pickup then dropoff, on one vehicle.
-      for (let index = 0; index < route.stops.length; index += 2) {
-        expect(route.stops[index]?.stopType).toBe("pickup");
+      // Paired shipment: pickup then dropoff for the same job. Single
+      // stop jobs appear as one service stop.
+      for (let index = 0; index < route.stops.length; ) {
+        const stop = route.stops[index]!;
+        if (stop.stopType === "service") {
+          index += 1;
+          continue;
+        }
+        expect(stop.stopType).toBe("pickup");
         expect(route.stops[index + 1]?.stopType).toBe("dropoff");
-        expect(route.stops[index]?.jobId).toBe(route.stops[index + 1]?.jobId);
+        expect(route.stops[index + 1]?.jobId).toBe(stop.jobId);
+        index += 2;
       }
     }
 
@@ -236,12 +260,24 @@ describe("fleet optimisation", () => {
     const second = await createFleetProposal(runtime, fakeClients, tenantId);
     expect(second.runId).toBe(first.runId);
 
-    const jobId = first.vehicles[0]?.stops[0]?.jobId;
+    const pairedRows = await migrator.sql`
+      SELECT j.id, j.assigned_driver_id FROM jobs j
+      JOIN job_stops p ON p.job_id = j.id AND p.stop_type = 'pickup' AND p.status = 'pending'
+      JOIN job_stops d ON d.job_id = j.id AND d.stop_type = 'dropoff' AND d.status = 'pending'
+      WHERE j.tenant_id = ${tenantId} AND j.status = 'assigned'
+      LIMIT 1
+    `;
+    const jobId = (pairedRows[0] as { id: string }).id;
+    const currentDriver = (
+      pairedRows[0] as { assigned_driver_id: string | null }
+    ).assigned_driver_id;
     expect(jobId).toBeTruthy();
     const drivers = await migrator.sql`
-      SELECT id FROM drivers WHERE tenant_id = ${tenantId} ORDER BY id LIMIT 2
+      SELECT id FROM drivers WHERE tenant_id = ${tenantId} ORDER BY id
     `;
-    const otherDriver = (drivers[1] as { id?: string } | undefined)?.id;
+    const otherDriver = (drivers as Array<{ id: string }>).find(
+      (driver) => driver.id !== currentDriver,
+    )?.id;
     expect(otherDriver).toBeTruthy();
     await migrator.sql`
       UPDATE jobs SET assigned_driver_id = ${otherDriver!} WHERE id = ${jobId!}
@@ -249,6 +285,50 @@ describe("fleet optimisation", () => {
     const third = await createFleetProposal(runtime, fakeClients, tenantId);
     expect(third.runId).not.toBe(first.runId);
     expect(await expectedVersion(tenantId)).toBe(1);
+  });
+
+
+  it("reports a structured MISSING_SKILL reason when no vehicle has the capability", async () => {
+    const { tenantId } = await setup();
+    const jobRows = await migrator.sql`
+      SELECT j.id FROM jobs j
+      JOIN job_stops s ON s.job_id = j.id AND s.stop_type = 'pickup'
+      WHERE j.tenant_id = ${tenantId} AND j.status = 'assigned'
+      LIMIT 1
+    `;
+    const jobId = (jobRows[0] as { id: string }).id;
+    await migrator.sql`
+      UPDATE jobs SET required_capabilities = ARRAY['refrigerated']
+      WHERE id = ${jobId}
+    `;
+    const proposal = await createFleetProposal(runtime, fakeClients, tenantId);
+    const unassigned = proposal.unassigned.find((entry) => entry.jobId === jobId);
+    expect(unassigned?.reason).toBe("MISSING_SKILL");
+    // Other work still plans and publishes.
+    const approval = await approveFleetProposal(
+      runtime,
+      tenantId,
+      proposal.runId,
+      proposal.expectedRouteVersion,
+    );
+    expect(approval.version).toBe(2);
+  });
+
+  it("reports CAPACITY_EXCEEDED for paired work when capacity is zero", async () => {
+    const { tenantId } = await setup();
+    const jobRows = await migrator.sql`
+      SELECT j.id FROM jobs j
+      JOIN job_stops s ON s.job_id = j.id AND s.stop_type = 'pickup'
+      WHERE j.tenant_id = ${tenantId} AND j.status = 'assigned'
+      LIMIT 1
+    `;
+    const jobId = (jobRows[0] as { id: string }).id;
+    await migrator.sql`
+      UPDATE vehicles SET capacity_units = 0 WHERE tenant_id = ${tenantId}
+    `;
+    const proposal = await createFleetProposal(runtime, fakeClients, tenantId);
+    const unassigned = proposal.unassigned.find((entry) => entry.jobId === jobId);
+    expect(unassigned?.reason).toBe("CAPACITY_EXCEEDED");
   });
 
   it("never exposes another tenant's proposal or publication", async () => {
@@ -269,5 +349,10 @@ describe("fleet optimisation", () => {
     expect(fleetB.routes).toHaveLength(0);
   });
 });
+
+
+
+
+
 
 

@@ -1,21 +1,35 @@
 /**
- * VROOM HTTP adapter (docs/10.3): shipments (paired pickup/delivery),
- * matrices supplied by OSRM, validated solution output.
+ * VROOM HTTP adapter (docs/10.3): shipments (paired pickup/delivery) and
+ * single-stop jobs, matrices supplied by OSRM, validated solution output
+ * with solver-provided arrival times.
  */
-import { RoutingError, type OsrmMatrix, type VroomShipmentInput, type VroomSolution, type VroomVehicleInput } from "./types.js";
+import {
+  RoutingError,
+  type OsrmMatrix,
+  type VroomJobInput,
+  type VroomShipmentInput,
+  type VroomSolution,
+  type VroomUnitRef,
+  type VroomVehicleInput,
+} from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 interface VroomResponse {
   code?: number;
   error?: string;
-  unassigned?: Array<{ id?: string | number }>;
+  unassigned?: Array<{ id?: string | number; description?: string }>;
   routes?: Array<{
     vehicle?: number;
     distance?: number;
     duration?: number;
-    steps?: Array<{ type?: string; id?: string | number }>;
+    steps?: Array<{ type?: string; id?: string | number; arrival?: number }>;
   }>;
+}
+
+interface NumericUnit {
+  kind: "shipment" | "job";
+  id: string;
 }
 
 export class VroomClient {
@@ -30,27 +44,18 @@ export class VroomClient {
     shipments: VroomShipmentInput[],
     matrices: OsrmMatrix,
     locationCount: number,
+    jobs: VroomJobInput[] = [],
   ): Promise<VroomSolution> {
     if (matrices.durations.length !== locationCount) {
       throw new RoutingError("ROUTING_INVALID_RESPONSE", "matrix/location count mismatch");
     }
-    // VROOM requires integer pickup/delivery ids; map them back to
-    // business shipment ids for the caller.
-    const numericToShipment = new Map<number, string>();
-    const body = {
-      vehicles: vehicles.map((vehicle) => ({
-        id: vehicle.id,
-        start_index: vehicle.startIndex,
-        end_index: vehicle.endIndex,
-        ...(vehicle.capacity ? { capacity: vehicle.capacity } : {}),
-        ...(vehicle.timeWindow ? { time_window: vehicle.timeWindow } : {}),
-      })),
-      shipments: shipments.map((shipment, index) => {
-        const pickupId = index * 2 + 1;
-        const deliveryId = index * 2 + 2;
-        numericToShipment.set(pickupId, shipment.id);
-        numericToShipment.set(deliveryId, shipment.id);
-        return {
+    const numericUnit = new Map<number, NumericUnit>();
+    const bodyShipments = shipments.map((shipment, index) => {
+      const pickupId = index * 2 + 1;
+      const deliveryId = index * 2 + 2;
+      numericUnit.set(pickupId, { kind: "shipment", id: shipment.id });
+      numericUnit.set(deliveryId, { kind: "shipment", id: shipment.id });
+      return {
         pickup: {
           id: pickupId,
           location_index: shipment.pickupIndex,
@@ -68,11 +73,35 @@ export class VroomClient {
           ...(shipment.deliveryWindow ? { time_windows: [shipment.deliveryWindow] } : {}),
         },
         ...(shipment.amount ? { amount: shipment.amount } : {}),
-        };
-      }),
+      };
+    });
+    const jobIdBase = shipments.length * 2;
+    const bodyJobs = jobs.map((job, index) => {
+      const numericId = jobIdBase + index + 1;
+      numericUnit.set(numericId, { kind: "job", id: job.id });
+      return {
+        id: numericId,
+        location_index: job.locationIndex,
+        ...(job.serviceSeconds !== undefined ? { service: job.serviceSeconds } : {}),
+        ...(job.timeWindow ? { time_windows: [job.timeWindow] } : {}),
+        ...(job.skills?.length ? { skills: job.skills } : {}),
+        ...(job.amount ? { amount: job.amount } : {}),
+      };
+    });
+
+    const body = {
+      vehicles: vehicles.map((vehicle) => ({
+        id: vehicle.id,
+        start_index: vehicle.startIndex,
+        end_index: vehicle.endIndex,
+        ...(vehicle.capacity ? { capacity: vehicle.capacity } : {}),
+        ...(vehicle.timeWindow ? { time_window: vehicle.timeWindow } : {}),
+        ...(vehicle.skills?.length ? { skills: vehicle.skills } : {}),
+      })),
+      shipments: bodyShipments,
+      jobs: bodyJobs,
       matrices: {
         car: {
-          // VROOM expects integer seconds/metres; OSRM matrices are floats.
           durations: matrices.durations.map((row) => row.map((value) => Math.round(value))),
           distances: matrices.distances.map((row) => row.map((value) => Math.round(value))),
         },
@@ -110,25 +139,37 @@ export class VroomClient {
     }
 
     const orderByVehicle = new Map<number, string[]>();
+    const ordersByVehicle = new Map<number, VroomUnitRef[]>();
+    const arrivalsByVehicle = new Map<number, Map<string, number>>();
     const routes: VroomSolution["routes"] = [];
     for (const route of payload.routes ?? []) {
       if (typeof route.vehicle !== "number") {
         continue;
       }
-      const ordered: string[] = [];
+      const units: VroomUnitRef[] = [];
+      const arrivalMap = new Map<string, number>();
       for (const step of route.steps ?? []) {
-        if (step.type !== "pickup" && step.type !== "delivery") {
+        if (step.type !== "pickup" && step.type !== "delivery" && step.type !== "job") {
           continue;
         }
-        const numericId = Number(step.id);
-        const shipmentId = numericToShipment.has(numericId)
-          ? numericToShipment.get(numericId)!
-          : String(step.id ?? "").split("::")[0];
-        if (shipmentId && !ordered.includes(shipmentId)) {
-          ordered.push(shipmentId);
+        const unit = numericUnit.get(Number(step.id));
+        if (!unit) {
+          continue;
+        }
+        const key = `${unit.kind}:${unit.id}:${step.type}`;
+        if (typeof step.arrival === "number" && Number.isFinite(step.arrival)) {
+          arrivalMap.set(key, step.arrival);
+        }
+        if (!units.some((entry) => entry.kind === unit.kind && entry.id === unit.id)) {
+          units.push({ ...unit });
         }
       }
-      orderByVehicle.set(route.vehicle, ordered);
+      ordersByVehicle.set(route.vehicle, units);
+      arrivalsByVehicle.set(route.vehicle, arrivalMap);
+      orderByVehicle.set(
+        route.vehicle,
+        units.filter((unit) => unit.kind === "shipment").map((unit) => unit.id),
+      );
       routes.push({
         vehicleId: route.vehicle,
         distanceMetres: Number(route.distance ?? 0),
@@ -136,18 +177,28 @@ export class VroomClient {
       });
     }
 
-    const unassigned = (payload.unassigned ?? [])
-      .map((entry) => {
-        const numericId = Number(entry.id);
-        return numericToShipment.get(numericId) ?? String(entry.id ?? "").split("::")[0];
-      })
-      .filter((id): id is string => Boolean(id));
+    const unassigned: string[] = [];
+    const unassignedReasons = new Map<string, string>();
+    for (const entry of payload.unassigned ?? []) {
+      const unit = numericUnit.get(Number(entry.id));
+      if (!unit) {
+        continue;
+      }
+      if (!unassigned.includes(unit.id)) {
+        unassigned.push(unit.id);
+      }
+      if (entry.description) {
+        unassignedReasons.set(unit.id, entry.description);
+      }
+    }
 
-    return { orderByVehicle, unassigned, routes };
+    return {
+      orderByVehicle,
+      ordersByVehicle,
+      arrivalsByVehicle,
+      unassigned,
+      unassignedReasons,
+      routes,
+    };
   }
 }
-
-
-
-
-
