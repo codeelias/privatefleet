@@ -17,6 +17,7 @@ import { registerAuthRoutes } from "./modules/auth/routes.js";
 import { FleetError, PgFleetService } from "./modules/fleet/pg-service.js";
 import { registerFleetRoutes } from "./modules/fleet/routes.js";
 import { registerDriverDeviceRoutes } from "./modules/driver/routes.js";
+import { registerTrackingRoutes } from "./modules/tracking/routes.js";
 import { registerDemoRoutes } from "./modules/demo/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
@@ -174,24 +175,30 @@ export function buildApp(config: AppConfig): {
       throw new Error("postgres repository mode requires DATABASE_URL");
     }
     const db = createDb(config.databaseUrl);
-    const bus = createRealtimeBus(app.server);
     const auth = new AuthService(config, db);
+    const bus = createRealtimeBus(app.server, {
+      demoMode: false,
+      coalesceMs: 1_000,
+      verifyToken: (token) => auth.verifyAccess(token),
+    });
     const fleet = new PgFleetService(db, bus);
     registerAuthRoutes(app, auth);
     registerFleetRoutes(app, auth, fleet);
     registerDriverDeviceRoutes(app, auth, fleet);
+    registerTrackingRoutes(app, auth, bus, db);
     app.addHook("onClose", async () => {
       await closeDb(db);
     });
     postgres = { db, auth, fleet, bus };
   } else {
     const store = new DemoStore("morning-rush");
-    const bus = createRealtimeBus(app.server);
+    const bus = createRealtimeBus(app.server, { demoMode: true });
     registerDemoRoutes(app, store, bus);
     demo = { store, bus };
   }
 
   return { app, demo, postgres };
 }
+
 
 

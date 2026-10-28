@@ -5,6 +5,7 @@
  * escape hatch for spatial indexes).
  */
 import {
+  bigint,
   doublePrecision,
   index,
   integer,
@@ -113,6 +114,33 @@ export const drivers = pgTable(
     createdAt,
   },
   (t) => [index("drivers_tenant_idx").on(t.tenantId)],
+);
+
+export const locationPoints = pgTable(
+  "location_points",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    vehicleId: uuid("vehicle_id")
+      .notNull()
+      .references(() => vehicles.id, { onDelete: "cascade" }),
+    driverId: uuid("driver_id").references(() => drivers.id, { onDelete: "set null" }),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    latitude: doublePrecision("latitude").notNull(),
+    longitude: doublePrecision("longitude").notNull(),
+    accuracyMetres: doublePrecision("accuracy_metres"),
+    headingDeg: doublePrecision("heading_deg"),
+    speedMps: doublePrecision("speed_mps"),
+    /** Server-assigned monotonic per-vehicle sequence. */
+    sequenceNo: bigint("sequence_no", { mode: "number" }).notNull(),
+  },
+  (t) => [
+    uniqueIndex("location_points_vehicle_sequence_uq").on(t.vehicleId, t.sequenceNo),
+    index("location_points_vehicle_captured_idx").on(t.vehicleId, t.capturedAt),
+  ],
 );
 
 export const jobs = pgTable(
@@ -291,5 +319,6 @@ export const tenantScopedTables = [
   idempotencyKeys,
   demoScenarios,
 ] as const;
+
 
 

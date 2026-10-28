@@ -9,6 +9,15 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.37 - Phase 4: real GPS telemetry ingestion and authenticated tenant rooms (2026-10-28)
+- New `POST /v1/telemetry` for driver devices: batches of 1-50 samples, vehicle derived from the authenticated driver, never the body.
+- Durable cold history `location_points` (server-assigned monotonic `sequence_no`, unique per vehicle) plus hot `vehicles` position update in one tenant-scoped transaction; RLS includes the new table.
+- Monotonic ingestion: samples at/before the current position are rejected as stale; future samples beyond 5 minutes are invalid; per-sample results returned.
+- Socket.IO production handshakes now require a valid access token and join a server-derived tenant room; telemetry publishes tenant-scoped with 1 s per-vehicle coalescing. Client sends the token through the session hook.
+- Snapshot recovery reads the hot position columns, preserving the staleness rule.
+- Verification: API 27/27 plus realtime tests 2/2 (tenant room isolation, unauthenticated rejection); demo E2E 13 passed / 13 skipped; auth+driver acceptance 8/8; typecheck/lint/build green.
+- Demo mode remains default and unchanged; migrations applied to the dev database.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.36 - Phase 1 freeze: true-paint metrics, 2x DPI, route versions, debug grid (2026-10-28)
 - Latency now measures time-to-visible-pixel: socket receipt -> React commit -> canvas draw -> rAF -> post-paint task. Snapshots report `basis: "after-paint"`.
 - True-paint benchmark (250 vehicles, 2530 samples): p95 72.4 ms at 1x DPR; 159.5 ms at 2x; frame p50 16.7 ms, p95 33.4 ms, 41.1 FPS vs map-only 42.7 FPS at 1x. 2x keeps frame parity (39.5 FPS) so DPI stays at min(devicePixelRatio, 2) for sharpness.
@@ -316,6 +325,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

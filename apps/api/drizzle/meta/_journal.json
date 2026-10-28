@@ -22,6 +22,13 @@
       "when": 1793154085734,
       "tag": "0002_purple_exodus",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793180572512,
+      "tag": "0003_wet_wendigo",
+      "breakpoints": true
     }
   ]
 }

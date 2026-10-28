@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuthSession } from "@privatefleet/contracts";
 import { api, configureAuth } from "../api/client.js";
+import { configureSocketAuth } from "../realtime/socket.js";
 import {
   clearSession,
   loadSession,
@@ -86,7 +87,11 @@ export function useSession(): {
 
   useEffect(() => {
     configureAuth({ getAccessToken, onRefreshFailed: clear });
-    return () => configureAuth(null);
+    configureSocketAuth(getAccessToken);
+    return () => {
+      configureAuth(null);
+      configureSocketAuth(null);
+    };
   }, [getAccessToken, clear]);
 
   useEffect(() => {
@@ -141,4 +146,5 @@ export function useSession(): {
 
   return { state, login, logout };
 }
+
 

@@ -4,6 +4,7 @@
  * will use. DEMO_MODE only.
  */
 import type { RealtimeBus } from "../../lib/realtime.js";
+import { DEMO_TENANT_ID } from "./data.js";
 import type { DemoStore } from "./store.js";
 
 export function startSimulator(
@@ -15,9 +16,10 @@ export function startSimulator(
     for (const vehicleId of store.vehicleIds()) {
       const position = store.advanceVehicle(vehicleId);
       if (position) {
-        bus.publishTelemetry(position);
+        bus.publishTelemetry(DEMO_TENANT_ID, position);
       }
     }
   }, intervalMs);
   return () => clearInterval(timer);
 }
+

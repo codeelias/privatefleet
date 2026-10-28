@@ -96,6 +96,45 @@ export const RoutePathSchema = z.object({
 });
 export type RoutePath = z.infer<typeof RoutePathSchema>;
 
+// --- Phase 4: authenticated device telemetry (docs/09) ----------------
+
+export const TelemetrySampleSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  capturedAt: z.string().datetime(),
+  accuracyMetres: z.number().nonnegative().max(5000).optional(),
+  headingDeg: z.number().min(0).max(360).optional(),
+  speedMps: z.number().nonnegative().max(120).optional(),
+});
+export type TelemetrySample = z.infer<typeof TelemetrySampleSchema>;
+
+export const TelemetryBatchSchema = z.object({
+  samples: z.array(TelemetrySampleSchema).min(1).max(50),
+});
+export type TelemetryBatch = z.infer<typeof TelemetryBatchSchema>;
+
+export const TelemetryIngestResultSchema = z.object({
+  accepted: z.number().int().nonnegative(),
+  rejected: z.number().int().nonnegative(),
+  results: z.array(
+    z.object({
+      status: z.enum(["accepted", "stale", "invalid"]),
+      capturedAt: z.string(),
+      sequenceNo: z.number().int().optional(),
+      reason: z.string().optional(),
+    }),
+  ),
+  lastPosition: z
+    .object({
+      latitude: z.number(),
+      longitude: z.number(),
+      capturedAt: z.string(),
+      sequenceNo: z.number().int(),
+    })
+    .optional(),
+});
+export type TelemetryIngestResult = z.infer<typeof TelemetryIngestResultSchema>;
+
 // --- Phase 2 auth contracts (docs/04, ADR-0005 auth decision) ---------
 
 export const TenantSummarySchema = z.object({

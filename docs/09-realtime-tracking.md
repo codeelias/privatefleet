@@ -77,3 +77,29 @@ Structured metrics (logs now, Prometheus only if the pilot needs it): outbox lag
 
 
 
+
+## 9.10 Phase 4 implementation status (2026-10-28)
+Real telemetry ingestion now exists (not demo-only):
+- `POST /v1/telemetry` (driver device token only): a batch of 1-50
+  samples; the vehicle is derived server-side from the authenticated
+  driver, never from the body.
+- One tenant-scoped transaction per batch: append to `location_points`
+  (server-assigned monotonic `sequence_no`), advance the hot
+  `vehicles.latitude/longitude/captured_at`, refresh
+  `drivers.last_ping_at`.
+- Monotonic acceptance: samples at or before the current position are
+  rejected as stale (reported per sample); future samples beyond a 5 min
+  tolerance are invalid.
+- Socket.IO handshakes are authenticated in production (access token ->
+  tenant room, server-derived). Telemetry publishes to the tenant room
+  only; per-vehicle coalescing (1 s) bounds dispatcher updates.
+- Snapshot recovery reads the hot columns, so a reconnect restores the
+  newest accepted position with the existing staleness rule.
+- Verification: `apps/api/src/modules/tracking/telemetry.test.ts` (3:
+  ordering/snapshot, replay + spoofed vehicle, auth) and
+  `apps/api/src/lib/realtime.test.ts` (2: tenant room isolation,
+  unauthenticated rejection).
+
+Remaining for Phase 4 completeness: geofence transitions, per-device
+rate limits, background location on the Expo app, and an end-to-end
+field-style test through the driver app.
