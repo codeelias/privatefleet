@@ -7,6 +7,7 @@
 import { useState } from "react";
 import type {
   FleetState,
+  LiveOptimizationProposal,
   OptimizationProposal,
   OptimizedStop,
 } from "@privatefleet/contracts";
@@ -56,15 +57,25 @@ function StopList({ stops }: { stops: OptimizedStop[] }) {
 export function OptimizationScreen({ state }: { state: FleetState }) {
   const [driverId, setDriverId] = useState(state.drivers[0]?.id ?? "");
   const [run, setRun] = useState<OptimizationProposal | null>(null);
+  const [liveRun, setLiveRun] = useState<LiveOptimizationProposal | null>(null);
+  const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const live = state.demoMode === false;
 
   async function optimise() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.runOptimization(driverId);
-      setRun(result);
+      if (live) {
+        const result = await api.runOptimizationLive(driverId);
+        setLiveRun(result);
+        setPublishedVersion(null);
+        setRun(null);
+      } else {
+        const result = await api.runOptimization(driverId);
+        setRun(result);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Optimisation failed");
     } finally {
@@ -73,14 +84,20 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
   }
 
   async function publish() {
-    if (!run) {
+    if (!run && !liveRun) {
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      const result = await api.approvePlan(run.runId, state.routeVersion);
-      setRun(result);
+      if (live && liveRun) {
+        const result = await api.approveLivePlan(liveRun.runId, state.routeVersion);
+        setPublishedVersion(result.version);
+        setLiveRun({ ...liveRun, published: true, publishedAt: result.publishedAt });
+      } else if (run) {
+        const result = await api.approvePlan(run.runId, state.routeVersion);
+        setRun(result);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Publish failed");
     } finally {
@@ -128,6 +145,92 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
         <p className="rounded-lg border border-status-danger/40 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
           {error}
         </p>
+      )}
+
+      {live && liveRun && (
+        <>
+          <div className="rounded-xl border border-brand-primary/40 bg-brand-primary/10 px-4 py-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <StatusChip tone="success" label="OSRM + VROOM" />
+              <span className="text-lg font-bold text-text-primary">
+                {(liveRun.proposal.distanceMetres / 1000).toFixed(1)} km -{" "}
+                {Math.round(liveRun.proposal.durationSeconds / 60)} min
+              </span>
+              <span className="text-xs text-text-secondary">
+                engine {liveRun.engine} v{liveRun.engineVersion} - run{" "}
+                {liveRun.runId.slice(0, 8)}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-text-secondary">
+              Road-network estimates from the routing engine. No traffic data is
+              claimed; arrival times are only shown once validated.
+            </p>
+            {liveRun.proposal.unassigned.length > 0 && (
+              <p className="mt-2 text-sm text-status-warning">
+                {liveRun.proposal.unassigned.length} shipment(s) could not be
+                placed - adjust assignments before publishing.
+              </p>
+            )}
+          </div>
+
+          <Panel
+            title={`Planned stop order - ${liveRun.proposal.stops.length} stops`}
+            action={
+              <StatusChip
+                tone={liveRun.proposal.unassigned.length > 0 ? "warning" : "success"}
+                label={liveRun.proposal.unassigned.length > 0 ? "unassigned work" : "all stops placed"}
+              />
+            }
+          >
+            <ol className="space-y-1.5 text-sm">
+              {liveRun.proposal.stops.map((stop, index) => (
+                <li
+                  key={`${stop.stopId}-${index}`}
+                  className="flex items-center gap-3 rounded-lg border border-command-border bg-command-raised px-3 py-2"
+                >
+                  <span className="w-6 text-[10px] font-bold text-text-secondary">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <span className="flex-1 truncate">
+                    <span className="mr-1 font-bold">{stop.jobRef}</span>
+                    {stop.address}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wider text-text-secondary">
+                    {stop.stopType}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </Panel>
+
+          <div className="flex items-center gap-3">
+            {liveRun.published ? (
+              <div className="flex items-center gap-3">
+                <StatusChip tone="success" label="Published" />
+                <span className="text-sm text-text-secondary">
+                  Route version {publishedVersion ?? ""} is live
+                  {liveRun.publishedAt ? ` (${timeOf(liveRun.publishedAt)})` : ""}. The board
+                  and live map now reflect this plan.
+                </span>
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void publish()}
+                  disabled={busy || liveRun.proposal.unassigned.length > 0}
+                  className="rounded-xl bg-status-success px-4 py-2 text-sm font-bold text-command-bg hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {busy ? "Publishing..." : "Publish approved plan"}
+                </button>
+                <span className="text-xs text-text-secondary">
+                  Approval publishes an immutable route version and rejects a stale
+                  version (409).
+                </span>
+              </>
+            )}
+          </div>
+        </>
       )}
 
       {run && (
@@ -195,7 +298,16 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
         </>
       )}
 
-      {!run && !busy && (
+      {live && !liveRun && !busy && (
+        <div className="flex flex-1 items-center justify-center">
+          <p className="text-sm text-text-secondary">
+            Live routing is enabled. Pick a driver with assigned pickup/dropoff pairs
+            and run the optimiser; nothing publishes without approval.
+          </p>
+        </div>
+      )}
+
+      {!live && !run && !busy && (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-text-secondary">
             Pick a driver and optimise. The proposal compares the current plan to a
@@ -206,4 +318,5 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
     </div>
   );
 }
+
 

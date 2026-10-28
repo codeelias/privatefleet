@@ -30,6 +30,13 @@ export default defineConfig({
   ],
   webServer: [
     {
+      command: "node support/fake-routing.mjs",
+      cwd: ".",
+      url: "http://127.0.0.1:4191/health",
+      reuseExistingServer: false,
+      timeout: 30_000,
+    },
+    {
       command: "pnpm --filter @privatefleet/api exec tsx src/db/serve-auth-e2e.ts",
       cwd: "../..",
       url: "http://127.0.0.1:4002/healthz",
@@ -45,6 +52,8 @@ export default defineConfig({
         PORT: "4002",
         LOG_LEVEL: "warn",
         CORS_ORIGINS: "http://127.0.0.1:8080",
+        OSRM_BASE_URL: "http://127.0.0.1:4191",
+        VROOM_BASE_URL: "http://127.0.0.1:4191",
       },
     },
     {
@@ -80,6 +89,8 @@ export default defineConfig({
     },
   ],
 });
+
+
 
 
 

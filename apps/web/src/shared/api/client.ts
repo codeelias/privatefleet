@@ -13,6 +13,7 @@ import type {
   AuthSession,
   AuthTokens,
   FleetState,
+  LiveOptimizationProposal,
   OptimizationProposal,
   ScenarioName,
   ScenariosList,
@@ -147,11 +148,24 @@ export const api = {
       headers: { "idempotency-key": idempotencyKey },
       body: JSON.stringify({ jobId, driverId }),
     }),
+  runOptimizationLive: (driverId: string) =>
+    request<LiveOptimizationProposal>("/v1/optimization/run", {
+      method: "POST",
+      body: JSON.stringify({ driverId }),
+    }),
   runOptimization: (driverId: string) =>
     request<OptimizationProposal>("/v1/optimization/run", {
       method: "POST",
       body: JSON.stringify({ driverId }),
     }),
+  approveLivePlan: (runId: string, expectedRouteVersion: number) =>
+    request<{ routeId: string; version: number; publishedAt: string }>(
+      `/v1/optimization/${runId}/approve`,
+      {
+        method: "POST",
+        body: JSON.stringify({ expectedRouteVersion }),
+      },
+    ),
   approvePlan: (runId: string, expectedRouteVersion: number) =>
     request<OptimizationProposal>(`/v1/optimization/${runId}/approve`, {
       method: "POST",
@@ -163,5 +177,6 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 

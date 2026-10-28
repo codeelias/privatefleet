@@ -9,6 +9,14 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.41 - Phase 5: dispatcher live-proposal UI and end-to-end publish acceptance (2026-10-28)
+- Route Optimisation screen now branches on mode: postgres/live shows engine + version + run id, km/min estimates, solved stop order, unassigned-work warning, and publishes via the stale-version-checked approval endpoint; demo mode keeps the seeded simulated proposal unchanged.
+- New web API calls `runOptimizationLive` and `approveLivePlan`; live publish reports the published route version.
+- Acceptance against the real UI + postgres API with a protocol-faithful fake OSRM/VROOM service: propose -> publish -> `routeVersion` 2 with one published route.
+- Harness note: Node 22 fetch rejects port 4190 (undici blocked ports); fake routing runs on 4191.
+- Verification: auth acceptance 10/10, demo E2E 13/13, API 40/40, web unit 21/21, typecheck 6/6, lint 6/6, build 5/5, encoding clean.
+- Remaining: multi-vehicle planning, real OSRM/VROOM container deployment check, Expo native background location.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.40 - Phase 5: durable optimization runs, route publication and snapshot routing (2026-10-28)
 - Migration 0004: `routes` (validated geometry persisted at publish), `route_stops`, `optimization_runs`, tenant-scoped with RLS coverage.
 - `createProposal`: loads pending assigned pickup/dropoff pairs, runs OSRM matrix -> VROOM -> road geometry, persists run with input hash/engine/version/metrics, and reuses stored runs for identical inputs (cache).
@@ -349,6 +357,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

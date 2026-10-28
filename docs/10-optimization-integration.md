@@ -101,7 +101,21 @@ Evidence: service tests (3) cover persistence/cache, publish -> snapshot
 version 2 with route_stops, stale rejection and idempotent re-approval;
 API suite 40/40; demo E2E 13/13; auth acceptance 9/9.
 
-Remaining: wire the dispatcher UI to the live proposal shape (the demo
-screen still consumes the seeded proposal), multi-vehicle planning, and a
-real container run of OSRM/VROOM as the deployment check.
+Dispatcher UI (2026-10-28): in postgres mode the Route Optimisation screen
+calls the live endpoint, renders engine/version/run id, distance and
+duration, the solved stop order, unassigned work, and publishes through
+the stale-version-checked approval call. Demo mode keeps the seeded
+simulated proposal exactly as before.
+
+Acceptance: `apps/e2e/tests-auth/optimization-live.spec.ts` runs the real
+UI against the postgres API with a protocol-faithful fake OSRM/VROOM
+service (`apps/e2e/support/fake-routing.mjs`), publishes, and verifies
+`routeVersion` 2 with one published route. Note for future harness work:
+Node 22 `fetch` rejects port 4190 (undici blocked-port list); the fake
+service uses 4191.
+
+Remaining: multi-vehicle planning (current live run plans one driver),
+real OSRM/VROOM containers as the deployment check, and background
+location on the native driver app.
+
 
