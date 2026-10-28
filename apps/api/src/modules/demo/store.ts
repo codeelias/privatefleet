@@ -29,8 +29,43 @@ import {
   SIMULATOR_ROUTES,
 } from "./data.js";
 import { ROUTE_GEOMETRY } from "./route-geometry.js";
+import { SCENARIO_ASSIGNMENTS } from "./assignments.js";
 
 const STALE_AFTER_MS = 60_000;
+
+/** Demo speed: 40 km/h. Movement is speed x time, not point counting. */
+export const DEMO_SPEED_MPS = 40_000 / 3_600;
+export const SIMULATOR_TICK_SECONDS = 2;
+
+function haversineMetres(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+): number {
+  // Degrees scaled by metres-per-degree (do not mix radians here).
+  const dLat = b.latitude - a.latitude;
+  const dLon = b.longitude - a.longitude;
+  const latRad = ((a.latitude + b.latitude) / 2) * (Math.PI / 180);
+  const x = dLon * 111_320 * Math.cos(latRad);
+  const y = dLat * 110_540;
+  return Math.sqrt(x * x + y * y);
+}
+
+function cumulativeDistances(route: { latitude: number; longitude: number }[]): {
+  cumulative: number[];
+  total: number;
+} {
+  const cumulative: number[] = [0];
+  let total = 0;
+  for (let index = 1; index < route.length; index += 1) {
+    const previous = route[index - 1];
+    const current = route[index];
+    if (previous && current) {
+      total += haversineMetres(previous, current);
+    }
+    cumulative.push(total);
+  }
+  return { cumulative, total };
+}
 
 interface JobRecord {
   dto: JobDto;
@@ -39,46 +74,15 @@ interface JobRecord {
 interface VehicleRecord {
   dto: VehicleDto;
   route: { latitude: number; longitude: number }[];
-  routeIndex: number;
+  /** Cumulative distance in metres at each route point (last = total). */
+  cumulative: number[];
+  totalDistance: number;
+  /** Distance travelled along the route in metres. */
+  distanceAlong: number;
+  segmentIndex: number;
   sequenceNo: number;
   lastCapturedAt: string;
 }
-
-interface JobPlanEntry {
-  ref: string;
-  driver: number;
-}
-
-/** Pre-assigned blocks per scenario (review fix: the board must feel busy). */
-const PLANNED: Record<ScenarioName, JobPlanEntry[]> = {
-  "morning-rush": [
-    { ref: "J-196", driver: 0 },
-    { ref: "J-201", driver: 0 },
-    { ref: "J-182", driver: 0 },
-    { ref: "J-202", driver: 1 },
-    { ref: "J-205", driver: 1 },
-    { ref: "J-191", driver: 1 },
-    { ref: "J-214", driver: 2 },
-    { ref: "J-219", driver: 2 },
-  ],
-  emergency: [
-    { ref: "J-196", driver: 0 },
-    { ref: "J-201", driver: 0 },
-    { ref: "J-182", driver: 0 },
-    { ref: "J-202", driver: 1 },
-    { ref: "J-205", driver: 1 },
-    { ref: "J-191", driver: 1 },
-    { ref: "J-214", driver: 2 },
-    { ref: "J-219", driver: 2 },
-  ],
-  proof: [
-    { ref: "J-202", driver: 1 },
-    { ref: "J-205", driver: 1 },
-    { ref: "J-191", driver: 1 },
-    { ref: "J-214", driver: 2 },
-    { ref: "J-219", driver: 2 },
-  ],
-};
 
 export class DemoStore {
   private scenario: ScenarioName = "morning-rush";
@@ -123,6 +127,9 @@ export class DemoStore {
         vehicleId: seed.vehicleId,
         lastPingAt: now,
       });
+      const fixture = ROUTE_GEOMETRY[scenario]?.[seed.vehicleId];
+      const route = fixture?.points ?? SIMULATOR_ROUTES[seed.vehicleId] ?? [seed.start];
+      const { cumulative, total } = cumulativeDistances(route);
       this.vehicles.set(seed.vehicleId, {
         dto: {
           id: seed.vehicleId,
@@ -134,8 +141,11 @@ export class DemoStore {
         },
         // Precomputed road-following demo geometry (OSRM fixtures); the
         // simulator and the rendered route share this exact path.
-        route: ROUTE_GEOMETRY[seed.vehicleId] ?? SIMULATOR_ROUTES[seed.vehicleId] ?? [seed.start],
-        routeIndex: 0,
+        route,
+        cumulative,
+        totalDistance: total,
+        distanceAlong: 0,
+        segmentIndex: 0,
         sequenceNo: 0,
         lastCapturedAt: now,
       });
@@ -146,27 +156,21 @@ export class DemoStore {
       if (scenario === "emergency" && seed.reference === "J-208") {
         dto.priority = "stat" satisfies JobPriority;
       }
-      if (scenario === "proof" && seed.reference === "J-198") {
-        const driver = DRIVER_SEEDS[0];
-        if (driver) {
-          dto.status = "in_progress";
-          dto.assignedDriverId = driver.id;
-          dto.assignedVehicleId = driver.vehicleId;
-          const first = dto.stops[0];
-          if (first) {
-            first.status = "arrived";
-          }
-        }
-      }
-      // Busy-day plan: pre-assigned blocks so the Dispatch Board feels
-      // like a real operational morning (review fix: sparse board).
-      const plan = PLANNED[scenario].find((p) => p.ref === seed.reference);
-      if (plan && dto.status === "unassigned") {
+      // Assignment truth shared with the route-fixture generator: the
+      // board, the rendered route and the simulator cannot drift apart.
+      const plan = SCENARIO_ASSIGNMENTS[scenario].find((p) => p.ref === seed.reference);
+      if (plan) {
         const driver = DRIVER_SEEDS[plan.driver];
         if (driver) {
-          dto.status = "assigned";
+          dto.status = plan.started ? "in_progress" : "assigned";
           dto.assignedDriverId = driver.id;
           dto.assignedVehicleId = driver.vehicleId;
+          if (plan.started) {
+            const first = dto.stops[0];
+            if (first) {
+              first.status = "arrived";
+            }
+          }
         }
       }
       this.jobs.set(seed.id, { dto });
@@ -709,16 +713,33 @@ export class DemoStore {
       return undefined;
     }
     const route = record.route;
-    // One loop per ~450 ticks (15 minutes at a 2s cadence). routeIndex is
-    // in point units, so the step scales with geometry density.
-    const step = Math.max(0.05, (route.length - 1) / 450);
-    record.routeIndex = (record.routeIndex + step) % (route.length - 1);
-    const from = route[Math.floor(record.routeIndex)];
-    const to = route[Math.floor(record.routeIndex) + 1];
+    const distanceStep = DEMO_SPEED_MPS * SIMULATOR_TICK_SECONDS;
+    if (record.totalDistance <= 0 || route.length < 2) {
+      return undefined;
+    }
+    // Movement is distance over time: advance along the cumulative
+    // distance, then interpolate inside the containing segment.
+    record.distanceAlong = (record.distanceAlong + distanceStep) % record.totalDistance;
+    let segment = record.segmentIndex;
+    if (record.distanceAlong < (record.cumulative[segment] ?? 0)) {
+      segment = 0; // wrapped around the end of the circuit
+    }
+    while (
+      segment < route.length - 2 &&
+      (record.cumulative[segment + 1] ?? 0) < record.distanceAlong
+    ) {
+      segment += 1;
+    }
+    record.segmentIndex = segment;
+    const from = route[segment];
+    const to = route[segment + 1];
     if (!from || !to) {
       return undefined;
     }
-    const t = record.routeIndex % 1;
+    const legStart = record.cumulative[segment] ?? 0;
+    const legEnd = record.cumulative[segment + 1] ?? legStart + 1;
+    const legDistance = legEnd - legStart;
+    const t = legDistance > 0 ? (record.distanceAlong - legStart) / legDistance : 0;
     const latitude = from.latitude + (to.latitude - from.latitude) * t;
     const longitude = from.longitude + (to.longitude - from.longitude) * t;
     const headingDeg =
@@ -776,6 +797,8 @@ export class DemoStore {
     };
   }
 }
+
+
 
 
 

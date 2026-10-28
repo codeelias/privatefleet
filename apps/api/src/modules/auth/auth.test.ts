@@ -91,6 +91,49 @@ describe("auth lifecycle", () => {
     expect((res.json() as { code: string }).code).toBe("INVALID_CREDENTIALS");
   });
 
+  it("serialises concurrent refreshes: exactly one winner, no token branch", async () => {
+    const session = await register("Refresh Race Ltd");
+    createdTenants.push(session.tenant.id);
+    const login = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: {
+        tenantSlug: session.tenant.slug,
+        email: session.user.email,
+        password: "correct horse battery staple",
+      },
+    });
+    const tokens = (login.json() as Session).tokens;
+
+    const [first, second] = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: "/v1/auth/refresh",
+        payload: { refreshToken: tokens.refreshToken },
+      }),
+      app.inject({
+        method: "POST",
+        url: "/v1/auth/refresh",
+        payload: { refreshToken: tokens.refreshToken },
+      }),
+    ]);
+    expect([first.statusCode, second.statusCode].sort()).toEqual([200, 401]);
+
+    const winner = (first.statusCode === 200 ? first : second).json() as Session["tokens"];
+    const firstUse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      payload: { refreshToken: winner.refreshToken },
+    });
+    expect(firstUse.statusCode).toBe(200);
+    const replay = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      payload: { refreshToken: winner.refreshToken },
+    });
+    expect(replay.statusCode).toBe(401);
+  });
+
   it("logs in, then rotates refresh tokens (replay is rejected)", async () => {
     const session = await register("Rotation Test Ltd");
     createdTenants.push(session.tenant.id);

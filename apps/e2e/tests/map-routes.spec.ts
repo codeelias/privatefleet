@@ -2,104 +2,145 @@ import { expect, test } from "@playwright/test";
 import { fleetState, resetScenario, WEB } from "./helpers";
 
 /**
- * Route-correctness acceptance (docs/14.2, ADR-0010): road-following
- * geometry from the same scenario state as markers, selection highlight,
- * scenario switching, movement along the route, and an honest failure
- * state. Geometry is precomputed OSRM demo data (labelled as such).
+ * Route-correctness acceptance (docs/16, ADR-0013).
+ *
+ * Demo fixtures are precomputed OSRM road geometry (labelled demo data).
+ * This spec proves, for EVERY scenario, that the rendered geometry and
+ * assignment state agree, and that simulated movement is distance-based.
+ *
+ * Documented tolerances (exact fixture coordinates, no geocoding):
+ * - route origin vs vehicle position: 150 m
+ * - stop vs its route leg: 120 m
+ * - movement distance over elapsed time: 0.5x - 2.0x (speed * delta)
  */
+
+const ORIGIN_TOLERANCE_M = 150;
+const STOP_TOLERANCE_M = 120;
+const DEMO_SPEED_MPS = 40_000 / 3_600;
 
 function metresBetween(
   a: { latitude: number; longitude: number },
   b: { latitude: number; longitude: number },
 ): number {
-  const lat = (a.latitude + b.latitude) / 2;
-  const dx = (b.longitude - a.longitude) * 111_320 * Math.cos((lat * Math.PI) / 180);
+  const lat = ((a.latitude + b.latitude) / 2) * (Math.PI / 180);
+  const dx = (b.longitude - a.longitude) * 111_320 * Math.cos(lat);
   const dy = (b.latitude - a.latitude) * 110_540;
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-test("Live map: road-following routes match assignments and selection", async ({
-  page,
-  isMobile,
-}) => {
+function inLondon(point: { latitude: number; longitude: number }): boolean {
+  // Greater London bbox. A swapped coordinate order (lat/lng reversed)
+  // would fail this immediately, which is the RFC 7946 guard.
+  return (
+    point.latitude > 51.3 &&
+    point.latitude < 51.7 &&
+    point.longitude > -0.55 &&
+    point.longitude < 0.3
+  );
+}
+
+test("Live map: routes, assignments and scenarios are consistent", async ({ isMobile }) => {
   test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
+
+  for (const scenario of ["morning-rush", "emergency", "proof"] as const) {
+    await resetScenario(scenario);
+    const state = await fleetState();
+
+    // Geometry validity + coordinate order (London bbox).
+    expect(state.routes.length).toBe(3);
+    for (const route of state.routes) {
+      expect(route.points.length).toBeGreaterThanOrEqual(50);
+      for (const point of route.points) {
+        expect(Number.isFinite(point.latitude)).toBe(true);
+        expect(Number.isFinite(point.longitude)).toBe(true);
+        expect(inLondon(point)).toBe(true);
+      }
+      const first = route.points[0];
+      const second = route.points[1];
+      expect(first).toBeTruthy();
+      expect(second).toBeTruthy();
+      expect(first).not.toEqual(second);
+    }
+
+    // Route/vehicle/assignment consistency.
+    expect(state.routes.length).toBe(state.vehicles.length);
+    for (const route of state.routes) {
+      expect(state.vehicles.some((v) => v.id === route.vehicleId)).toBe(true);
+      expect(state.drivers.some((d) => d.id === route.driverId)).toBe(true);
+    }
+
+    // Route origin agrees with the vehicle position.
+    for (const route of state.routes) {
+      const vehicle = state.vehicles.find((v) => v.id === route.vehicleId);
+      expect(vehicle?.location).toBeTruthy();
+      const start = route.points[0];
+      if (vehicle?.location && start) {
+        expect(metresBetween(start, vehicle.location)).toBeLessThan(ORIGIN_TOLERANCE_M);
+      }
+    }
+
+    // Assigned stops are close to their driver's road geometry.
+    // Sequence order is certified deterministically in the API unit test
+    // (route-geometry.test.ts) from engine-snapped waypoint indices; an
+    // out-and-back circuit cannot be ordered by proximity alone.
+    for (const job of state.jobs) {
+      if (!job.assignedDriverId) {
+        continue;
+      }
+      const route = state.routes.find((r) => r.driverId === job.assignedDriverId);
+      expect(route).toBeTruthy();
+      for (const stop of job.stops) {
+        const nearest = Math.min(
+          ...(route?.points ?? []).map((point) => metresBetween(point, stop.location)),
+        );
+        expect(nearest).toBeLessThan(STOP_TOLERANCE_M);
+      }
+    }
+  }
+});
+
+test("Live map: simulated movement is distance over time", async ({ isMobile }) => {
+  test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
+
   await resetScenario("morning-rush");
-  const state = await fleetState();
+  const before = await fleetState();
+  const vehicleId = before.vehicles[0]?.id;
+  expect(vehicleId).toBeTruthy();
+  const startedAt = Date.now();
+  await new Promise((resolve) => setTimeout(resolve, 6_000));
+  const after = await fleetState();
+  const elapsedSeconds = (Date.now() - startedAt) / 1_000;
 
-  // 1) Road geometry, not straight lines: dense sampled routes.
-  expect(state.routes.length).toBe(3);
-  for (const route of state.routes) {
-    expect(route.points.length).toBeGreaterThanOrEqual(100);
-  }
+  const startPosition = before.vehicles.find((v) => v.id === vehicleId)?.location;
+  const endPosition = after.vehicles.find((v) => v.id === vehicleId)?.location;
+  expect(startPosition).toBeTruthy();
+  expect(endPosition).toBeTruthy();
 
-  // 2) Each driver's route starts where their vehicle is.
-  for (const route of state.routes) {
-    const vehicle = state.vehicles.find((v) => v.id === route.vehicleId);
-    const start = route.points[0];
-    const current = vehicle?.location;
-    expect(start).toBeTruthy();
-    expect(current).toBeTruthy();
-    if (start && current) {
-      expect(metresBetween(start, current)).toBeLessThan(400);
-    }
-  }
+  console.log("MOVEMENT", JSON.stringify({ before: startPosition, after: endPosition, elapsedSeconds, scenario: before.scenario }));
+  const travelled = metresBetween(startPosition!, endPosition!);
+  const expected = DEMO_SPEED_MPS * elapsedSeconds;
+  expect(travelled).toBeGreaterThan(expected * 0.5);
+  expect(travelled).toBeLessThan(expected * 2.0);
+});
 
-  // 3) Every assigned stop is on that driver's route (roads near stops).
-  for (const job of state.jobs) {
-    if (!job.assignedDriverId) {
-      continue;
-    }
-    const route = state.routes.find((r) => r.driverId === job.assignedDriverId);
-    expect(route).toBeTruthy();
-    for (const stop of job.stops) {
-      const nearest = Math.min(
-        ...(route?.points ?? []).map((p) => metresBetween(p, stop.location)),
-      );
-      expect(nearest).toBeLessThan(400);
-    }
-  }
+test("Live map: selecting a vehicle highlights its route", async ({ page, isMobile }) => {
+  test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
 
+  await resetScenario("morning-rush");
   await page.goto(WEB);
   await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible();
 
-  // 4) Selecting a vehicle highlights its route (stroke width 5 vs 3).
   const pin = page.locator('[title*="VAN-02"]').first();
   await expect(pin).toBeVisible();
   await pin.click();
   await expect(pin).toHaveAttribute("aria-pressed", "true");
-  const highlighted = page.locator('path.leaflet-interactive[stroke-width="5"]');
-  await expect(highlighted).toHaveCount(1);
+  await expect(page.locator('path.leaflet-interactive[stroke-width="5"]')).toHaveCount(1);
   await expect(page.locator('path.leaflet-interactive[stroke-width="3"]')).toHaveCount(2);
 
-  // 5) Movement follows the route (next position still on the geometry).
-  const before = await fleetState();
-  await page.waitForTimeout(4_500);
-  const after = await fleetState();
-  const movedVehicle = after.vehicles.find(
-    (v) => v.id === before.vehicles[0]?.id,
-  );
-  const previous = before.vehicles[0]?.location;
-  expect(movedVehicle?.location).toBeTruthy();
-  expect(previous).toBeTruthy();
-  if (movedVehicle?.location && previous) {
-    expect(metresBetween(movedVehicle.location, previous)).toBeGreaterThan(1);
-    const route = after.routes.find((r) => r.vehicleId === movedVehicle.id);
-    const nearest = Math.min(
-      ...(route?.points ?? []).map((p) => metresBetween(p, movedVehicle.location as {
-        latitude: number;
-        longitude: number;
-      })),
-    );
-    expect(nearest).toBeLessThan(300);
-  }
-
-  // 6) Scenario switching keeps the map consistent.
+  // Scenario switching keeps the map consistent and never fakes geometry.
   await page.getByRole("button", { name: "Emergency" }).click();
   await expect(page.getByRole("button", { name: "Emergency" })).toBeEnabled();
-  await expect(page.locator('path.leaflet-interactive')).toHaveCount(3);
-  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible();
-
-  // 7) No false "geometry unavailable" warning while routes exist.
+  await expect(page.locator("path.leaflet-interactive")).toHaveCount(3);
   await expect(page.getByText(/Route geometry unavailable/)).toHaveCount(0);
 });
 

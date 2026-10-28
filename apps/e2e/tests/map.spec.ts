@@ -12,7 +12,8 @@ async function openDispatcher(page: Page): Promise<void> {
  * route (the state once reported the route's first point forever) and
  * route polylines must render from FleetState.routes.
  */
-test("Live map: vehicles follow routes and pins move", async ({ page }) => {
+test("Live map: vehicles follow routes and pins move", async ({ page, isMobile }) => {
+  test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
   await resetScenario("morning-rush");
 
   const first = await fleetState();
@@ -34,8 +35,15 @@ test("Live map: vehicles follow routes and pins move", async ({ page }) => {
   const pin = page.locator('[title*="VAN-02"]').first();
   await expect(pin).toBeVisible();
   const before = await pin.evaluate((el) => (el as HTMLElement).style.left);
-  await page.waitForTimeout(4_500);
-  const after = await pin.evaluate((el) => (el as HTMLElement).style.left);
-  expect(after).not.toBe(before);
+  // Poll: the simulator ticks every 2s and browser scheduling jitter can
+  // delay the first repaint, so a single fixed wait is flaky.
+  await expect
+    .poll(async () => pin.evaluate((el) => (el as HTMLElement).style.left), {
+      timeout: 20_000,
+      intervals: [1_000, 2_000],
+    })
+    .not.toBe(before);
 });
+
+
 

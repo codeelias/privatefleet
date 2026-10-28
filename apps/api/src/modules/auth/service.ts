@@ -131,10 +131,16 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + this.config.refreshTtlDays * 86_400_000);
 
     await withTenant(this.handle, row.tenant_id, async (db) => {
-      await db.execute(sql`
+      // Rotation is atomic: only one concurrent refresh may revoke the
+      // presented token. A lost race must not create a second branch.
+      const rotated = (await db.execute(sql`
         UPDATE refresh_tokens SET revoked_at = now(), replaced_by = ${nextId}
         WHERE id = ${row.id} AND revoked_at IS NULL
-      `);
+        RETURNING id
+      `)) as unknown as Array<{ id: string }>;
+      if (rotated.length === 0) {
+        throw new AuthError("REFRESH_INVALID", "Refresh token is no longer valid");
+      }
       await db.execute(sql`
         INSERT INTO refresh_tokens (id, tenant_id, user_id, token_hash, expires_at)
         VALUES (${nextId}, ${row.tenant_id}, ${row.user_id}, ${nextHash}, ${expiresAt.toISOString()})
@@ -230,4 +236,5 @@ function slugify(name: string): string {
     .replace(/(^-|-$)/g, "")
     .slice(0, 80);
 }
+
 

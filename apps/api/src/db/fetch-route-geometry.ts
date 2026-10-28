@@ -1,18 +1,25 @@
 /**
  * Route geometry fixture generator (demo data, clearly labelled).
  *
- * Fetches road-following geometry from the public OSRM demo server for
- * each simulated driver route, then writes a committed fixture file so
- * the demo never depends on live routing. Coordinates are stored in
- * GeoJSON order semantics but as {latitude, longitude} objects to match
- * the contracts; the map layer converts to [lng, lat] at render time.
+ * For every demo scenario and driver, fetches road-following geometry
+ * from the public OSRM demo server through that driver's assigned stops
+ * (pickup then dropoff, in assignment order, starting at the driver
+ * position) and writes a committed fixture so the demo never depends on
+ * live routing. It is an out-and-back circuit so the simulator loops.
  *
- * Regenerate with: pnpm --filter @privatefleet/api exec tsx src/db/fetch-route-geometry.ts
+ * Assignment truth comes from modules/demo/assignments.ts, the same
+ * source the in-memory store uses, so the board, the rendered route and
+ * the simulated movement cannot drift apart.
+ *
+ * Regenerate with:
+ *   pnpm --filter @privatefleet/api exec tsx src/db/fetch-route-geometry.ts
  */
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { DRIVER_SEEDS, JOB_SEEDS, SIMULATOR_ROUTES } from "../modules/demo/data.js";
+import type { ScenarioName } from "@privatefleet/contracts";
+import { DRIVER_SEEDS, JOB_SEEDS } from "../modules/demo/data.js";
+import { SCENARIO_ASSIGNMENTS } from "../modules/demo/assignments.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const target = join(here, "..", "modules", "demo", "route-geometry.ts");
@@ -22,40 +29,30 @@ interface GeoPoint {
   longitude: number;
 }
 
-const ROUTE_THROUGH_STOPS = process.argv.includes("--through-stops");
-
-/**
- * Morning Rush assignments (docs/14.2): driver index -> job references.
- * The generated circuit starts at the driver position, visits each job in
- * assignment order (pickup then dropoff), then returns - so the rendered
- * route agrees with the assignments shown on the board.
- */
-const ASSIGNED: Array<{ driver: number; jobs: string[] }> = [
-  { driver: 0, jobs: ["J-196", "J-201", "J-182"] },
-  { driver: 1, jobs: ["J-202", "J-205", "J-191"] },
-  { driver: 2, jobs: ["J-214", "J-219"] },
-];
-
-function stopWaypoints(): Record<string, GeoPoint[]> {
-  const out: Record<string, GeoPoint[]> = {};
-  for (const entry of ASSIGNED) {
-    const driver = DRIVER_SEEDS[entry.driver];
-    if (!driver) {
-      continue;
-    }
-    const points: GeoPoint[] = [{ ...driver.start }];
-    for (const reference of entry.jobs) {
-      const job = JOB_SEEDS.find((seed) => seed.reference === reference);
-      if (!job) {
-        continue;
-      }
-      points.push({ latitude: job.pickup.latitude, longitude: job.pickup.longitude });
-      points.push({ latitude: job.dropoff.latitude, longitude: job.dropoff.longitude });
-    }
-    out[driver.vehicleId] = points;
-  }
-  return out;
+/** Metres between two WGS84 points (degrees scaled by metres/degree). */
+function distanceMetres(a: GeoPoint, b: GeoPoint): number {
+  const dLat = b.latitude - a.latitude;
+  const dLon = b.longitude - a.longitude;
+  const latRad = ((a.latitude + b.latitude) / 2) * (Math.PI / 180);
+  const x = dLon * 111_320 * Math.cos(latRad);
+  const y = dLat * 110_540;
+  return Math.sqrt(x * x + y * y);
 }
+
+const STOP_SNAP_TOLERANCE_M = 120;
+
+/** First index at/after `from` within tolerance of the waypoint. */
+function waypointIndex(points: GeoPoint[], waypoint: GeoPoint, from: number): number {
+  for (let index = from; index < points.length; index += 1) {
+    const point = points[index];
+    if (point && distanceMetres(point, waypoint) <= STOP_SNAP_TOLERANCE_M) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+const SCENARIOS: ScenarioName[] = ["morning-rush", "emergency", "proof"];
 
 async function osrmRoute(points: GeoPoint[]): Promise<GeoPoint[]> {
   const coords = points.map((p) => `${p.longitude},${p.latitude}`).join(";");
@@ -83,32 +80,83 @@ async function osrmRoute(points: GeoPoint[]): Promise<GeoPoint[]> {
   return sampled;
 }
 
+function driverWaypoints(scenario: ScenarioName, driver: number): GeoPoint[] {
+  const seed = DRIVER_SEEDS[driver];
+  if (!seed) {
+    return [];
+  }
+  const points: GeoPoint[] = [{ ...seed.start }];
+  for (const assignment of SCENARIO_ASSIGNMENTS[scenario].filter((a) => a.driver === driver)) {
+    const job = JOB_SEEDS.find((candidate) => candidate.reference === assignment.ref);
+    if (!job) {
+      continue;
+    }
+    points.push({ latitude: job.pickup.latitude, longitude: job.pickup.longitude });
+    points.push({ latitude: job.dropoff.latitude, longitude: job.dropoff.longitude });
+  }
+  return points;
+}
+
 async function main(): Promise<void> {
-  void ROUTE_THROUGH_STOPS;
   const lines: string[] = [];
   lines.push("/**");
   lines.push(" * DEMO ROUTE GEOMETRY - precomputed with the public OSRM demo");
-  lines.push(" * server and committed as fixtures (docs/10.4, ADR-0010).");
+  lines.push(" * server and committed as fixtures (docs/16.5, ADR-0013).");
   lines.push(" * These are explicitly demo-data road routes, not live routing;");
-  lines.push(" * Phase 5 replaces them with OSRM/VROOM-backed geometry.");
-  lines.push(" * Generated by src/db/fetch-route-geometry.ts - do not edit by hand.");
+  lines.push(" * Phase 5 replaces them with OSRM/VROOM-backed validated geometry.");
+  lines.push(" * Keyed by scenario, then vehicle. Generated by");
+  lines.push(" * src/db/fetch-route-geometry.ts - do not edit by hand.");
   lines.push(" */");
   lines.push('import type { GeoPoint } from "@privatefleet/contracts";');
   lines.push("");
-  lines.push("export const ROUTE_GEOMETRY: Record<string, GeoPoint[]> = {");
-  const waypointMap = ROUTE_THROUGH_STOPS ? stopWaypoints() : SIMULATOR_ROUTES;
-  for (const [vehicleId, waypoints] of Object.entries(waypointMap)) {
-    const outbound = await osrmRoute(waypoints);
-    // Out-and-back circuit so the simulator loops without teleporting.
-    const inbound = [...outbound].reverse().slice(1);
-    const circuit = [...outbound, ...inbound];
-    lines.push(`  // vehicle ${vehicleId}`);
-    lines.push(`  "${vehicleId}": [`);
-    for (const point of circuit) {
-      lines.push(`    { latitude: ${point.latitude}, longitude: ${point.longitude} },`);
+  lines.push("export interface DemoRoute {");
+  lines.push("  points: GeoPoint[];");
+  lines.push("  /** Outbound indices of the engine-snapped waypoints, in order. */");
+  lines.push("  waypoints: number[];");
+  lines.push("}");
+  lines.push("");
+  lines.push("export const ROUTE_GEOMETRY: Record<string, Record<string, DemoRoute>> = {");
+
+  for (const scenario of SCENARIOS) {
+    lines.push(`  "${scenario}": {`);
+    for (const [driverIndex, seed] of DRIVER_SEEDS.entries()) {
+      const waypoints = driverWaypoints(scenario, driverIndex);
+      if (waypoints.length < 2) {
+        continue;
+      }
+      const outbound = await osrmRoute(waypoints);
+      // Certify the engine ordered the waypoints as requested: find each
+      // waypoint on the outbound leg after the previous one.
+      const indices: number[] = [];
+      let cursor = 0;
+      let sequenceValid = true;
+      for (const waypoint of waypoints) {
+        const index = waypointIndex(outbound, waypoint, cursor);
+        if (index < 0) {
+          sequenceValid = false;
+          break;
+        }
+        indices.push(index);
+        cursor = index;
+      }
+      if (!sequenceValid) {
+        throw new Error(`${scenario}/${seed.vehicleRegistration}: OSRM route does not pass waypoints in order`);
+      }
+      // Out-and-back circuit so the simulator loops without teleporting.
+      const inbound = [...outbound].reverse().slice(1);
+      const circuit = [...outbound, ...inbound];
+      lines.push(`    // driver ${driverIndex}: ${seed.vehicleRegistration}`);
+      lines.push(`    "${seed.vehicleId}": {`);
+      lines.push(`      waypoints: [${indices.join(", ")}],`);
+      lines.push(`      points: [`);
+      for (const point of circuit) {
+        lines.push(`        { latitude: ${point.latitude}, longitude: ${point.longitude} },`);
+      }
+      lines.push("      ],");
+      lines.push("    },");
+      console.log(`${scenario}/${seed.vehicleRegistration}: ${circuit.length} points`);
     }
-    lines.push("  ],");
-    console.log(`fetched ${vehicleId}: ${circuit.length} points`);
+    lines.push("  },");
   }
   lines.push("};");
   lines.push("");
@@ -117,5 +165,4 @@ async function main(): Promise<void> {
 }
 
 await main();
-
 
