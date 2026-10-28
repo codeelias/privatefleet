@@ -9,6 +9,7 @@ import { hash as argonHash } from "@node-rs/argon2";
 import { buildApp } from "../../app.js";
 import { loadConfig, migrationDatabaseUrl } from "../../config.js";
 import { closeDb, createDb, type DbHandle } from "../../db/client.js";
+import { seedTenant } from "../../db/seed.js";
 
 const APP_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
@@ -222,6 +223,67 @@ describe("driver-scoped assignments", () => {
   });
 });
 
+describe("seeded single-stop job (device acceptance fixture)", () => {
+  it("completes J-000 through arrive + complete", async () => {
+    const seeded = await seedTenant(migrator, {
+      tenantName: "Seeded Device Co",
+      email: "owner@seeded.demo",
+      password: "demo-password-123",
+      slug: `seeded-${randomUUID().slice(0, 6)}`,
+    });
+    createdTenants.push(seeded.tenantId);
+    const owner = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { tenantSlug: seeded.tenantSlug, email: seeded.email, password: seeded.password },
+    });
+    expect(owner.statusCode).toBe(200);
+    const ownerToken = (owner.json() as { tokens: { accessToken: string } }).tokens.accessToken;
+    const state = await app.inject({
+      method: "GET",
+      url: "/v1/fleet/state",
+      headers: authed(ownerToken),
+    });
+    const job = (state.json() as { jobs: Array<{ id: string; reference: string; assignedDriverId?: string; stops: Array<{ id: string; status: string }> }> }).jobs.find(
+      (candidate) => candidate.reference === "J-000",
+    );
+    expect(job).toBeTruthy();
+    expect(job!.stops.length).toBe(1);
+    const driverRes = await app.inject({
+      method: "POST",
+      url: "/v1/auth/driver-login",
+      payload: { tenantSlug: seeded.tenantSlug, driverId: job!.assignedDriverId, pin: "1234" },
+    });
+    expect(driverRes.statusCode).toBe(200);
+    const driverToken = (driverRes.json() as { tokens: { accessToken: string } }).tokens.accessToken;
+
+    const arrive = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${job!.id}/stops/${job!.stops[0]!.id}/arrive`,
+      headers: { ...authed(driverToken), "idempotency-key": randomUUID() },
+      payload: { driverId: job!.assignedDriverId },
+    });
+    expect(arrive.statusCode).toBe(200);
+    const complete = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${job!.id}/stops/${job!.stops[0]!.id}/complete`,
+      headers: { ...authed(driverToken), "idempotency-key": randomUUID() },
+      payload: { driverId: job!.assignedDriverId, recipientName: "Seeded Recipient" },
+    });
+    expect(complete.statusCode).toBe(200);
+    const finalState = await app.inject({
+      method: "GET",
+      url: "/v1/fleet/state",
+      headers: authed(ownerToken),
+    });
+    const finalJob = (finalState.json() as { jobs: Array<{ id: string; status: string; stops: Array<{ status: string }> }> }).jobs.find(
+      (candidate) => candidate.id === job!.id,
+    );
+    expect(finalJob?.status).toBe("completed");
+    expect(finalJob?.stops.every((stop) => stop.status === "completed")).toBe(true);
+  });
+});
+
 describe("driver actions reach dispatch", () => {
   it("arrives and completes with idempotent replay, dispatcher sees it", async () => {
     const tokenA = await driverLogin(fleet.driverA.id);
@@ -278,3 +340,4 @@ describe("driver actions reach dispatch", () => {
     expect(events[0]?.count).toBe(1);
   });
 });
+

@@ -56,5 +56,18 @@ export default defineConfig({
         API_PROXY_TARGET: "http://127.0.0.1:4002",
       },
     },
+    {
+      command: "pnpm --filter @privatefleet/driver dev --host 127.0.0.1 --port 5177",
+      cwd: "../..",
+      url: "http://127.0.0.1:5177",
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: {
+        API_PROXY_TARGET: "http://127.0.0.1:4002",
+      },
+    },
   ],
 });
+
+
+

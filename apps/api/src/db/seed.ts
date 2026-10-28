@@ -9,6 +9,7 @@ import type { AuthSession } from "@privatefleet/contracts";
 import { closeDb, createDb, type DbHandle } from "./client.js";
 import { ensureDatabase } from "./ensure-db.js";
 import { buildJobDto, DRIVER_SEEDS, JOB_SEEDS } from "../modules/demo/data.js";
+import { SCENARIO_ASSIGNMENTS } from "../modules/demo/assignments.js";
 
 export interface SeedOptions {
   tenantName: string;
@@ -74,6 +75,7 @@ export async function seedTenant(
 
   let vehicles = 0;
   let drivers = 0;
+  const seededDrivers: Array<{ driverId: string; vehicleId: string }> = [];
   for (const [index, seed] of DRIVER_SEEDS.entries()) {
     const vehicleId = randomUUID();
     const driverId = randomUUID();
@@ -87,6 +89,7 @@ export async function seedTenant(
       VALUES (${driverId}, ${tenantId}, ${seed.fullName},
         ${index === 1 ? "on_route" : "available"}, ${driverPinHash}, ${vehicleId}, now())
     `;
+    seededDrivers.push({ driverId, vehicleId });
     vehicles += 1;
     drivers += 1;
   }
@@ -95,9 +98,18 @@ export async function seedTenant(
   for (const [index, seed] of JOB_SEEDS.entries()) {
     const dto = buildJobDto(seed, index);
     const jobId = randomUUID();
+    // Apply the Morning Rush assignments so a seeded driver has real work
+    // (shared assignment truth with the demo store and route fixtures).
+    const assignment = SCENARIO_ASSIGNMENTS["morning-rush"].find(
+      (candidate) => candidate.ref === dto.reference,
+    );
+    const assignedTo = assignment ? seededDrivers[assignment.driver] : undefined;
     await sql`
-      INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status)
-      VALUES (${jobId}, ${tenantId}, ${dto.reference}, ${dto.serviceType}, ${dto.priority}, 'unassigned')
+      INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status,
+        assigned_driver_id, assigned_vehicle_id)
+      VALUES (${jobId}, ${tenantId}, ${dto.reference}, ${dto.serviceType}, ${dto.priority},
+        ${assignedTo ? "assigned" : "unassigned"},
+        ${assignedTo?.driverId ?? null}, ${assignedTo?.vehicleId ?? null})
     `;
     for (const stop of dto.stops) {
       await sql`
@@ -111,6 +123,24 @@ export async function seedTenant(
     jobs += 1;
   }
 
+  // Deterministic single-stop job for the driver-device acceptance test
+  // (reference sorts first; completing one stop completes the job).
+  const e2eDriver = seededDrivers[0];
+  if (e2eDriver) {
+    const e2eJobId = randomUUID();
+    await sql`
+      INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status,
+        assigned_driver_id, assigned_vehicle_id)
+      VALUES (${e2eJobId}, ${tenantId}, 'J-000', 'Pickup', 'standard', 'assigned',
+        ${e2eDriver.driverId}, ${e2eDriver.vehicleId})
+    `;
+    await sql`
+      INSERT INTO job_stops (id, tenant_id, job_id, sequence, stop_type, address,
+        latitude, longitude, window_start, window_end, status)
+      VALUES (${randomUUID()}, ${tenantId}, ${e2eJobId}, 1, 'pickup',
+        'E2E Test Stop, London', 51.5, -0.1, now(), now() + interval '1 hour', 'pending')
+    `;
+  }
   await sql`
     INSERT INTO alerts (id, tenant_id, severity, status, title, entity, location,
       freshness, recommended_action, reference)
@@ -162,6 +192,7 @@ if (process.argv[1] && process.argv[1].endsWith("seed.ts")) {
     process.exitCode = 1;
   });
 }
+
 
 
 

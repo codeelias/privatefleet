@@ -173,8 +173,18 @@ export class AuthService {
       FROM auth_user_by_id(${row.user_id}::uuid)
     `) as unknown as UserRow[];
     const user = userRows[0];
-    if (!user) {
-      throw new AuthError("REFRESH_INVALID", "Refresh token is no longer valid");
+    // Driver devices refresh too: subject may be a driver id.
+    let actorRole: "owner" | "dispatcher" | "admin" | "driver";
+    if (user) {
+      actorRole = user.role;
+    } else {
+      const driverRows = (await this.handle.sql`
+        SELECT id FROM auth_driver_by_id(${row.user_id}::uuid)
+      `) as unknown as Array<{ id: string }>;
+      if (!driverRows[0]) {
+        throw new AuthError("REFRESH_INVALID", "Refresh token is no longer valid");
+      }
+      actorRole = "driver";
     }
 
     const next = randomBytes(32).toString("base64url");
@@ -200,7 +210,7 @@ export class AuthService {
     });
 
     return {
-      accessToken: await this.signAccess(row.tenant_id, row.user_id, user.role),
+      accessToken: await this.signAccess(row.tenant_id, row.user_id, actorRole),
       refreshToken: next,
       expiresIn: this.config.accessTtlSeconds,
       tokenType: "Bearer",
@@ -288,6 +298,7 @@ function slugify(name: string): string {
     .replace(/(^-|-$)/g, "")
     .slice(0, 80);
 }
+
 
 
 

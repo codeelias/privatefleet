@@ -9,6 +9,16 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.27 - Phase 3: driver app production mode, offline queue hardening, browser acceptance (2026-10-28)
+- Real driver bug fixed: the hold-to-confirm control kept a stale interval reference, so one hold fired `onConfirm` on every tick after the threshold - duplicate arrive commands (one 200, the rest 409). Now a ref-held interval with a single-fire guard confirms exactly once.
+- Driver app production mode: detects `/v1/meta`; demo mode keeps the profile picker, postgres mode shows a device sign-in (workspace + driver ID + PIN) and uses `GET /v1/driver/queue` plus `POST /v1/driver/shift/start`. Session persists with `accessTtlMs`; expiry triggers one single-flight refresh; a 401 forces a real refresh before retry; failure clears the session back to sign-in.
+- Offline queue hardening: `flush` is single-flight (concurrent `online` events cannot dispatch the same command twice); failures are typed (`HttpError`): 4xx becomes an explicit conflict surfaced to the driver, network/5xx keeps the command pending for retry. Commands keep stable idempotency keys across retries.
+- API: refresh rotation now also supports driver subjects (`auth_driver_by_id` SECURITY DEFINER lookup) so a device session survives token expiry without re-entering the PIN.
+- Seed: Morning Rush assignments are applied to seeded postgres tenants (drivers have real work), plus a deterministic single-stop job `J-000` for device acceptance (documented demo fixture).
+- Browser acceptance (`pnpm e2e:auth`, 7 tests now): driver signs in on the device UI against the real API, holds to arrive, completes the POD, and the dispatcher's fresh authenticated view shows the job `completed` with every stop completed.
+- Verification: API 23/23 (driver suite now 8 incl. seeded J-000 path), demo E2E 7 passed / 7 skipped, auth+driver acceptance 7/7, typecheck 5/5, lint 5/5, build 4/4, encoding clean.
+- Remaining for Phase 3: Expo native scaffold (blocked locally by ~2.8 GB disk headroom; native build needs Expo tooling plus an Android/iOS toolchain), and conflict-surfacing UI copy for offline queues on the shift screen.
+
 ### v1.26 - Phase 3: driver device identity and tenant-scoped driver workflow (2026-10-28)
 - Drivers now have device credentials: `drivers.pin_hash` (argon2id) added by migration 0002; `pnpm db:seed` sets demo PIN `1234` for seeded drivers (documented demo data, not a production credential policy).
 - `POST /v1/auth/driver-login` (tenant slug + driver id + PIN) issues a JWT with role `driver` and subject = driver id; wrong PIN, unknown driver and cross-tenant driver ids all return the same 401.

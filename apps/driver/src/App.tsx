@@ -4,7 +4,7 @@
  * Views: pick profile -> shift home (queue) -> active stop (hold-to-
  * confirm arrival) -> proof of service / exceptions.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ActivityIndicator,
@@ -22,8 +22,11 @@ import {
   enqueue,
   flush,
   nextStops,
+  onAuthLost,
   pendingCount,
+  storedDriverSession,
   type DriverQueue,
+  type DriverStoredSession,
 } from "./shared/client";
 import { colors, touch } from "./theme";
 
@@ -71,30 +74,40 @@ function Chip({ label, tone }: { label: string; tone: "urgent" | "neutral" | "on
 
 function HoldToConfirm({ label, onConfirm }: { label: string; onConfirm: () => void }) {
   const [progress, setProgress] = useState(0);
-  const [timer, setTimer] = useState<ReturnType<typeof setInterval> | null>(null);
+  // Refs, not state: the interval callback must see the live handle and
+  // confirm exactly once (a stale state closure used to fire onConfirm on
+  // every tick after the threshold - duplicate commands, 409 conflicts).
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const firedRef = useRef(false);
 
   function start() {
     setProgress(0);
+    firedRef.current = false;
     const started = Date.now();
-    const t = setInterval(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    timerRef.current = setInterval(() => {
       const pct = Math.min(1, (Date.now() - started) / 800);
       setProgress(pct);
       if (pct >= 1) {
-        if (timer) {
-          clearInterval(timer);
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
         }
-        setTimer(null);
-        onConfirm();
+        if (!firedRef.current) {
+          firedRef.current = true;
+          onConfirm();
+        }
       }
     }, 40);
-    setTimer(t);
   }
 
   function cancel() {
-    if (timer) {
-      clearInterval(timer);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-    setTimer(null);
     setProgress(0);
   }
 
@@ -124,17 +137,79 @@ export function DriverApp() {
   const [recipientName, setRecipientName] = useState("");
   const [notes, setNotes] = useState("");
   const [reason, setReason] = useState<string>(SKIP_REASONS[0]);
+  const [mode, setMode] = useState<"loading" | "demo" | "production">("loading");
+  const [session, setSession] = useState<DriverStoredSession | null>(null);
+  const [tenantSlug, setTenantSlug] = useState("");
+  const [driverIdText, setDriverIdText] = useState("");
+  const [pin, setPin] = useState("");
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onAuthLost(() => {
+      setSession(null);
+      setDriverId(null);
+      setView({ name: "pick" });
+    });
+    let cancelled = false;
+    void api
+      .meta()
+      .then((meta) => {
+        if (cancelled) {
+          return;
+        }
+        if (meta.demoMode) {
+          setMode("demo");
+          return;
+        }
+        setMode("production");
+        const existing = storedDriverSession();
+        if (existing) {
+          setSession(existing);
+          setDriverId(existing.driver.id);
+          setView({ name: "shift" });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMode("demo");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const submitLogin = useCallback(async () => {
+    setLoginError(null);
+    setLoginBusy(true);
+    try {
+      const nextSession = await api.driverLogin({
+        tenantSlug: tenantSlug.trim(),
+        driverId: driverIdText.trim(),
+        pin,
+      });
+      setSession(nextSession);
+      setDriverId(nextSession.driver.id);
+      setView({ name: "shift" });
+    } catch (err) {
+      setLoginError(err instanceof Error ? err.message : "Sign in failed");
+    } finally {
+      setLoginBusy(false);
+    }
+  }, [tenantSlug, driverIdText, pin]);
 
   const fleetQuery = useQuery({
     queryKey: ["fleet"],
     queryFn: api.fleetState,
-    enabled: view.name === "pick",
+    enabled: mode === "demo" && view.name === "pick",
   });
 
   const queueQuery = useQuery({
-    queryKey: ["queue", driverId],
-    queryFn: () => api.queue(driverId as string),
-    enabled: driverId !== null,
+    queryKey: ["queue", mode === "production" ? "self" : driverId],
+    queryFn: () =>
+      mode === "production" ? api.driverQueue() : api.queue(driverId as string),
+    enabled: mode === "production" ? session !== null : driverId !== null,
     refetchInterval: 5_000,
   });
 
@@ -169,7 +244,7 @@ export function DriverApp() {
       }
       setError(null);
       try {
-        await enqueue({
+        const syncResult = await enqueue({
           commandId: crypto.randomUUID(),
           kind: command.kind,
           jobId: command.jobId,
@@ -178,7 +253,11 @@ export function DriverApp() {
           payload: command.payload,
           capturedAt: new Date().toISOString(),
         });
+        if (!syncResult.ok) {
+          setError(syncResult.message ?? "Action needs attention");
+        }
         await queryClient.invalidateQueries({ queryKey: ["queue", driverId] });
+        await queryClient.invalidateQueries({ queryKey: ["queue", "self"] });
         await queryClient.invalidateQueries({ queryKey: ["fleet"] });
       } catch (err) {
         setError(err instanceof Error ? err.message : "Action failed");
@@ -189,6 +268,68 @@ export function DriverApp() {
 
   const queue: DriverQueue | undefined = queueQuery.data;
   const stops = queue ? nextStops(queue) : [];
+
+  if (mode === "loading") {
+    return (
+      <View style={[styles.screen, { justifyContent: "center" }]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (mode === "production" && !session) {
+    return (
+      <ScrollView style={styles.screen} contentContainerStyle={styles.padded}>
+        <Text style={styles.brand}>NORTHSTAR TRANSPORT</Text>
+        <Text style={styles.title}>Driver sign in</Text>
+        <Text style={styles.subtitle}>
+          Workspace, driver ID and PIN are issued by your dispatcher.
+        </Text>
+        <Text style={[styles.muted, { marginTop: 18 }]}>Workspace</Text>
+        <TextInput
+          accessibilityLabel="Workspace"
+          autoCapitalize="none"
+          value={tenantSlug}
+          onChangeText={setTenantSlug}
+          style={styles.input}
+        />
+        <Text style={[styles.muted, { marginTop: 12 }]}>Driver ID</Text>
+        <TextInput
+          accessibilityLabel="Driver ID"
+          autoCapitalize="none"
+          value={driverIdText}
+          onChangeText={setDriverIdText}
+          style={styles.input}
+        />
+        <Text style={[styles.muted, { marginTop: 12 }]}>PIN</Text>
+        <TextInput
+          accessibilityLabel="PIN"
+          secureTextEntry
+          keyboardType="number-pad"
+          value={pin}
+          onChangeText={setPin}
+          style={styles.input}
+        />
+        {loginError && (
+          <Text style={[styles.muted, { color: colors.danger, marginTop: 12 }]}>
+            {loginError}
+          </Text>
+        )}
+        <Pressable
+          accessibilityRole="button"
+          disabled={loginBusy}
+          onPress={() => {
+            void submitLogin();
+          }}
+          style={[styles.primaryButton, { marginTop: 18, opacity: loginBusy ? 0.6 : 1 }]}
+        >
+          <Text style={styles.primaryButtonText}>
+            {loginBusy ? "Signing in..." : "Sign in"}
+          </Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
 
   if (view.name === "pick") {
     const drivers: DriverDto[] = fleetQuery.data?.drivers ?? [];
@@ -635,3 +776,4 @@ const styles = StyleSheet.create({
     padding: 10,
   },
 });
+

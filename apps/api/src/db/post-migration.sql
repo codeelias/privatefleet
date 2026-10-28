@@ -99,3 +99,16 @@ GRANT EXECUTE ON FUNCTION auth_tenant_by_slug(text) TO privatefleet_app;
 GRANT EXECUTE ON FUNCTION auth_user_by_email(uuid, text) TO privatefleet_app;
 GRANT EXECUTE ON FUNCTION auth_user_by_id(uuid) TO privatefleet_app;
 GRANT EXECUTE ON FUNCTION auth_refresh_lookup(text) TO privatefleet_app;
+
+CREATE OR REPLACE FUNCTION auth_driver_by_id(p_driver uuid)
+RETURNS TABLE (id uuid, tenant_id uuid, full_name text, status driver_status, vehicle_id uuid, last_ping_at timestamptz)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT d.id, d.tenant_id, d.full_name, d.status, d.vehicle_id, d.last_ping_at
+  FROM drivers d WHERE d.id = p_driver LIMIT 1;
+$$;
+
+GRANT EXECUTE ON FUNCTION auth_driver_by_id(uuid) TO privatefleet_app;
+
