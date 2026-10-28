@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Phase 2 schema (docs/03, ADR-0005): tenancy-first Postgres with RLS.
  * Every operational table carries tenant_id; ids stay uuid; PostGIS
  * geometry is added by post-migration SQL (raw SQL is the approved
@@ -39,12 +39,6 @@ export const jobStatusEnum = pgEnum("job_status", [
   "cancelled",
 ]);
 export const jobPriorityEnum = pgEnum("job_priority", ["standard", "urgent", "stat"]);
-export const serviceTypeEnum = pgEnum("service_type", [
-  "Pickup",
-  "Delivery",
-  "Drop",
-  "Collection",
-]);
 export const stopTypeEnum = pgEnum("stop_type", ["pickup", "dropoff"]);
 export const alertSeverityEnum = pgEnum("alert_severity", ["urgent", "at_risk", "info"]);
 export const alertStatusEnum = pgEnum("alert_status", ["open", "acknowledged", "resolved"]);
@@ -127,7 +121,8 @@ export const jobs = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
     reference: text("reference").notNull(),
-    serviceType: serviceTypeEnum("service_type").notNull(),
+    // Tenant-configurable service labels ("STAT pickup", "Clinic", ...)
+    serviceType: text("service_type").notNull(),
     priority: jobPriorityEnum("priority").notNull().default("standard"),
     status: jobStatusEnum("status").notNull().default("unassigned"),
     assignedDriverId: uuid("assigned_driver_id"),
@@ -294,3 +289,4 @@ export const tenantScopedTables = [
   idempotencyKeys,
   demoScenarios,
 ] as const;
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Seeds a tenant with the Phase 1 demo dataset so the Phase 2 backend
  * has realistic data for development and integration tests. Runs as the
  * migrator role (RLS bypassed) - never as the runtime app role.
@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { hash as argonHash } from "@node-rs/argon2";
 import type { AuthSession } from "@privatefleet/contracts";
 import { closeDb, createDb, type DbHandle } from "./client.js";
+import { ensureDatabase } from "./ensure-db.js";
 import { buildJobDto, DRIVER_SEEDS, JOB_SEEDS } from "../modules/demo/data.js";
 
 export interface SeedOptions {
@@ -40,14 +41,14 @@ export async function seedTenant(
 ): Promise<SeedResult> {
   const tenantId = randomUUID();
   const userId = randomUUID();
-  const slug = `${slugify(options.tenantName)}-demo`;
+  const slug = `${slugify(options.tenantName)}-${randomUUID().slice(0, 6)}`;
   const passwordHash = await argonHash(options.password);
 
   const sql = handle.sql;
   await sql`
     INSERT INTO tenants (id, name, slug, theme)
     VALUES (${tenantId}, ${options.tenantName}, ${slug},
-      ${sql.json({ primary: "#4F8CFF", accent: "#22C55E" })})
+      ${JSON.stringify({ primary: "#4F8CFF", accent: "#22C55E" })}::jsonb)
   `;
   await sql`
     INSERT INTO users (id, tenant_id, email, password_hash, role)
@@ -118,6 +119,7 @@ async function main(): Promise<void> {
   const url =
     process.env.MIGRATION_DATABASE_URL ??
     "postgres://privatefleet:privatefleet_dev_pw@127.0.0.1:5432/privatefleet_dev";
+  await ensureDatabase(url);
   const handle = createDb(url, { max: 1 });
   try {
     const result = await seedTenant(handle, {
@@ -142,3 +144,5 @@ if (process.argv[1] && process.argv[1].endsWith("seed.ts")) {
     process.exitCode = 1;
   });
 }
+
+

@@ -9,6 +9,14 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.23 - Phase 2 gate complete: CI Postgres, seed, smoke, honest service types (2026-10-28)
+- CI: new `api` job with a `postgis/postgis:16-3.4` service, PostGIS extension + non-owner app role bootstrap, owner-run migrations/RLS, then the 11 integration tests (auth, RLS cross-tenant, lifecycle, idempotency). The e2e job is unchanged.
+- Seed: `pnpm db:seed` provisions a tenant with the Phase 1 dataset (3 drivers, 3 vehicles, 12 jobs + stops, alert) and prints its slug; `pnpm db:smoke` boots the real app in postgres mode, logs in, snapshots the fleet and performs an idempotent assign - verified end to end (12 jobs / 3 drivers / 3 vehicles, assign `assigned`, replay stable, job status `assigned`).
+- Design correction: `service_type` is tenant-configurable text (labels like "STAT pickup", "Clinic", "Transfer" are core to the product); the fixed enum was removed via migration 0001.
+- Fixed: seed jsonb parameter (drizzle/postgres.js object param), duplicate tenant slug on re-seed, and the smoke replay comparison (JSONB key order).
+- Verification: API tests 11/11, typecheck 5/5, lint 5/5, build 4/4, demo E2E 5 passed / 3 skipped (demo mode unchanged and still the default).
+- Phase 2 exit gate: migrations, JWT+refresh auth, RLS with composite tenant keys, server-authoritative lifecycle, command idempotency, transactional outbox, and cross-tenant probes on API + repository + database layers - all covered by automated tests. Phase 3 (driver workflow) is next; pushes remain paused (owner directive).
+
 ### v1.22 - Phase 2 lifecycle: idempotent commands, outbox, tenant isolation (2026-10-28)
 - `PgFleetService` (postgres mode) implements the same API surface as the demo: snapshot, assignment preview, assign, arrive, complete, skip, alert acknowledge/resolve - all authenticated, tenant-scoped inside a transaction with `app.tenant_id` (RLS), with job_events audit rows and outbox rows written in the same transaction.
 - Command idempotency: `idempotency_keys` replay returns the stored response byte-for-byte; a repeated keyed command never double-writes. Missing keys fall back to a deterministic per-command key for assign.
