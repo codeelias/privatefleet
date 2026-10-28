@@ -1,7 +1,8 @@
-import { expect, test } from "@playwright/test";
+﻿import { expect, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { fleetState, resetScenario, WEB } from "./helpers";
 
-async function openDispatcher(page: import("@playwright/test").Page): Promise<void> {
+async function openDispatcher(page: Page): Promise<void> {
   await page.goto(WEB);
   await expect(page.getByText("Fleet Operations")).toBeVisible();
 }
@@ -37,3 +38,4 @@ test("Live map: vehicles follow routes and pins move", async ({ page }) => {
   const after = await pin.evaluate((el) => (el as HTMLElement).style.left);
   expect(after).not.toBe(before);
 });
+

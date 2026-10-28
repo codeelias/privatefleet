@@ -9,6 +9,16 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.22 - Phase 2 lifecycle: idempotent commands, outbox, tenant isolation (2026-10-28)
+- `PgFleetService` (postgres mode) implements the same API surface as the demo: snapshot, assignment preview, assign, arrive, complete, skip, alert acknowledge/resolve - all authenticated, tenant-scoped inside a transaction with `app.tenant_id` (RLS), with job_events audit rows and outbox rows written in the same transaction.
+- Command idempotency: `idempotency_keys` replay returns the stored response byte-for-byte; a repeated keyed command never double-writes. Missing keys fall back to a deterministic per-command key for assign.
+- Outbox publisher: committed events are published to the tenant Socket.IO room after the transaction (realtime bus now derives the room from the event tenant); a durable polling worker remains Phase 4 hardening.
+- Tests (11/11): auth lifecycle (register/login/refresh rotation + replay/me), RLS cross-tenant probes (hidden rows, blocked WITH CHECK), fleet snapshot isolation (tenant B sees zero jobs, anonymous 401), idempotent assign replay with exactly one job_event and one outbox row, assignment conflict, arrive->complete with job completion, illegal transition rejection, wrong-driver 403, alert acknowledgement with audit.
+- Fixed: Postgres timestamps arrive as Date or ISO string depending on the driver path - mappings now normalise both; alert status updates cast the enum; fire-and-forget outbox publishing now awaited (no dangling queries after shutdown).
+- Fixed: UTF-8 BOMs written by PowerShell into root and apps/api package.json broke Vite's PostCSS config loader - stripped; all package.json files verified to parse.
+- Demo mode remains the default and the full E2E suite still passes (5 passed / 3 skipped).
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.21 - Phase 2 foundation: Postgres, RLS, auth (2026-10-28)
 - Local infrastructure: PostgreSQL 16 + PostGIS 3.4 provisioned in WSL Ubuntu-24.04 (`scripts/db-up.ps1`, `pnpm db:up`); two connection roles per the approved RLS design - `privatefleet` (owner, migrations/seeds) and `privatefleet_app` (non-owner, runtime, so RLS is actually enforced). `ensure-db` self-heals the WSL idle shutdown at every DB entry point (migrate, tests).
 - Schema (Drizzle, ADR-0005): tenants, users, drivers, vehicles, jobs, job_stops, job_events, alerts, outbox, refresh_tokens, idempotency_keys, demo_scenarios - tenant_id on every operational table, composite unique keys (tenant+reference, tenant+email, tenant+key).

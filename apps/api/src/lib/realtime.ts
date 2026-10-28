@@ -20,13 +20,17 @@ export function createRealtimeBus(httpServer: HttpServer): RealtimeBus {
   io.on("connection", (socket) => {
     socket.join(`tenant:${DEMO_TENANT_ID}`);
   });
-  const room = `tenant:${DEMO_TENANT_ID}`;
   return {
     publishBusiness(event) {
-      io.to(room).emit("event", event);
+      // Phase 2: events carry their own tenant; publish to that room and
+      // keep the demo room for the seeded demo tenant (Phase 1 clients).
+      io.to(`tenant:${event.tenantId}`).emit("event", event);
+      if (event.tenantId !== DEMO_TENANT_ID) {
+        io.to(`tenant:${DEMO_TENANT_ID}`).emit("event", event);
+      }
     },
     publishTelemetry(position) {
-      io.to(room).emit("vehicle.position", position);
+      io.to(`tenant:${DEMO_TENANT_ID}`).emit("vehicle.position", position);
     },
   };
 }

@@ -13,6 +13,8 @@ import { closeDb, createDb, type DbHandle } from "./db/client.js";
 import { createRealtimeBus, type RealtimeBus } from "./lib/realtime.js";
 import { AuthError, AuthService } from "./modules/auth/service.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
+import { FleetError, PgFleetService } from "./modules/fleet/pg-service.js";
+import { registerFleetRoutes } from "./modules/fleet/routes.js";
 import { registerDemoRoutes } from "./modules/demo/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
@@ -24,6 +26,8 @@ export interface DemoContext {
 export interface PostgresContext {
   db: DbHandle;
   auth: AuthService;
+  fleet: PgFleetService;
+  bus: RealtimeBus;
 }
 
 const ERROR_MAP: Record<string, { status: number; uiMessage: string }> = {
@@ -46,6 +50,10 @@ const ERROR_MAP: Record<string, { status: number; uiMessage: string }> = {
   ALERT_NOT_FOUND: {
     status: 404,
     uiMessage: "That alert was already handled. Refresh the list.",
+  },
+  IDEMPOTENCY_CONFLICT: {
+    status: 409,
+    uiMessage: "This action was already processed with different data. Refresh and try again.",
   },
   STOP_NOT_FOUND: {
     status: 404,
@@ -100,6 +108,19 @@ export function buildApp(config: AppConfig): {
         uiMessage,
       });
     }
+    if (err instanceof FleetError) {
+      const mapped = ERROR_MAP[err.code];
+      if (mapped) {
+        return reply.status(mapped.status).send({
+          type: `https://privatefleet.example/errors/${err.code.toLowerCase()}`,
+          title: "Request could not be completed",
+          status: mapped.status,
+          code: err.code,
+          detail: mapped.uiMessage,
+          uiMessage: mapped.uiMessage,
+        });
+      }
+    }
     const code = err instanceof Error ? err.message : "";
     const mapped = ERROR_MAP[code];
     if (mapped) {
@@ -147,12 +168,15 @@ export function buildApp(config: AppConfig): {
       throw new Error("postgres repository mode requires DATABASE_URL");
     }
     const db = createDb(config.databaseUrl);
+    const bus = createRealtimeBus(app.server);
     const auth = new AuthService(config, db);
+    const fleet = new PgFleetService(db, bus);
     registerAuthRoutes(app, auth);
+    registerFleetRoutes(app, auth, fleet);
     app.addHook("onClose", async () => {
       await closeDb(db);
     });
-    postgres = { db, auth };
+    postgres = { db, auth, fleet, bus };
   } else {
     const store = new DemoStore("morning-rush");
     const bus = createRealtimeBus(app.server);
