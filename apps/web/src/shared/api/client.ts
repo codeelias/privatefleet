@@ -13,6 +13,7 @@ import type {
   AuthSession,
   AuthTokens,
   FleetState,
+  FleetOptimizationProposal,
   LiveOptimizationProposal,
   OptimizationProposal,
   ScenarioName,
@@ -22,6 +23,17 @@ import type {
 export class AuthExpiredError extends Error {
   constructor() {
     super("Your session has expired. Please sign in again.");
+  }
+}
+
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string | undefined,
+    message: string,
+  ) {
+    super(message);
+    this.name = "HttpError";
   }
 }
 
@@ -37,8 +49,15 @@ export function configureAuth(hooks: AuthHooks | null): void {
 }
 
 async function parseError(res: Response): Promise<Error> {
-  const body = (await res.json().catch(() => null)) as { uiMessage?: string } | null;
-  return new Error(body?.uiMessage ?? "That request could not be completed. Try again.");
+  const body = (await res.json().catch(() => null)) as {
+    uiMessage?: string;
+    code?: string;
+  } | null;
+  return new HttpError(
+    res.status,
+    body?.code,
+    body?.uiMessage ?? "That request could not be completed. Try again.",
+  );
 }
 
 async function rawRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -148,6 +167,19 @@ export const api = {
       headers: { "idempotency-key": idempotencyKey },
       body: JSON.stringify({ jobId, driverId }),
     }),
+  runFleetOptimization: () =>
+    request<FleetOptimizationProposal>("/v1/optimization/fleet-run", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  approveFleetPlan: (runId: string, expectedRouteVersion: number) =>
+    request<{ version: number; routeIds: string[]; publishedAt: string }>(
+      `/v1/optimization/fleet/${runId}/approve`,
+      {
+        method: "POST",
+        body: JSON.stringify({ expectedRouteVersion }),
+      },
+    ),
   runOptimizationLive: (driverId: string) =>
     request<LiveOptimizationProposal>("/v1/optimization/run", {
       method: "POST",

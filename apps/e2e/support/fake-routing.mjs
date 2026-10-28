@@ -34,21 +34,48 @@ const server = createServer((req, res) => {
     req.on("end", () => {
       const body = JSON.parse(raw || "{}");
       const shipments = body.shipments ?? [];
-      const vehicleId = Number(body.vehicles?.[0]?.id ?? 0);
-      const steps = [
-        { type: "start", id: 0 },
-        ...shipments.flatMap((shipment) => [
-          { type: "pickup", id: Number(shipment.pickup?.id) },
-          { type: "delivery", id: Number(shipment.delivery?.id) },
-        ]),
-        { type: "end", id: 0 },
+      const jobs = body.jobs ?? [];
+      const vehicles = body.vehicles ?? [];
+      const units = [
+        ...shipments.map((shipment) => ({
+          pickup: Number(shipment.pickup?.id),
+          delivery: Number(shipment.delivery?.id),
+        })),
+        ...jobs.map((job) => ({ job: Number(job.id) })),
       ];
+      // Fleet fixture: leave the last single-stop job explicitly unassigned so
+      // the dispatcher UI always exercises the unassigned-work panel.
+      const unassignedUnit = units.length > 0 && jobs.length > 0 ? units[units.length - 1] : null;
+      const assignedUnits = unassignedUnit ? units.slice(0, -1) : units;
+      let arrival = 60;
+      const routes = vehicles.map((vehicle, vehicleIndex) => {
+        const steps = [{ type: "start", id: 0 }];
+        assignedUnits.forEach((unit, unitIndex) => {
+          if (unitIndex % vehicles.length !== vehicleIndex) {
+            return;
+          }
+          if (unit.job !== undefined) {
+            steps.push({ type: "job", id: unit.job, arrival });
+            arrival += 120;
+          } else {
+            steps.push(
+              { type: "pickup", id: unit.pickup, arrival },
+              { type: "delivery", id: unit.delivery, arrival: arrival + 60 },
+            );
+            arrival += 180;
+          }
+        });
+        steps.push({ type: "end", id: 0 });
+        return { vehicle: Number(vehicle.id), distance: 12_000, duration: 900, steps };
+      });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
         JSON.stringify({
           code: 0,
-          unassigned: [],
-          routes: [{ vehicle: vehicleId, distance: 12_000, duration: 900, steps }],
+          unassigned: unassignedUnit
+            ? [{ id: unassignedUnit.job, description: "MISSING_SKILL" }]
+            : [],
+          routes,
         }),
       );
     });

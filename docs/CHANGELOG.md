@@ -9,6 +9,15 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.47 - Fleet dispatcher UI: review and atomic approval (2026-10-28)
+- Optimization screen live mode now runs the verified fleet endpoints (`POST /v1/optimization/fleet-run`, `POST /v1/optimization/fleet/:runId/approve`) instead of the single-driver presentation. Demo mode and its fixture workflow are unchanged.
+- Renders one route panel per vehicle with ordered stops, explicit SINGLE JOB / PICKUP / DELIVERY labels, per-route distance and duration, fleet totals, solver arrival times only when absolute, and a structured unassigned-work panel with human reasons (MISSING_SKILL, CAPACITY_EXCEEDED, etc.).
+- One approval action with duplicate prevention, stale `409 ROUTE_VERSION_STALE` explanation (no blind retry), retained published plan on failure, and authoritative `["fleet"]` query invalidation after approval so map/board render persisted state.
+- Typed `HttpError` (status + code) in the web client for honest stale/failure handling.
+- Dispatcher acceptance: new `tests-auth/fleet-ui.spec.ts` proves multiple vehicle routes, mixed unit types, unassigned reason, one atomic publish with persisted version/assignments, and stale approval never shown as published. Auth suite now seeds a dedicated fleet tenant (deterministic against driver-test mutations).
+- Verification: auth E2E 11/11, demo E2E 13 passed / 13 skipped, API 49/49, web unit 21/21, typecheck 6/6, lint 6/6, build 5/5.
+- The previous single-driver live E2E spec is superseded by the fleet dispatcher spec (UI no longer exposes that path in postgres mode). Native background tracking/geofencing remain out of scope.
+
 ### v1.46 - Fix single-stop job loss at the routing factory; identity-level real gate (2026-10-28)
 - Root cause proven: `createRoutingClients` wrapped `VroomClient.solve` without forwarding the new fifth `jobs` argument. The direct service trace passed jobs explicitly (26 stops); the real HTTP app path silently dropped them before VROOM (24 stops, 0 service stops). Cache and controller mapping were ruled out by tracing the fresh service result.
 - Fix: the factory now forwards `jobs`; regression test captures the outgoing VROOM body and asserts the job step maps back to the domain id.

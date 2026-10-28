@@ -163,3 +163,13 @@ version unchanged, typed 502, manual assignment 200).
 Not yet modelled: capacity/skills constraints and per-stop service durations
 (adapter support exists; domain fields do not), and dispatcher UI rendering
 of fleet proposals.
+
+## 10.10 Dispatcher fleet UI (2026-10-28)
+Postgres-mode Optimization screen consumes the fleet proposal contract directly:
+per-vehicle route panels with ordered stops and explicit unit types, per-route
+and fleet totals, solver-provided absolute arrivals only, an unassigned panel
+with structured reasons, and one atomic approval. Stale approvals (409) are
+explained without retrying; failures keep the previously published plan; a
+successful approval invalidates the authoritative fleet query so the map and
+board re-render persisted routes. Demo mode remains fixture-driven and
+unchanged.
