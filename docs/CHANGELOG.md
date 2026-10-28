@@ -9,6 +9,11 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.20 - MapTiler key kept inactive until unrestricted (2026-10-28)
+- The configured MapTiler key answers 403 "Key usage restricted" for localhost; the key line in gitignored `apps/web/.env.local` is now commented out, so the demo makes zero MapTiler requests (no 403 console noise, no pre-flight probe). Verified: 0 maptiler requests, 15 OSM tiles, no key warning badge, vector path goes straight to OpenFreeMap bright.
+- Re-enable by fixing the key's allowed HTTP origins in MapTiler Cloud and uncommenting the line - the app validates before use either way.
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.19 - config-driven map sources (provider pluggability) (2026-10-28)
 - Map sources extracted to `apps/web/src/features/live-map/map-config.ts`: no tile host or style URL is hardcoded in the map UI. Providers are selected from `VITE_MAP_*` variables with a documented resolution order (explicit config, then MapTiler when a key exists, then approved B2 defaults: OpenFreeMap bright/liberty vector, OSM raster).
 - `?map=vector|raster` overrides the engine per session; `VITE_MAP_ENGINE` sets the default. Markers, route overlays, projection and dispatch interactions are untouched by provider changes.
