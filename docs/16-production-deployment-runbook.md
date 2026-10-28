@@ -179,15 +179,19 @@ credential helper is unusable in that session) and pinned by local image id:
 | Dataset | Geofabrik Greater London latest, sha256 `CFD5085...BBD0D` (129,863,196 bytes) | prepared with OSRM `car.lua`, MLD partition + customize |
 
 Services: OSRM `osrm-routed --algorithm mld` on 5000; VROOM on 3000 with
-`OSRM_URL=http://host.docker.internal:5000`. Reached from the API host through
-an SSH tunnel (`-L 5000 -L 3000`) because the host firewall blocks LAN access.
+`OSRM_URL=http://host.docker.internal:5000`. The Docker host firewall now
+permits LAN access to `192.168.1.128:5000` and `:3000` (opened and verified
+2026-10-28: OSRM route 200, VROOM health 200, mixed job solve `code: 0`, and
+the full fleet gate passed over the direct URLs). The API host uses the direct
+URLs below; the SSH tunnel remains an optional fallback, not a requirement.
 
 Gate command (real services, production HTTP path):
 
 ```
-OSRM_BASE_URL=http://127.0.0.1:5000 VROOM_BASE_URL=http://127.0.0.1:3000 \
+OSRM_BASE_URL=http://192.168.1.128:5000 VROOM_BASE_URL=http://192.168.1.128:3000 \
 DATABASE_URL=<app role> MIGRATION_DATABASE_URL=<owner> AUTH_JWT_SECRET=<secret> \
-pnpm --filter @privatefleet/api exec tsx src/db/routing-live-gate.ts
+ROUTING_DATASET_ID=greater-london-2026-10-28 \
+pnpm --filter @privatefleet/api exec tsx src/db/fleet-live-gate.ts
 ```
 
 Single-driver result (2026-10-28): engine `osrm+vroom`; propose 146 ms;
@@ -234,7 +238,7 @@ or VROOM rejects the matrix.
 ## 10. What is NOT proven yet (updated)
 
 **Deployment claim:** the gates above passed in the controlled environment
-described here (local Docker Desktop host, SSH tunnel, harness-seeded tenant).
+described here (local Docker Desktop host reached over the LAN, harness-seeded tenant).
 They establish integration correctness, not a customer production
 deployment; production provisioning, TLS, backups and the restore drill are
 covered by sections 6-8 and remain to be executed with the signed pilot.
@@ -262,5 +266,6 @@ covered by sections 6-8 and remain to be executed with the signed pilot.
   the API; clients recover via the authenticated snapshot.
 - Keep the previous container image digests and the previous `greater-london`
   extract until the new deployment passes the section 7 gate.
+
 
 
