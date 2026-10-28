@@ -9,6 +9,15 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.40 - Phase 5: durable optimization runs, route publication and snapshot routing (2026-10-28)
+- Migration 0004: `routes` (validated geometry persisted at publish), `route_stops`, `optimization_runs`, tenant-scoped with RLS coverage.
+- `createProposal`: loads pending assigned pickup/dropoff pairs, runs OSRM matrix -> VROOM -> road geometry, persists run with input hash/engine/version/metrics, and reuses stored runs for identical inputs (cache).
+- `approveProposal`: transactional publish - stale `expectedRouteVersion` rejected with 409 `ROUTE_VERSION_STALE`, new immutable version inserted, previous published route superseded, ordered route_stops written, run linked, `route.published` outbox event emitted; re-approval idempotent.
+- `GET /v1/fleet/state` now serves persisted routes and the database-authoritative `routeVersion` (postgres mode).
+- New dispatcher-only endpoints `POST /v1/optimization/run` and `POST /v1/optimization/:runId/approve`; typed 503 when routing is not configured so manual dispatch is unaffected.
+- Verification: API 40/40 incl. 3 optimization persistence/publication tests; demo E2E 13/13 (demo untouched); auth acceptance 9/9; typecheck 6/6, lint 6/6, build 5/5, encoding clean.
+- Remaining: dispatcher UI wiring to the live proposal shape, multi-vehicle planning, real OSRM/VROOM container deployment check.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.39 - Phase 5: OSRM/VROOM provider layer behind the validated route contract (2026-10-28)
 - New `apps/api/src/modules/routing/`: OSRM matrix/route adapter with response validation, VROOM matrix-mode shipment solver adapter, and `planShipments` (matrix -> solve -> road geometry -> invariant checks, unassigned work surfaced).
 - Typed routing errors (`ROUTING_NOT_CONFIGURED`, `OSRM_UNAVAILABLE`, `VROOM_UNAVAILABLE`, `ROUTING_INVALID_RESPONSE`, `PLAN_INFEASIBLE`); `OSRM_BASE_URL`/`VROOM_BASE_URL` config requires both or neither.
@@ -340,6 +349,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

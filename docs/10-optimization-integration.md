@@ -80,6 +80,28 @@ Evidence:
   this environment (no Docker installed); a real container run remains
   the deployment check.
 
-Next: durable `optimization_runs` + tenant route persistence, proposal
-preview/publish endpoints with the existing 409 stale-version rejection,
-and dispatcher UI wiring. Demo fixtures stay the default offline path.
+Durable plans + publication implemented (2026-10-28):
+- Migration `0004` adds `routes` (geometry persisted at publish),
+  `route_stops` and `optimization_runs`, all tenant-scoped and included in
+  the RLS policy loop.
+- `createProposal` loads the driver's pending pickup/dropoff pairs, runs
+  OSRM matrix -> VROOM -> road geometry, stores the run with input hash,
+  engine/version and metrics, and reuses a stored run for identical inputs.
+- `approveProposal` is one tenant transaction: version check (409
+  `ROUTE_VERSION_STALE`), insert the published route + ordered stops,
+  supersede the previous published route, link the run and write the
+  `route.published` outbox event. Re-approval is idempotent.
+- `GET /v1/fleet/state` now returns persisted published routes and the
+  authoritative tenant `routeVersion` from the database.
+- Endpoints (`POST /v1/optimization/run`, `POST /v1/optimization/:runId/approve`)
+  are dispatcher-only; live routing returns typed 503 when OSRM/VROOM are
+  not configured, so manual dispatch keeps working.
+
+Evidence: service tests (3) cover persistence/cache, publish -> snapshot
+version 2 with route_stops, stale rejection and idempotent re-approval;
+API suite 40/40; demo E2E 13/13; auth acceptance 9/9.
+
+Remaining: wire the dispatcher UI to the live proposal shape (the demo
+screen still consumes the seeded proposal), multi-vehicle planning, and a
+real container run of OSRM/VROOM as the deployment check.
+

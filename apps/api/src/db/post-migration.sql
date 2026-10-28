@@ -35,7 +35,7 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'users', 'vehicles', 'drivers', 'jobs', 'job_stops', 'job_events',
     'alerts', 'outbox', 'refresh_tokens', 'idempotency_keys', 'demo_scenarios',
-    'location_points'
+    'location_points', 'routes', 'route_stops', 'optimization_runs'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);

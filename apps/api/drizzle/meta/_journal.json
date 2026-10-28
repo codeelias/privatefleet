@@ -29,6 +29,13 @@
       "when": 1793180572512,
       "tag": "0003_wet_wendigo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793181713107,
+      "tag": "0004_spotty_squadron_supreme",
+      "breakpoints": true
     }
   ]
 }

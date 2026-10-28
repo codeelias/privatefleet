@@ -87,6 +87,41 @@ export const OptimizationProposalSchema = z.object({
 });
 export type OptimizationProposal = z.infer<typeof OptimizationProposalSchema>;
 
+export const LiveProposalStopSchema = z.object({
+  jobId: IdSchema,
+  jobRef: z.string(),
+  stopId: IdSchema,
+  stopType: z.enum(["pickup", "dropoff"]),
+  address: z.string(),
+});
+export type LiveProposalStop = z.infer<typeof LiveProposalStopSchema>;
+
+/**
+ * Phase 5 live proposal from OSRM/VROOM. Arrival times are omitted until
+ * the solver's schedule is validated for display; no ETAs are invented.
+ */
+export const LiveOptimizationProposalSchema = z.object({
+  runId: IdSchema,
+  driverId: IdSchema,
+  driverName: z.string(),
+  demoMode: z.literal(false),
+  engine: z.literal("osrm+vroom"),
+  engineVersion: z.string(),
+  status: z.literal("succeeded"),
+  published: z.boolean(),
+  publishedAt: z.string().datetime().optional(),
+  inputHash: z.string(),
+  matrixSize: z.number().int().nonnegative(),
+  proposal: z.object({
+    distanceMetres: z.number().nonnegative(),
+    durationSeconds: z.number().nonnegative(),
+    stops: z.array(LiveProposalStopSchema),
+    unassigned: z.array(IdSchema),
+    geometry: z.array(GeoPointSchema).min(2),
+  }),
+});
+export type LiveOptimizationProposal = z.infer<typeof LiveOptimizationProposalSchema>;
+
 export const RoutePathSchema = z.object({
   vehicleId: IdSchema,
   driverId: IdSchema.optional(),

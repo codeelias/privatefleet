@@ -18,6 +18,9 @@ import { FleetError, PgFleetService } from "./modules/fleet/pg-service.js";
 import { registerFleetRoutes } from "./modules/fleet/routes.js";
 import { registerDriverDeviceRoutes } from "./modules/driver/routes.js";
 import { registerTrackingRoutes } from "./modules/tracking/routes.js";
+import { registerOptimizationRoutes } from "./modules/optimization/routes.js";
+import { createRoutingClients } from "./modules/routing/factory.js";
+import { RoutingError } from "./modules/routing/types.js";
 import { registerDemoRoutes } from "./modules/demo/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
@@ -186,6 +189,19 @@ export function buildApp(config: AppConfig): {
     registerFleetRoutes(app, auth, fleet);
     registerDriverDeviceRoutes(app, auth, fleet);
     registerTrackingRoutes(app, auth, bus, db);
+    const routingClients =
+      config.osrmBaseUrl && config.vroomBaseUrl
+        ? createRoutingClients({
+            osrmBaseUrl: config.osrmBaseUrl,
+            vroomBaseUrl: config.vroomBaseUrl,
+          })
+        : null;
+    registerOptimizationRoutes(app, auth, db, () => {
+      if (!routingClients) {
+        throw new RoutingError("ROUTING_NOT_CONFIGURED");
+      }
+      return routingClients;
+    });
     app.addHook("onClose", async () => {
       await closeDb(db);
     });
@@ -199,6 +215,7 @@ export function buildApp(config: AppConfig): {
 
   return { app, demo, postgres };
 }
+
 
 
 

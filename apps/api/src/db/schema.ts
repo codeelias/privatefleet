@@ -6,6 +6,7 @@
  */
 import {
   bigint,
+  date,
   doublePrecision,
   index,
   integer,
@@ -41,6 +42,20 @@ export const jobStatusEnum = pgEnum("job_status", [
 ]);
 export const jobPriorityEnum = pgEnum("job_priority", ["standard", "urgent", "stat"]);
 export const stopTypeEnum = pgEnum("stop_type", ["pickup", "dropoff"]);
+export const routeStatusEnum = pgEnum("route_status", [
+  "draft",
+  "published",
+  "in_progress",
+  "completed",
+  "superseded",
+  "cancelled",
+]);
+export const optimizationStatusEnum = pgEnum("optimization_status", [
+  "pending",
+  "running",
+  "succeeded",
+  "failed",
+]);
 export const alertSeverityEnum = pgEnum("alert_severity", ["urgent", "at_risk", "info"]);
 export const alertStatusEnum = pgEnum("alert_status", ["open", "acknowledged", "resolved"]);
 export const actorTypeEnum = pgEnum("actor_type", ["user", "driver", "system"]);
@@ -141,6 +156,80 @@ export const locationPoints = pgTable(
     uniqueIndex("location_points_vehicle_sequence_uq").on(t.vehicleId, t.sequenceNo),
     index("location_points_vehicle_captured_idx").on(t.vehicleId, t.capturedAt),
   ],
+);
+
+export const routes = pgTable(
+  "routes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    routeDate: date("route_date").notNull(),
+    driverId: uuid("driver_id").notNull(),
+    vehicleId: uuid("vehicle_id").notNull(),
+    status: routeStatusEnum("status").notNull().default("draft"),
+    version: integer("version").notNull().default(1),
+    plannedDistanceM: bigint("planned_distance_m", { mode: "number" }),
+    plannedDurationS: integer("planned_duration_s"),
+    /** Validated road geometry persisted at publish time (Phase 5). */
+    geometry: jsonb("geometry").$type<Array<{ latitude: number; longitude: number }>>(),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt,
+  },
+  (t) => [
+    uniqueIndex("routes_tenant_id_id_uq").on(t.tenantId, t.id),
+    index("routes_tenant_status_idx").on(t.tenantId, t.status),
+  ],
+);
+
+export const routeStops = pgTable(
+  "route_stops",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    routeId: uuid("route_id")
+      .notNull()
+      .references(() => routes.id, { onDelete: "cascade" }),
+    jobStopId: uuid("job_stop_id")
+      .notNull()
+      .references(() => jobStops.id, { onDelete: "cascade" }),
+    sequenceNo: integer("sequence_no").notNull(),
+    plannedArrivalAt: timestamp("planned_arrival_at", { withTimezone: true }),
+    plannedDepartureAt: timestamp("planned_departure_at", { withTimezone: true }),
+    legDistanceM: integer("leg_distance_m"),
+    legDurationS: integer("leg_duration_s"),
+    status: text("status").notNull().default("planned"),
+  },
+  (t) => [
+    uniqueIndex("route_stops_route_sequence_uq").on(t.routeId, t.sequenceNo),
+    uniqueIndex("route_stops_route_stop_uq").on(t.routeId, t.jobStopId),
+  ],
+);
+
+export const optimizationRuns = pgTable(
+  "optimization_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    routeId: uuid("route_id"),
+    inputHash: text("input_hash").notNull(),
+    engine: text("engine").notNull(),
+    engineVersion: text("engine_version").notNull(),
+    request: jsonb("request").notNull(),
+    result: jsonb("result"),
+    metrics: jsonb("metrics"),
+    status: optimizationStatusEnum("status").notNull().default("pending"),
+    error: text("error"),
+    createdAt,
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (t) => [index("optimization_runs_input_hash_idx").on(t.tenantId, t.inputHash, t.createdAt)],
 );
 
 export const jobs = pgTable(
