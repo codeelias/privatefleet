@@ -15,6 +15,7 @@
     "db:smoke": "tsx src/db/smoke.ts"
   },
   "dependencies": {
+    "@fastify/cors": "^11.3.1",
     "@node-rs/argon2": "^2.2.2",
     "@privatefleet/contracts": "workspace:*",
     "drizzle-orm": "^0.45.4",
@@ -35,5 +36,3 @@
     "vitest": "^5.0.5"
   }
 }
-
-

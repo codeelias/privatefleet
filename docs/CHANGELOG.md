@@ -9,12 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
-### v1.28 - Phase 3: Expo driver application scaffold (2026-10-28)
+### v1.28 - Phase 3: Expo driver application, verified end-to-end on web (2026-10-28)
 - New `apps/driver-expo` workspace app: Expo SDK 53 / React Native 0.79 / react-native-web, `app.json` for iOS, Android and web (SPA export), babel + tsconfig wired for Metro.
 - The Expo app implements the same server contract as the RN-web driver: PIN device login (`/v1/auth/driver-login`), tenant-scoped `/v1/driver/queue`, shift start, arrive/complete/skip with idempotency keys, session refresh with single-flight + forced refresh on 401, and a durable offline queue in AsyncStorage (pending on network failure, explicit conflict on 4xx, one flush at a time). Hold-to-confirm uses the single-fire ref pattern so a hold cannot spam commands.
-- API base is `EXPO_PUBLIC_API_URL` (Expo public env, default `http://127.0.0.1:4002`).
-- Verified: typecheck passes; `expo export --platform web` bundles successfully (397 kB, 188 modules) with `web.output: "single"` (static/SSR output needs expo-router, which this app does not use). Repo gates: typecheck 6/6, lint 6/6, build 5/5, API 23/23, demo E2E 7 passed / 7 skipped.
-- Not yet verified: running the Expo bundle against the live API (needs CORS on the API and a static-serve acceptance harness - next step), and native device builds (require EAS credentials or an Android/iOS toolchain; not available on this workstation, by design documented in ADR-0009).
+- API now supports explicit CORS origins (`CORS_ORIGINS`, comma-separated, default off) for browser-hosted builds; only the configured Expo origin is allowed.
+- Expo runtime acceptance: the exported web bundle is served statically and driven by Playwright against the real postgres API - sign in, queue, hold-to-arrive, POD completion, and the dispatcher's fresh view shows the job completed. A second deterministic seed job (J-001) keeps the RN-web (J-000) and Expo flows independent.
+- Verified: `pnpm e2e:auth` 8/8 (auth, RN-web driver workflow, Expo web driver workflow); API 23/23; demo E2E 7 passed / 7 skipped; typecheck 6/6, lint 6/6, build 5/5; encoding clean; Expo `export --platform web` bundles 188 modules / 397 kB.
+- Not yet verified: native iOS/Android builds - they require EAS credentials or a local Android/iOS toolchain that this workstation does not have; the RN-web and Expo-web builds are the verified transports (ADR-0009 update).
 - Pushes remain paused (owner directive); local commits only.
 
 ### v1.27 - Phase 3: driver app production mode, offline queue hardening, browser acceptance (2026-10-28)

@@ -123,22 +123,29 @@ export async function seedTenant(
     jobs += 1;
   }
 
-  // Deterministic single-stop job for the driver-device acceptance test
-  // (reference sorts first; completing one stop completes the job).
-  const e2eDriver = seededDrivers[0];
-  if (e2eDriver) {
-    const e2eJobId = randomUUID();
+  // Deterministic single-stop jobs for device acceptance: one per driver,
+  // so the RN-web and Expo workflows cannot consume each other's fixture.
+  const singleStopFixtures = [
+    { reference: "J-000", driverIndex: 0, address: "E2E Test Stop, London" },
+    { reference: "J-001", driverIndex: 1, address: "Expo Test Stop, London" },
+  ];
+  for (const fixture of singleStopFixtures) {
+    const assigned = seededDrivers[fixture.driverIndex];
+    if (!assigned) {
+      continue;
+    }
+    const fixtureJobId = randomUUID();
     await sql`
       INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status,
         assigned_driver_id, assigned_vehicle_id)
-      VALUES (${e2eJobId}, ${tenantId}, 'J-000', 'Pickup', 'standard', 'assigned',
-        ${e2eDriver.driverId}, ${e2eDriver.vehicleId})
+      VALUES (${fixtureJobId}, ${tenantId}, ${fixture.reference}, 'Pickup', 'standard', 'assigned',
+        ${assigned.driverId}, ${assigned.vehicleId})
     `;
     await sql`
       INSERT INTO job_stops (id, tenant_id, job_id, sequence, stop_type, address,
         latitude, longitude, window_start, window_end, status)
-      VALUES (${randomUUID()}, ${tenantId}, ${e2eJobId}, 1, 'pickup',
-        'E2E Test Stop, London', 51.5, -0.1, now(), now() + interval '1 hour', 'pending')
+      VALUES (${randomUUID()}, ${tenantId}, ${fixtureJobId}, 1, 'pickup',
+        ${fixture.address}, 51.5, -0.1, now(), now() + interval '1 hour', 'pending')
     `;
   }
   await sql`

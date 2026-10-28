@@ -7,6 +7,7 @@
  * (ADR-0011) - raw internal errors never reach a screen.
  */
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import { z } from "zod";
 import type { AppConfig } from "./config.js";
 import { closeDb, createDb, type DbHandle } from "./db/client.js";
@@ -76,6 +77,10 @@ export function buildApp(config: AppConfig): {
   postgres: PostgresContext | undefined;
 } {
   const app = Fastify({ logger: { level: config.logLevel } });
+  if (config.corsOrigins.length > 0) {
+    // Only explicit origins: the Expo web build runs on its own port.
+    void app.register(cors, { origin: config.corsOrigins });
+  }
 
   app.setErrorHandler((err, _request, reply) => {
     if (err instanceof z.ZodError) {
@@ -188,4 +193,5 @@ export function buildApp(config: AppConfig): {
 
   return { app, demo, postgres };
 }
+
 

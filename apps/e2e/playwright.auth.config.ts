@@ -44,6 +44,7 @@ export default defineConfig({
         REPOSITORY_MODE: "postgres",
         PORT: "4002",
         LOG_LEVEL: "warn",
+        CORS_ORIGINS: "http://127.0.0.1:8080",
       },
     },
     {
@@ -54,6 +55,17 @@ export default defineConfig({
       timeout: 120_000,
       env: {
         API_PROXY_TARGET: "http://127.0.0.1:4002",
+      },
+    },
+    {
+      command: "pnpm export:web && node scripts/serve-dist.mjs",
+      cwd: "../driver-expo",
+      url: "http://127.0.0.1:8080",
+      reuseExistingServer: false,
+      timeout: 300_000,
+      env: {
+        EXPO_PUBLIC_API_URL: "http://127.0.0.1:4002",
+        PORT: "8080",
       },
     },
     {
@@ -68,6 +80,7 @@ export default defineConfig({
     },
   ],
 });
+
 
 
 
