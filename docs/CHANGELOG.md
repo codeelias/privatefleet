@@ -9,6 +9,16 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.43 - Real OSRM/VROOM deployment gate passed (2026-10-28)
+- Lifted the engineering freeze per owner directive and resumed the real routing deployment gate.
+- Loaded pinned images offline (Docker SSH credential helper unusable): OSRM `osrm/osrm-backend:v5.25.0` (id a16438df8826) and VROOM `vroomvrp/vroom-docker:v1.13.0` (id ae19c5666266); prepared the pinned Geofabrik Greater London extract (sha256 CFD5085...BBD0D) with car.lua + MLD partition/customize on the Docker host.
+- Real gate through production HTTP path: propose 146 ms; 4 unique matrix locations; 6 stops; 0 unassigned; 16,692 m / 2,697 s; 1,465 geometry points; stale approval 409 ROUTE_VERSION_STALE; published version 2; snapshot version 2 with 1,465 route points; 1 run, 6 route_stops, 1 outbox event; 642 ms total.
+- Outage gate: VROOM unreachable -> 502 VROOM_UNAVAILABLE; fleet snapshot stayed 200 with unchanged routeVersion and routes (no destruction of published plans).
+- Real services exposed four adapter defects, fixed: `amount` sent without vehicle capacity; string shipment ids (VROOM requires integers); float matrix entries (VROOM 1.13 requires integers); duplicate stop locations producing invalid matrices (now deduplicated with an index map).
+- New `scripts/registry-pull.mjs` (constrained-host image loader), `src/db/routing-live-gate.ts` gate script; optimization test env isolated from routing variables.
+- Verification: API 40/40; typecheck 6/6; lint 6/6. Demo mode unchanged; demo/auth E2E re-run follows this commit.
+- Remaining per directive: fleet-wide multi-vehicle optimisation with atomic publication, then native background tracking.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.42 - Phase 1 demo frozen: boot verified, deployment runbook, Phase 4/5 paused (2026-10-28)
 - Owner directive: pause Phase 4/5 build work (no Docker services, real OSM extracts, multi-vehicle routing or native background GPS) until a design partner signs a pilot contract. No application code changed in this freeze.
 - Demo boot verified from a clean start: `pnpm dev` -> demo API on 4000 (`readyz`: demoMode=true, repositoryMode=demo), dispatcher `http://localhost:5173`, driver `http://localhost:5174` (Vite binds localhost; `127.0.0.1` is not served by plain `pnpm dev`). Fleet state: 3 vehicles, 12 jobs, 3 routes, demoMode=true.
@@ -365,6 +375,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

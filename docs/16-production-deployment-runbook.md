@@ -158,14 +158,51 @@ real containers for the container-backed version of this gate.
    produced via EAS when a device build is needed. Foreground location sharing
    is implemented; native background location is deliberately deferred.
 
-## 9. What is NOT proven at freeze (known limitations)
+## 9. Container-backed gate: PASSED 2026-10-28
 
-- **Container-backed routing gate not yet executed.** Docker Desktop was
-  reachable over SSH (`192.168.1.128`), but image pulls from that SSH session
-  were blocked by Docker Desktop's credential helper ("logon session does not
-  exist"); pulling via the registry API was prepared but not completed before
-  the freeze directive. The adapters are proven against a live public OSRM and
-  protocol-faithful fake VROOM only.
+Environment: Windows 11 Docker Desktop 4.95.0, engine 29.8.2 (linux/amd64)
+at `192.168.1.128`; images loaded offline from the registry (Docker's SSH
+credential helper is unusable in that session) and pinned by local image id:
+
+| Component | Tag | Image id |
+|---|---|---|
+| OSRM backend | `osrm/osrm-backend:v5.25.0` | `a16438df8826` |
+| VROOM | `vroomvrp/vroom-docker:v1.13.0` | `ae19c5666266` |
+| Dataset | Geofabrik Greater London latest, sha256 `CFD5085...BBD0D` (129,863,196 bytes) | prepared with OSRM `car.lua`, MLD partition + customize |
+
+Services: OSRM `osrm-routed --algorithm mld` on 5000; VROOM on 3000 with
+`OSRM_URL=http://host.docker.internal:5000`. Reached from the API host through
+an SSH tunnel (`-L 5000 -L 3000`) because the host firewall blocks LAN access.
+
+Gate command (real services, production HTTP path):
+
+```
+OSRM_BASE_URL=http://127.0.0.1:5000 VROOM_BASE_URL=http://127.0.0.1:3000 \
+DATABASE_URL=<app role> MIGRATION_DATABASE_URL=<owner> AUTH_JWT_SECRET=<secret> \
+pnpm --filter @privatefleet/api exec tsx src/db/routing-live-gate.ts
+```
+
+Result (2026-10-28): engine `osrm+vroom v1`; propose 146 ms; 4 unique matrix
+locations for 3 shipments; 6 ordered stops; 0 unassigned; 16,692 m and
+2,697 s; 1,465 geometry points; stale approval `409 ROUTE_VERSION_STALE`;
+published version 2; snapshot version 2 with 1,465 route points; 1
+optimization run, 6 route_stops, 1 `route.published` outbox event; 642 ms
+end to end.
+
+Outage check (`--expect-unavailable`, VROOM URL unreachable): propose returned
+`502 VROOM_UNAVAILABLE`; `GET /v1/fleet/state` stayed `200` with unchanged
+`routeVersion: 1` and zero routes - a routing outage does not damage the
+published plan or manual dispatch.
+
+Real-service defects found and fixed by this gate (none were visible against
+fakes): VROOM rejects `amount` without matching vehicle capacity; VROOM
+requires integer pickup/delivery ids (not `uuid::pickup` strings); VROOM 1.13
+requires integer matrix entries (OSRM returns floats); duplicate stop
+locations (e.g. two jobs at Kings Cross) must be deduplicated in the matrix
+or VROOM rejects the matrix.
+
+## 10. What is NOT proven yet (updated)
+
 - Multi-vehicle optimisation is not implemented (one driver per proposal).
 - Native background GPS/geofencing is not implemented; staleness is surfaced
   honestly.
@@ -175,7 +212,7 @@ real containers for the container-backed version of this gate.
   app still boots and routes/pins render, but the basemap background is blank.
   For a venue with no connectivity, use a local tile cache before the pitch.
 
-## 10. Rollback and outage behaviour
+## 11. Rollback and outage behaviour
 
 - Route publication is transactional: a failed approval leaves the previous
   published route authoritative.
@@ -185,3 +222,4 @@ real containers for the container-backed version of this gate.
   the API; clients recover via the authenticated snapshot.
 - Keep the previous container image digests and the previous `greater-london`
   extract until the new deployment passes the section 7 gate.
+

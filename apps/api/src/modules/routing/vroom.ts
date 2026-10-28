@@ -34,6 +34,9 @@ export class VroomClient {
     if (matrices.durations.length !== locationCount) {
       throw new RoutingError("ROUTING_INVALID_RESPONSE", "matrix/location count mismatch");
     }
+    // VROOM requires integer pickup/delivery ids; map them back to
+    // business shipment ids for the caller.
+    const numericToShipment = new Map<number, string>();
     const body = {
       vehicles: vehicles.map((vehicle) => ({
         id: vehicle.id,
@@ -42,9 +45,14 @@ export class VroomClient {
         ...(vehicle.capacity ? { capacity: vehicle.capacity } : {}),
         ...(vehicle.timeWindow ? { time_window: vehicle.timeWindow } : {}),
       })),
-      shipments: shipments.map((shipment) => ({
+      shipments: shipments.map((shipment, index) => {
+        const pickupId = index * 2 + 1;
+        const deliveryId = index * 2 + 2;
+        numericToShipment.set(pickupId, shipment.id);
+        numericToShipment.set(deliveryId, shipment.id);
+        return {
         pickup: {
-          id: `${shipment.id}::pickup`,
+          id: pickupId,
           location_index: shipment.pickupIndex,
           ...(shipment.pickupServiceSeconds !== undefined
             ? { service: shipment.pickupServiceSeconds }
@@ -52,16 +60,23 @@ export class VroomClient {
           ...(shipment.pickupWindow ? { time_windows: [shipment.pickupWindow] } : {}),
         },
         delivery: {
-          id: `${shipment.id}::delivery`,
+          id: deliveryId,
           location_index: shipment.deliveryIndex,
           ...(shipment.deliveryServiceSeconds !== undefined
             ? { service: shipment.deliveryServiceSeconds }
             : {}),
           ...(shipment.deliveryWindow ? { time_windows: [shipment.deliveryWindow] } : {}),
         },
-        amount: shipment.amount ?? [1],
-      })),
-      matrices: { car: { durations: matrices.durations, distances: matrices.distances } },
+        ...(shipment.amount ? { amount: shipment.amount } : {}),
+        };
+      }),
+      matrices: {
+        car: {
+          // VROOM expects integer seconds/metres; OSRM matrices are floats.
+          durations: matrices.durations.map((row) => row.map((value) => Math.round(value))),
+          distances: matrices.distances.map((row) => row.map((value) => Math.round(value))),
+        },
+      },
     };
 
     const controller = new AbortController();
@@ -105,8 +120,10 @@ export class VroomClient {
         if (step.type !== "pickup" && step.type !== "delivery") {
           continue;
         }
-        const raw = String(step.id ?? "");
-        const shipmentId = raw.split("::")[0];
+        const numericId = Number(step.id);
+        const shipmentId = numericToShipment.has(numericId)
+          ? numericToShipment.get(numericId)!
+          : String(step.id ?? "").split("::")[0];
         if (shipmentId && !ordered.includes(shipmentId)) {
           ordered.push(shipmentId);
         }
@@ -120,9 +137,17 @@ export class VroomClient {
     }
 
     const unassigned = (payload.unassigned ?? [])
-      .map((entry) => String(entry.id ?? "").split("::")[0])
+      .map((entry) => {
+        const numericId = Number(entry.id);
+        return numericToShipment.get(numericId) ?? String(entry.id ?? "").split("::")[0];
+      })
       .filter((id): id is string => Boolean(id));
 
     return { orderByVehicle, unassigned, routes };
   }
 }
+
+
+
+
+

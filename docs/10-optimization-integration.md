@@ -119,3 +119,19 @@ real OSRM/VROOM containers as the deployment check, and background
 location on the native driver app.
 
 
+
+## 10.8 Real-service gate passed (2026-10-28)
+The deployment gate ran against real, offline-loaded containers on the
+Windows Docker Desktop host: OSRM v5.25.0 (image a16438df8826) and VROOM
+v1.13.0 (image ae19c5666266), with the pinned Geofabrik Greater London
+extract (sha256 CFD5085...BBD0D) prepared via car.lua/MLD. Through the
+production HTTP path: proposal in 146 ms, 6 ordered stops, 0 unassigned,
+16,692 m / 2,697 s, 1,465 geometry points; stale approval 409
+ROUTE_VERSION_STALE; published version 2; snapshot returned the route;
+1 run, 6 route_stops, 1 outbox event. Outage check: 502
+VROOM_UNAVAILABLE with the snapshot unchanged.
+
+The gate exposed four adapter defects invisible to fakes, now fixed:
+amount/capacity mismatch, non-integer VROOM ids, float matrix entries, and
+duplicate matrix locations. Evidence and commands live in [16b - Production
+deployment runbook](16-production-deployment-runbook.md) section 9.

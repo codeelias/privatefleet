@@ -16,8 +16,11 @@ const APP_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
   "postgres://privatefleet_app:privatefleet_app_pw@127.0.0.1:5432/privatefleet_dev";
 
+const testEnv = { ...process.env };
+delete testEnv.OSRM_BASE_URL;
+delete testEnv.VROOM_BASE_URL;
 const config = loadConfig({
-  ...process.env,
+  ...testEnv,
   REPOSITORY_MODE: "postgres",
   DATABASE_URL: APP_DATABASE_URL,
   AUTH_JWT_SECRET: "test-secret-at-least-16-characters-long",
@@ -158,3 +161,4 @@ describe("live route proposals", () => {
     expect((response.json() as { code: string }).code).toBe("ROUTING_NOT_CONFIGURED");
   });
 });
+

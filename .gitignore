@@ -18,3 +18,5 @@ screenshots/
 apps/driver-expo/dist/
 apps/driver-expo/.expo/
 apps/driver-expo/web-build/
+
+.tmp/

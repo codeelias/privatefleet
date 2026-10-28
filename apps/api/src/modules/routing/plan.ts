@@ -72,17 +72,35 @@ export async function planShipments(
     return { vehicles: [], unassigned: [], matrixSize: 0 };
   }
 
-  const points: GeoPoint[] = [{ ...vehicle.depot }];
-  for (const shipment of shipments) {
-    points.push({ ...shipment.pickup }, { ...shipment.dropoff });
-  }
+  // Several shipments can share a stop location (same building). OSRM
+  // returns zero off-diagonal entries for duplicate points and VROOM
+  // rejects such matrices, so matrix locations are deduplicated and each
+  // shipment keeps an index into the unique list.
+  const locations: GeoPoint[] = [];
+  const indexByKey = new Map<string, number>();
+  const locationIndex = (point: GeoPoint): number => {
+    const key = `${point.latitude.toFixed(5)},${point.longitude.toFixed(5)}`;
+    const existing = indexByKey.get(key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const index = locations.length;
+    locations.push({ ...point });
+    indexByKey.set(key, index);
+    return index;
+  };
+  const depotIndex = locationIndex(vehicle.depot);
+  const shipmentLocations = shipments.map((shipment) => ({
+    pickup: locationIndex(shipment.pickup),
+    delivery: locationIndex(shipment.dropoff),
+  }));
 
-  const matrices: OsrmMatrix = await clients.matrix(points);
+  const matrices: OsrmMatrix = await clients.matrix(locations);
 
   const vroomVehicle: VroomVehicleInput = {
     id: vehicle.id,
-    startIndex: 0,
-    endIndex: 0,
+    startIndex: depotIndex,
+    endIndex: depotIndex,
   };
   if (vehicle.capacity) {
     vroomVehicle.capacity = vehicle.capacity;
@@ -95,8 +113,8 @@ export async function planShipments(
   const vroomShipments: VroomShipmentInput[] = shipments.map((shipment, index) => {
     const entry: VroomShipmentInput = {
       id: shipment.id,
-      pickupIndex: 1 + index * 2,
-      deliveryIndex: 2 + index * 2,
+      pickupIndex: shipmentLocations[index]!.pickup,
+      deliveryIndex: shipmentLocations[index]!.delivery,
     };
     if (shipment.pickupServiceSeconds !== undefined) {
       entry.pickupServiceSeconds = shipment.pickupServiceSeconds;
@@ -115,7 +133,12 @@ export async function planShipments(
     return entry;
   });
 
-  const solution = await clients.solve(vroomVehicleList(vroomVehicle), vroomShipments, matrices, points.length);
+  const solution = await clients.solve(
+    vroomVehicleList(vroomVehicle),
+    vroomShipments,
+    matrices,
+    locations.length,
+  );
 
   const byId = new Map(shipments.map((shipment) => [shipment.id, shipment]));
   const planned: PlannedVehicle[] = [];
@@ -147,9 +170,13 @@ export async function planShipments(
     throw new RoutingError("PLAN_INFEASIBLE", "solver produced no plan");
   }
 
-  return { vehicles: planned, unassigned: solution.unassigned, matrixSize: points.length };
+  return { vehicles: planned, unassigned: solution.unassigned, matrixSize: locations.length };
 }
 
 function vroomVehicleList(vehicle: VroomVehicleInput): VroomVehicleInput[] {
   return [vehicle];
 }
+
+
+
+

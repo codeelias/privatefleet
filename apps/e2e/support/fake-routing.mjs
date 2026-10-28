@@ -34,14 +34,11 @@ const server = createServer((req, res) => {
     req.on("end", () => {
       const body = JSON.parse(raw || "{}");
       const shipments = body.shipments ?? [];
-      const ids = shipments.map((shipment) =>
-        String(shipment.pickup?.id ?? "").replace("::pickup", ""),
-      );
       const steps = [
         { type: "start", id: 0 },
-        ...ids.flatMap((id) => [
-          { type: "pickup", id: `${id}::pickup` },
-          { type: "delivery", id: `${id}::delivery` },
+        ...shipments.flatMap((shipment) => [
+          { type: "pickup", id: Number(shipment.pickup?.id) },
+          { type: "delivery", id: Number(shipment.delivery?.id) },
         ]),
         { type: "end", id: 0 },
       ];
@@ -89,5 +86,6 @@ server.on("error", (err) => console.error("fake-routing error", err));
 server.listen(port, "127.0.0.1", () => {
   console.log(`fake routing (OSRM+VROOM) on http://127.0.0.1:${port}`);
 });
+
 
 

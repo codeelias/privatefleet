@@ -29,17 +29,15 @@ function startFake(mode: Mode = "ok"): Promise<Fake> {
         const body = JSON.parse(raw) as {
           shipments?: Array<{ pickup?: { id?: string }; delivery?: { id?: string } }>;
         };
-        const ids = (body.shipments ?? []).map((shipment) =>
-          String(shipment.pickup?.id ?? "").replace("::pickup", ""),
-        );
+        const shipments = body.shipments ?? [];
         const steps =
           mode === "infeasible"
             ? []
             : [
                 { type: "start", id: 0 },
-                ...ids.flatMap((id) => [
-                  { type: "pickup", id: `${id}::pickup` },
-                  { type: "delivery", id: `${id}::delivery` },
+                ...shipments.flatMap((shipment) => [
+                  { type: "pickup", id: Number(shipment.pickup?.id) },
+                  { type: "delivery", id: Number(shipment.delivery?.id) },
                 ]),
                 { type: "end", id: 0 },
               ];
@@ -48,7 +46,9 @@ function startFake(mode: Mode = "ok"): Promise<Fake> {
           JSON.stringify({
             code: 0,
             unassigned:
-              mode === "infeasible" ? ids.map((id) => ({ id: `${id}::pickup` })) : [],
+              mode === "infeasible"
+                ? shipments.map((shipment) => ({ id: Number(shipment.pickup?.id) }))
+                : [],
             routes:
               mode === "infeasible"
                 ? []
@@ -211,3 +211,4 @@ describe("planShipments", () => {
     ).rejects.toMatchObject({ code: "VROOM_UNAVAILABLE" });
   });
 });
+
