@@ -96,6 +96,7 @@ export class DemoStore {
   private telemetrySequence = 0;
   private lastRun: OptimizationProposal | undefined;
   private benchmarkVehicles = 0;
+  private routeVersionValue = 1;
 
   constructor(scenario: ScenarioName) {
     this.reset(scenario);
@@ -103,6 +104,7 @@ export class DemoStore {
 
   reset(scenario: ScenarioName): void {
     this.scenario = scenario;
+    this.routeVersionValue = 1;
     this.drivers.clear();
     this.vehicles.clear();
     this.jobs.clear();
@@ -680,9 +682,16 @@ export class DemoStore {
     return run;
   }
 
-  approve(runId: string): OptimizationProposal {
+  approve(runId: string, expectedRouteVersion?: number): OptimizationProposal {
     if (!this.lastRun || this.lastRun.runId !== runId) {
       throw new Error("OPTIMIZATION_RUN_NOT_FOUND");
+    }
+    // A stale client must not overwrite a newer published plan.
+    if (
+      expectedRouteVersion !== undefined &&
+      expectedRouteVersion !== this.routeVersionValue
+    ) {
+      throw new Error("ROUTE_VERSION_STALE");
     }
     const run: OptimizationProposal = {
       ...this.lastRun,
@@ -690,6 +699,7 @@ export class DemoStore {
       publishedAt: new Date().toISOString(),
     };
     this.lastRun = run;
+    this.routeVersionValue += 1;
     this.outbox.push({
       eventId: randomUUID(),
       schemaVersion: EVENT_SCHEMA_VERSION,
@@ -862,7 +872,8 @@ export class DemoStore {
       jobs: [...this.jobs.values()].map((j) => j.dto),
       alerts: this.alerts,
       serviceZones: this.serviceZones,
-      routes,
+      routes: routes.map((route) => ({ ...route, version: this.routeVersionValue })),
+      routeVersion: this.routeVersionValue,
       serverTime: new Date().toISOString(),
       ...(publishedPlan ? { publishedPlan } : {}),
     };

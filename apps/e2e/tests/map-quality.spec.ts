@@ -55,6 +55,22 @@ test("reconnect restores a consistent snapshot without duplicates", async ({
   expect(new Set(references).size).toBe(references.length);
 });
 
+test("debug alignment grid is available behind ?debug=map", async ({ page, isMobile }) => {
+  test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
+  await page.goto(`${WEB}/?debug=map`);
+  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible();
+  const grid = page.getByTestId("map-debug-grid");
+  await expect(grid).toBeVisible();
+  await expect
+    .poll(async () =>
+      grid.evaluate((element) => {
+        const canvas = element as HTMLCanvasElement;
+        return canvas.width > 0 && canvas.height > 0;
+      }),
+    )
+    .toBe(true);
+});
+
 test("malformed route geometry is hidden and the last verified route retained", async ({
   page,
   isMobile,
@@ -85,4 +101,5 @@ test("malformed route geometry is hidden and the last verified route retained", 
 
   await page.unroute("**/v1/fleet/state");
 });
+
 

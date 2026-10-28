@@ -21,7 +21,7 @@ import "leaflet/dist/leaflet.css";
 import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
 import { reconcileRoutes, routesChanged } from "./engine/routes";
 import { toGeoJsonCoordinates, toLeafletLatLngs } from "./engine/projection";
-import { markVisible } from "./engine/benchmark";
+import { markPainted } from "./engine/benchmark";
 import {
   isActive,
   positionAt,
@@ -61,6 +61,56 @@ function useVectorEngine(): boolean {
     return false;
   }
   return DEFAULT_ENGINE === "vector";
+}
+
+const DEBUG_MAP =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("debug") === "map";
+
+/** 10 m-class geographic grid for visual route/basemap alignment checks. */
+function drawDebugGrid(
+  ctx: CanvasRenderingContext2D,
+  project: (lat: number, lon: number) => { x: number; y: number } | null,
+  centerLat: number,
+  centerLon: number,
+  zoom: number,
+  width: number,
+  height: number,
+): void {
+  ctx.clearRect(0, 0, width, height);
+  const metresPerPixel =
+    (156543.03392 * Math.cos((centerLat * Math.PI) / 180)) / Math.pow(2, zoom);
+  const sizes = [10, 25, 50, 100, 250, 500, 1000];
+  const metres = sizes.find((size) => size / metresPerPixel >= 24) ?? 1000;
+  const dLat = metres / 110_540;
+  const dLon = metres / (111_320 * Math.cos((centerLat * Math.PI) / 180));
+  const lat0 = Math.round(centerLat / dLat) * dLat;
+  const lon0 = Math.round(centerLon / dLon) * dLon;
+  ctx.strokeStyle = "rgba(56,189,248,0.45)";
+  ctx.lineWidth = 1;
+  for (let index = -120; index <= 120; index += 1) {
+    const lat = lat0 + index * dLat;
+    const a = project(lat, centerLon - 0.5);
+    const b = project(lat, centerLon + 0.5);
+    if (a && b) {
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    const lon = lon0 + index * dLon;
+    const c = project(centerLat - 0.4, lon);
+    const d = project(centerLat + 0.4, lon);
+    if (c && d) {
+      ctx.beginPath();
+      ctx.moveTo(c.x, c.y);
+      ctx.lineTo(d.x, d.y);
+      ctx.stroke();
+    }
+  }
+  ctx.fillStyle = "#38BDF8";
+  ctx.font = "700 10px system-ui, sans-serif";
+  ctx.fillText(`${metres} m grid - debug alignment`, 10, 18);
 }
 
 function routeGeoJson(routes: RoutePathLike[]): GeoJSON.FeatureCollection {
@@ -111,7 +161,7 @@ function VehiclePin({
   });
   // Benchmark hook: fires after the marker commits at its new position.
   useEffect(() => {
-    markVisible(vehicle.id);
+    markPainted([vehicle.id]);
   }, [vehicle.id, x, y]);
   return (
     <div
@@ -175,6 +225,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const useCanvasPins = !useVector && state.vehicles.length > 40;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasHitsRef = useRef<CanvasVehicle[]>([]);
+  const debugCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const markerTweensRef = useRef<Map<string, Tween>>(new Map());
   const canvasTargetsRef = useRef<
     Array<{
@@ -458,6 +509,59 @@ export function MapCanvas({ state }: { state: FleetState }) {
     return { x: p.x, y: p.y };
   }
 
+  // Debug alignment grid: geographic 10 m-class lattice at the current
+  // zoom, so route segments can be compared with the rendered road.
+  useEffect(() => {
+    if (!DEBUG_MAP || !ready) {
+      return;
+    }
+    const canvas = debugCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (width === 0 || height === 0) {
+      return;
+    }
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const leaflet = leafletRef.current;
+    const vector = vectorRef.current;
+    const project = (lat: number, lon: number): { x: number; y: number } | null => {
+      if (useVector && vector) {
+        const point = vector.project([lon, lat]);
+        return { x: point.x, y: point.y };
+      }
+      if (!useVector && leaflet) {
+        const point = leaflet.latLngToContainerPoint([lat, lon]);
+        return { x: point.x, y: point.y };
+      }
+      return null;
+    };
+    let centerLat = 51.5074;
+    let centerLon = -0.1278;
+    let zoom = 14;
+    if (useVector && vector) {
+      const center = vector.getCenter();
+      centerLat = center.lat;
+      centerLon = center.lng;
+      zoom = vector.getZoom();
+    } else if (leaflet) {
+      const center = leaflet.getCenter();
+      centerLat = center.lat;
+      centerLon = center.lng;
+      zoom = leaflet.getZoom();
+    }
+    drawDebugGrid(ctx, project, centerLat, centerLon, zoom, width, height);
+  }, [ready, revision, useVector, state.vehicles]);
+
   // Canvas marker layer for large fleets: timestamped interpolation on a
   // monotonic clock between accepted telemetry positions, with a single
   // continuous rAF loop that stops once every marker has settled.
@@ -517,9 +621,10 @@ export function MapCanvas({ state }: { state: FleetState }) {
       if (width === 0 || height === 0) {
         return;
       }
-      // Large-fleet canvas: 1x backing store. Circles are ~11 px; the 2x
-      // fill cost dominates frame time in software rasterisation.
-      const dpr = 1;
+      // Device-fidelity backing store: up to 2x for sharp markers on
+      // retina displays, 1.5x above 150 vehicles to bound fill cost.
+      const dprCap = 2;
+      const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
       if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
         canvas.width = Math.round(width * dpr);
         canvas.height = Math.round(height * dpr);
@@ -539,9 +644,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
       }
       drawVehicleLayer(ctx, drawn, { width, height, devicePixelRatio: dpr });
       canvasHitsRef.current = drawn;
-      for (const entry of drawn) {
-        markVisible(entry.id);
-      }
+      markPainted(drawn.map((entry) => entry.id));
     };
     const step = (time: number): void => {
       frame = 0;
@@ -644,6 +747,13 @@ export function MapCanvas({ state }: { state: FleetState }) {
               </div>
             );
           })}
+          {DEBUG_MAP && (
+            <canvas
+              ref={debugCanvasRef}
+              data-testid="map-debug-grid"
+              className="pointer-events-none absolute inset-0 z-30"
+            />
+          )}
           {useCanvasPins && (
             <canvas
               ref={canvasRef}
@@ -722,6 +832,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
     </section>
   );
 }
+
 
 
 

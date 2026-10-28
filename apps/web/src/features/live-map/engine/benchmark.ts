@@ -7,6 +7,8 @@
  */
 export interface BenchmarkSnapshot {
   enabled: boolean;
+  /** Measurement basis: after-paint means the frame containing the draw. */
+  basis: "after-paint";
   samples: number;
   p50Ms: number;
   p95Ms: number;
@@ -59,6 +61,24 @@ export function markVisible(vehicleId: string): void {
   }
 }
 
+/**
+ * Ends latency measurement after the browser has painted the frame that
+ * contains the canvas draw. rAF runs before paint; a task scheduled after
+ * it runs after paint, which is the user-visible moment.
+ */
+export function markPainted(vehicleIds: string[]): void {
+  if (!enabled || vehicleIds.length === 0 || typeof window === "undefined") {
+    return;
+  }
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      for (const vehicleId of vehicleIds) {
+        markVisible(vehicleId);
+      }
+    }, 0);
+  });
+}
+
 function quantile(values: number[], q: number): number {
   if (values.length === 0) {
     return 0;
@@ -73,6 +93,7 @@ function snapshot(): BenchmarkSnapshot {
   const totalFrameMs = frameTimes.reduce((sum, value) => sum + value, 0);
   return {
     enabled,
+    basis: "after-paint",
     samples: latencies.length,
     p50Ms: Number(quantile(latencies, 0.5).toFixed(1)),
     p95Ms: Number(quantile(latencies, 0.95).toFixed(1)),

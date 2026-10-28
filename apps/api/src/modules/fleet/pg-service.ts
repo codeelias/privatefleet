@@ -210,6 +210,7 @@ export class PgFleetService {
         })),
         serviceZones: [],
         routes: [],
+        routeVersion: 1,
         serverTime: new Date().toISOString(),
       };
     });
@@ -701,6 +702,7 @@ export class PgFleetService {
     }
   }
 }
+
 
 
 

@@ -79,7 +79,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.approvePlan(run.runId);
+      const result = await api.approvePlan(run.runId, state.routeVersion);
       setRun(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Publish failed");
@@ -206,3 +206,4 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
     </div>
   );
 }
+

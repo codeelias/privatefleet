@@ -9,6 +9,14 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.36 - Phase 1 freeze: true-paint metrics, 2x DPI, route versions, debug grid (2026-10-28)
+- Latency now measures time-to-visible-pixel: socket receipt -> React commit -> canvas draw -> rAF -> post-paint task. Snapshots report `basis: "after-paint"`.
+- True-paint benchmark (250 vehicles, 2530 samples): p95 72.4 ms at 1x DPR; 159.5 ms at 2x; frame p50 16.7 ms, p95 33.4 ms, 41.1 FPS vs map-only 42.7 FPS at 1x. 2x keeps frame parity (39.5 FPS) so DPI stays at min(devicePixelRatio, 2) for sharpness.
+- Authoritative route versioning: `RoutePath.version` + `FleetState.routeVersion`; API stamps routes, bumps on publish, and rejects stale `expectedRouteVersion` with 409 `ROUTE_VERSION_STALE` + uiMessage. Store test covers stamp/bump/reject; scenario test asserts route versions match the authoritative value. Geometry signature is now only a client display guard.
+- Debug alignment grid behind `?debug=map`: adaptive 10m-class geographic lattice drawn in the same projection, with an acceptance test.
+- Verification: API 24/24, web unit 21/21, demo E2E (including debug grid, DPR and benchmark specs) run recorded below, typecheck 6/6, lint 6/6, build 5/5, encoding clean.
+- Phase 1 frozen: no further headless rendering optimisation without a measured regression. Deferred: real-GPU 60 FPS measurement, Phase 4 live GPS ingestion, Phase 5 OSRM/VROOM publication.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.35 - Interpolated canvas markers: glide restored without frame-cost regression (2026-10-28)
 - New `engine/interpolation.ts`: monotonic-clock tweens, retargeting from the current animated position, clamped (no indefinite extrapolation), reduced-motion instant snap. Four unit tests.
 - Canvas marker layer now animates between accepted telemetry positions on one continuous rAF loop that stops when every marker settles; pan/zoom re-projects instantly.
@@ -308,6 +316,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

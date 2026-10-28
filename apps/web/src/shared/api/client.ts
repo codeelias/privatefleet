@@ -152,9 +152,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ driverId }),
     }),
-  approvePlan: (runId: string) =>
+  approvePlan: (runId: string, expectedRouteVersion: number) =>
     request<OptimizationProposal>(`/v1/optimization/${runId}/approve`, {
       method: "POST",
+      body: JSON.stringify({ expectedRouteVersion }),
     }),
   acknowledgeAlert: (alertId: string) =>
     request(`/v1/alerts/${alertId}/acknowledge`, { method: "POST" }),
@@ -162,4 +163,5 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 

@@ -69,9 +69,9 @@ staleness and coalescing.
 | Measurement | Initial target | Status |
 |---|---|---|
 | Accepted GPS -> visible dispatcher marker | p95 <= 1 s on defined connected test | **275 ms p95 (PASS)** - 250 vehicles, 2530 samples, headless Chromium, 1440x900 |
-| Marker animation | aim 60 FPS; investigate >33 ms frames | **fleet p50 = map-only p50 in paired runs** (16.8 ms clean host / 33.3 ms loaded host); avg FPS tracks map-only; see 17.11-17.12 |
+| Marker animation | aim 60 FPS; investigate >33 ms frames | **true-paint p95 72 ms; frame p50 16.7 ms, p95 33.4 ms, 41.1 FPS vs map-only 42.7** (250 vehicles, 2x DPI: p95 159 ms, same frames); see 17.13 |
 | Fleet benchmark size | 250 vehicles in one tenant, routes + updates | **implemented** - demo-only `/v1/demo/load` load harness |
-| Route correctness | every drawn route passes invariants | implemented (unit-tested) |
+| Route correctness | every drawn route passes invariants | implemented (unit-tested); **server-issued route versions** with stale-publish 409 |
 | Scenario consistency | all three demo scenarios | verified (7/7 demo E2E) |
 | Reconnect | fresh snapshot restores without duplicates/reversal | **verified** - map-quality acceptance test |
 | Stale GPS | ghosted with last-updated, never shown live | **verified** - map-quality acceptance test |
@@ -265,3 +265,54 @@ Honest status: interpolation restores gliding markers at no measurable
 frame cost relative to the map itself. Sustained 60 FPS average still
 depends on the environment (software rasterisation caps the bare map), and
 a real-GPU measurement remains the outstanding verification.
+
+## 17.13 Phase 1 freeze: true-paint metric, DPI fidelity, route versions, debug grid
+Four review items were closed before freeze.
+
+### True-paint latency (the metric is now what the user sees)
+The old timer ended after the React commit; with a canvas renderer that is
+before paint. The benchmark now ends inside a task scheduled after the
+requestAnimationFrame callback that follows the draw: socket receipt ->
+React commit -> canvas draw -> rAF -> post-paint task. Snapshots report
+`basis: "after-paint"`.
+
+Measured (250 vehicles, 20 s, 2530 samples, same harness):
+| DPR | Latency p50 | p95 | p99 | Frame p50 | Frame p95 | Avg FPS | Map-only FPS |
+|---|---|---|---|---|---|---|---|
+| 1x | 36.8 ms | **72.4 ms** | 93.2 ms | 16.7 ms | 33.4 ms | 41.1 | 42.7 |
+| 2x | 44.7 ms | 159.5 ms | 176.5 ms | 16.7 ms | 33.4 ms | 39.5 | - |
+
+The rigorous metric confirms the earlier conclusion: p95 is far inside the
+1 s contract. The 2x run shows a heavier latency tail (159 ms vs 72 ms)
+and one ~1.2 s frame spike; average FPS is unchanged. Loaded-host runs
+still vary; the earlier Run B (fleet p50 50 ms vs map-only 33.3 ms) is not
+claimed as parity - parity is claimed only where a paired run shows it.
+
+### DPI fidelity
+Canvas backing store is now `min(devicePixelRatio, 2)` for every fleet
+size. 2x at 250 vehicles keeps frame p50 16.7 ms / p95 33.4 ms and ~39.5
+FPS, so the sharpness is kept rather than clamping large fleets to a
+blurrier 1x. Small fleets use DOM pins and are unaffected.
+
+### Authoritative route versions
+`RoutePath` carries a server-assigned `version` and `FleetState` carries
+`routeVersion`. The API stamps every route with the current version,
+bumps it on publish, and `POST /v1/optimization/:runId/approve` now
+accepts `expectedRouteVersion`; a stale value is rejected with
+`409 ROUTE_VERSION_STALE` and an empathetic `uiMessage`. The web client
+sends the version it saw. Covered by a store test (stamp, bump, reject)
+and asserted in the scenario consistency test. The geometry signature
+remains a client-side display guard only; it is no longer the authority.
+
+### Debug alignment grid
+`?debug=map` overlays an adaptive geographic grid (10 m-class: the
+smallest of 10/25/50/100/250/500/1000 m whose spacing is >= 24 px) drawn
+in the same projection as routes and markers. Acceptance test asserts the
+layer renders. This is the visual check that replaces the earlier
+"is it offset?" debate; it is debug-only and pointer-transparent.
+
+### Freeze status
+Phase 1 demo-engine standard: complete. Deferred by design: sustained
+60 FPS on real GPU hardware, live GPS ingestion (Phase 4) and OSRM/VROOM
+publication with server-issued versions (Phase 5). No further headless
+rendering optimisation is planned without a measured regression.

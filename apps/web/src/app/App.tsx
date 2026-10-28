@@ -65,6 +65,7 @@ const EMPTY_STATE: FleetState = {
   alerts: [],
   serviceZones: [],
   routes: [],
+  routeVersion: 1,
   serverTime: new Date().toISOString(),
 };
 
@@ -522,5 +523,6 @@ export function App() {
     />
   );
 }
+
 
 

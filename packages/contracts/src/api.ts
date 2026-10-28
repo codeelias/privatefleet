@@ -91,6 +91,8 @@ export const RoutePathSchema = z.object({
   vehicleId: IdSchema,
   driverId: IdSchema.optional(),
   points: z.array(GeoPointSchema).min(2),
+  /** Server-assigned immutable route version (bumped on every publish). */
+  version: z.number().int().nonnegative(),
 });
 export type RoutePath = z.infer<typeof RoutePathSchema>;
 
@@ -176,6 +178,8 @@ export const FleetStateSchema = z.object({
   alerts: z.array(AlertDtoSchema),
   serviceZones: z.array(ServiceZoneSchema),
   routes: z.array(RoutePathSchema),
+  /** Current authoritative route version for this tenant. */
+  routeVersion: z.number().int().nonnegative(),
   serverTime: z.string().datetime(),
   publishedPlan: OptimizationProposalSchema.optional(),
 });
