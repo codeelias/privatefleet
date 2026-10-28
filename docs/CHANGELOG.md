@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.19 - config-driven map sources (provider pluggability) (2026-10-28)
+- Map sources extracted to `apps/web/src/features/live-map/map-config.ts`: no tile host or style URL is hardcoded in the map UI. Providers are selected from `VITE_MAP_*` variables with a documented resolution order (explicit config, then MapTiler when a key exists, then approved B2 defaults: OpenFreeMap bright/liberty vector, OSM raster).
+- `?map=vector|raster` overrides the engine per session; `VITE_MAP_ENGINE` sets the default. Markers, route overlays, projection and dispatch interactions are untouched by provider changes.
+- Verified env-driven switching: overriding `VITE_MAP_RASTER_TILES`/`VITE_MAP_RASTER_NAME` changed the rendered provider with zero code edits (status read "raster tiles loaded (15 tiles, Configured Raster)"); the vector chain still resolves to OpenFreeMap bright.
+- ADR-0010 amended with the provider-pluggability rule, the full stack split (MapLibre GL JS, OpenFreeMap demo tiles, MapLibre React Native for driver, PostGIS, OSRM, VROOM, PMTiles/self-hosted later) and the explicit production review trigger.
+- Full E2E suite 5 passed / 3 skipped after the refactor. Pushes remain paused (owner directive); local commits only.
+
 ### v1.18 - MapTiler integration + key guard (2026-10-27)
 - MapTiler wired through `VITE_MAPTILER_KEY` (apps/web/.env.local, gitignored) for both engines: vector style `basic-v2/style.json` (with OpenFreeMap bright/liberty retries, then raster) and Leaflet raster `basic-v2/{z}/{x}/{y}.png`.
 - Diagnosis: the configured key answers 403 "Key usage restricted" with a **placeholder PNG** as the body, so `<img>` tiles still decode and render a watermark. A pre-flight `fetch` now validates the key before any MapTiler tile is attached; a non-200 key falls straight back to OSM with a dev-only amber notice naming the fix. Verified: 0 MapTiler images, 13 OSM tiles, status "raster tiles loaded (N tiles, OSM)".

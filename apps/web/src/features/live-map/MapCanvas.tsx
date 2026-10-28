@@ -19,35 +19,15 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
+import {
+  DEFAULT_ENGINE,
+  needsKeyPreflight,
+  PRIMARY_RASTER,
+  RASTER_FALLBACK,
+  VECTOR_STYLES,
+} from "./map-config";
 
 const LONDON = { lng: -0.107, lat: 51.517 };
-// MapTiler is preferred when a key is configured (VITE_MAPTILER_KEY);
-// otherwise the key-free providers below keep the demo alive.
-const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_KEY as string | undefined) ?? "";
-const MAPTILER_ATTRIBUTION =
-  '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; OpenStreetMap contributors';
-const OSM_RASTER = {
-  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-  attribution: "&copy; OpenStreetMap contributors",
-  name: "OSM",
-} as const;
-const MAPTILER_RASTER = {
-  url: `https://api.maptiler.com/maps/basic-v2/{z}/{x}/{y}.png?key=${MAPTILER_KEY}`,
-  attribution: MAPTILER_ATTRIBUTION,
-  name: "MapTiler basic",
-} as const;
-const VECTOR_STYLES = [
-  ...(MAPTILER_KEY
-    ? [
-        {
-          url: `https://api.maptiler.com/maps/basic-v2/style.json?key=${MAPTILER_KEY}`,
-          name: "MapTiler basic",
-        },
-      ]
-    : []),
-  { url: "https://tiles.openfreemap.org/styles/bright", name: "OpenFreeMap bright" },
-  { url: "https://tiles.openfreemap.org/styles/liberty", name: "OpenFreeMap liberty" },
-] as const;
 
 // Panning is restricted to Greater London (south-west / north-east).
 const LONDON_BOUNDS: [[number, number], [number, number]] = [
@@ -55,8 +35,16 @@ const LONDON_BOUNDS: [[number, number], [number, number]] = [
   [0.08, 51.62],
 ];
 
-function forceVector(): boolean {
-  return new URLSearchParams(window.location.search).get("map") === "vector";
+/** Engine selection: `?map=vector|raster` overrides the configured default. */
+function useVectorEngine(): boolean {
+  const param = new URLSearchParams(window.location.search).get("map");
+  if (param === "vector") {
+    return true;
+  }
+  if (param === "raster") {
+    return false;
+  }
+  return DEFAULT_ENGINE === "vector";
 }
 
 function routeGeoJson(state: FleetState): GeoJSON.FeatureCollection {
@@ -134,18 +122,18 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const leafletRef = useRef<L.Map | null>(null);
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [vectorFailed, setVectorFailed] = useState(false);
-  const [vectorProvider, setVectorProvider] = useState<string>(VECTOR_STYLES[0].name);
-  const [rasterProvider, setRasterProvider] = useState<string>(
-    MAPTILER_KEY ? MAPTILER_RASTER.name : OSM_RASTER.name,
+  const [vectorProvider, setVectorProvider] = useState<string>(
+    VECTOR_STYLES[0]?.name ?? "vector",
   );
-  const [mapTilerStatus, setMapTilerStatus] = useState<number | null>(null);
-  const mapTilerStatusRef = useRef<number | null>(null);
+  const [rasterProvider, setRasterProvider] = useState<string>(PRIMARY_RASTER.name);
+  const [providerStatus, setProviderStatus] = useState<number | null>(null);
+  const providerStatusRef = useRef<number | null>(null);
   const [tileCount, setTileCount] = useState(0);
   const [tilesFailed, setTilesFailed] = useState(false);
   const [ready, setReady] = useState(false);
   const [revision, setRevision] = useState(0);
   const styleIndexRef = useRef(0);
-  const useVector = forceVector() && !vectorFailed;
+  const useVector = useVectorEngine() && !vectorFailed;
 
   // --- Raster engine (Leaflet, default) ---------------------------------
   useEffect(() => {
@@ -188,12 +176,12 @@ export function MapCanvas({ state }: { state: FleetState }) {
         setRasterProvider(provider.name);
       });
       layer.on("tileerror", () => {
-        if (primary && MAPTILER_KEY && !swapped) {
+        if (primary && !swapped) {
           swapped = true;
           layer.remove();
           loaded = 0;
-          setRasterProvider(`${OSM_RASTER.name} fallback`);
-          attach(OSM_RASTER, false);
+          setRasterProvider(`${RASTER_FALLBACK.name} fallback`);
+          attach(RASTER_FALLBACK, false);
         } else if (loaded === 0) {
           setTilesFailed(true);
         }
@@ -202,26 +190,30 @@ export function MapCanvas({ state }: { state: FleetState }) {
       active = layer;
     };
 
-    // Validate a configured key BEFORE showing MapTiler tiles: a
-    // restricted key answers 403 with a placeholder PNG that <img>
-    // still decodes, which would silently put a "get a valid key"
-    // watermark on the demo map.
-    if (MAPTILER_KEY) {
-      fetch(`https://api.maptiler.com/maps/basic-v2/0/0/0.png?key=${MAPTILER_KEY}`)
+    // Some providers answer a rejected key with a 403 placeholder PNG
+    // that <img> still decodes (a watermark on the map). Validate the
+    // configured primary source before attaching it.
+    if (needsKeyPreflight(PRIMARY_RASTER)) {
+      const probe = PRIMARY_RASTER.url
+        .replace("{z}", "0")
+        .replace("{x}", "0")
+        .replace("{y}", "0")
+        .replace("{s}", "a");
+      fetch(probe)
         .then((res) => {
-          mapTilerStatusRef.current = res.status;
-          setMapTilerStatus(res.status);
+          providerStatusRef.current = res.status;
+          setProviderStatus(res.status);
         })
         .catch(() => {
-          mapTilerStatusRef.current = 0;
-          setMapTilerStatus(0);
+          providerStatusRef.current = 0;
+          setProviderStatus(0);
         })
         .finally(() => {
-          const usable = mapTilerStatusRef.current === 200;
-          attach(usable ? MAPTILER_RASTER : OSM_RASTER, usable);
+          const usable = providerStatusRef.current === 200;
+          attach(usable ? PRIMARY_RASTER : RASTER_FALLBACK, usable);
         });
     } else {
-      attach(OSM_RASTER, false);
+      attach(PRIMARY_RASTER, false);
     }
     void active;
     const raf = requestAnimationFrame(() => map.invalidateSize());
@@ -263,10 +255,15 @@ export function MapCanvas({ state }: { state: FleetState }) {
       return;
     }
     let map: maplibregl.Map;
+    const firstStyle = VECTOR_STYLES[0];
+    if (!firstStyle) {
+      setVectorFailed(true);
+      return;
+    }
     try {
       map = new maplibregl.Map({
         container: containerRef.current,
-        style: VECTOR_STYLES[0].url,
+        style: firstStyle.url,
         center: [LONDON.lng, LONDON.lat],
         zoom: 12,
         maxBounds: LONDON_BOUNDS,
@@ -293,7 +290,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
       }
     });
     map.on("load", () => {
-      const current = VECTOR_STYLES[styleIndexRef.current] ?? VECTOR_STYLES[0];
+      const current = VECTOR_STYLES[styleIndexRef.current] ?? firstStyle;
       setVectorProvider(current.name);
       map.addSource("vehicle-routes", {
         type: "geojson",
@@ -437,10 +434,10 @@ export function MapCanvas({ state }: { state: FleetState }) {
               {status}
             </p>
           )}
-          {import.meta.env.DEV && mapTilerStatus !== null && mapTilerStatus !== 200 && (
+          {import.meta.env.DEV && providerStatus !== null && providerStatus !== 200 && (
             <p className="absolute top-2 left-3 z-30 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
-              MapTiler key rejected ({mapTilerStatus}) - OSM tiles in use. Add
-              localhost:5173 to the key's allowed origins in MapTiler Cloud.
+              Tile provider rejected the configured key ({providerStatus}) -
+              fallback tiles in use. Check the key's allowed origins.
             </p>
           )}
         </div>
