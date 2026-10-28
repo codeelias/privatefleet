@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "PrivateFleet Driver",
+    "slug": "privatefleet-driver",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "platforms": ["ios", "android", "web"],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.privatefleet.driver"
+    },
+    "android": {
+      "package": "com.privatefleet.driver"
+    }
+  }
+}
+

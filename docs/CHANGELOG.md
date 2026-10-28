@@ -9,6 +9,14 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.28 - Phase 3: Expo driver application scaffold (2026-10-28)
+- New `apps/driver-expo` workspace app: Expo SDK 53 / React Native 0.79 / react-native-web, `app.json` for iOS, Android and web (SPA export), babel + tsconfig wired for Metro.
+- The Expo app implements the same server contract as the RN-web driver: PIN device login (`/v1/auth/driver-login`), tenant-scoped `/v1/driver/queue`, shift start, arrive/complete/skip with idempotency keys, session refresh with single-flight + forced refresh on 401, and a durable offline queue in AsyncStorage (pending on network failure, explicit conflict on 4xx, one flush at a time). Hold-to-confirm uses the single-fire ref pattern so a hold cannot spam commands.
+- API base is `EXPO_PUBLIC_API_URL` (Expo public env, default `http://127.0.0.1:4002`).
+- Verified: typecheck passes; `expo export --platform web` bundles successfully (397 kB, 188 modules) with `web.output: "single"` (static/SSR output needs expo-router, which this app does not use). Repo gates: typecheck 6/6, lint 6/6, build 5/5, API 23/23, demo E2E 7 passed / 7 skipped.
+- Not yet verified: running the Expo bundle against the live API (needs CORS on the API and a static-serve acceptance harness - next step), and native device builds (require EAS credentials or an Android/iOS toolchain; not available on this workstation, by design documented in ADR-0009).
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.27 - Phase 3: driver app production mode, offline queue hardening, browser acceptance (2026-10-28)
 - Real driver bug fixed: the hold-to-confirm control kept a stale interval reference, so one hold fired `onConfirm` on every tick after the threshold - duplicate arrive commands (one 200, the rest 409). Now a ref-held interval with a single-fire guard confirms exactly once.
 - Driver app production mode: detects `/v1/meta`; demo mode keeps the profile picker, postgres mode shows a device sign-in (workspace + driver ID + PIN) and uses `GET /v1/driver/queue` plus `POST /v1/driver/shift/start`. Session persists with `accessTtlMs`; expiry triggers one single-flight refresh; a 401 forces a real refresh before retry; failure clears the session back to sign-in.

@@ -24,3 +24,16 @@ One Expo (managed) codebase for the driver app. Phase 1 runs it via `expo export
 
 
 
+
+## Phase 3 update (2026-10-28)
+The Expo application is now scaffolded in `apps/driver-expo` (Expo SDK 53,
+React Native 0.79, web export supported) and shares the Phase 3 server
+contract with the RN-web app: PIN device login, tenant-scoped queue,
+idempotent arrive/complete/skip, single-flight refresh and a durable
+AsyncStorage offline queue with explicit conflict classification.
+
+Status: web export verified (`expo export --platform web`, 188 modules);
+runtime acceptance against the live API and EAS/native builds remain open.
+Native builds require EAS credentials or an Android/iOS toolchain that is
+not installed on the development workstation; the RN-web app stays the
+pilot-device path until an EAS build is produced.
