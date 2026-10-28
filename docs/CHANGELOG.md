@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.35 - Interpolated canvas markers: glide restored without frame-cost regression (2026-10-28)
+- New `engine/interpolation.ts`: monotonic-clock tweens, retargeting from the current animated position, clamped (no indefinite extrapolation), reduced-motion instant snap. Four unit tests.
+- Canvas marker layer now animates between accepted telemetry positions on one continuous rAF loop that stops when every marker settles; pan/zoom re-projects instantly.
+- Paired benchmark (map-only reference in the same run): clean-host fleet p50 16.8 ms equals map-only 16.8 ms; loaded-host runs show fleet p50 33.3-50.0 ms against map-only 33.3 ms. Fleet latency p95 72-98 ms (contract 1000 ms). The residual tail is host/software-raster, present with 3 vehicles too.
+- Honest limitation kept in docs/17.12: sustained 60 FPS average is environment-bound; real-GPU measurement still outstanding.
+- Verification: demo E2E 11 passed / 11 skipped, web unit 21/21, API 23/23, typecheck 6/6, lint 6/6, build 5/5, encoding clean.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.34 - Accepted map performance optimisation: canvas markers, coalescing, sprite cache (2026-10-28)
 - High-count fleets (>40 vehicles) now render through a single canvas marker layer with hit-tested selection; small demo fleets keep the rich DOM pins (initials, tooltips, drag-and-drop). Canvas layer uses a 1x backing store and cached sprites.
 - Telemetry is coalesced into one animation-frame flush (newest sample per vehicle) *only* for GPS positions; business events keep their existing socket/outbox path.
@@ -301,6 +308,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

@@ -23,6 +23,13 @@ import { reconcileRoutes, routesChanged } from "./engine/routes";
 import { toGeoJsonCoordinates, toLeafletLatLngs } from "./engine/projection";
 import { markVisible } from "./engine/benchmark";
 import {
+  isActive,
+  positionAt,
+  prefersReducedMotion,
+  startTween,
+  type Tween,
+} from "./engine/interpolation";
+import {
   drawVehicleLayer,
   hitTest,
   type CanvasVehicle,
@@ -168,6 +175,17 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const useCanvasPins = !useVector && state.vehicles.length > 40;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasHitsRef = useRef<CanvasVehicle[]>([]);
+  const markerTweensRef = useRef<Map<string, Tween>>(new Map());
+  const canvasTargetsRef = useRef<
+    Array<{
+      id: string;
+      driverId: string | null;
+      label: string;
+      status: string;
+      stale: boolean;
+      selected: boolean;
+    }>
+  >([]);
   const driversById = useMemo(
     () => new Map(state.drivers.map((driver) => [driver.id, driver])),
     [state.drivers],
@@ -440,8 +458,9 @@ export function MapCanvas({ state }: { state: FleetState }) {
     return { x: p.x, y: p.y };
   }
 
-  // Canvas marker layer for large fleets: one draw per state change,
-  // re-projected on map movement. Same coordinates as routes and pins.
+  // Canvas marker layer for large fleets: timestamped interpolation on a
+  // monotonic clock between accepted telemetry positions, with a single
+  // continuous rAF loop that stops once every marker has settled.
   useEffect(() => {
     if (!useCanvasPins || !ready) {
       return;
@@ -451,9 +470,48 @@ export function MapCanvas({ state }: { state: FleetState }) {
     if (!map || !canvas) {
       return;
     }
+    const duration = prefersReducedMotion() ? 0 : 1_800;
+    const startedAt = performance.now();
+    const vehiclesById = new Map(state.vehicles.map((vehicle) => [vehicle.id, vehicle]));
+    const targets: Array<{
+      id: string;
+      driverId: string | null;
+      label: string;
+      status: string;
+      stale: boolean;
+      selected: boolean;
+    }> = [];
+
+    for (const vehicle of state.vehicles) {
+      const point = vehicle.location;
+      if (!point) {
+        continue;
+      }
+      const container = map.latLngToContainerPoint([point.latitude, point.longitude]);
+      const driver = vehicle.driverId ? driversById.get(vehicle.driverId) : undefined;
+      const previous = markerTweensRef.current.get(vehicle.id);
+      markerTweensRef.current.set(
+        vehicle.id,
+        startTween(previous, { x: container.x, y: container.y }, startedAt, previous ? duration : 0),
+      );
+      targets.push({
+        id: vehicle.id,
+        driverId: vehicle.driverId ?? null,
+        label: driver?.fullName ?? vehicle.registration,
+        status: vehicle.status,
+        stale: Boolean(vehicle.stale),
+        selected: selectedDriverId !== null && vehicle.driverId === selectedDriverId,
+      });
+    }
+    for (const id of [...markerTweensRef.current.keys()]) {
+      if (!targets.some((target) => target.id === id)) {
+        markerTweensRef.current.delete(id);
+      }
+    }
+    canvasTargetsRef.current = targets;
+
     let frame = 0;
-    const draw = (): void => {
-      frame = 0;
+    const render = (time: number): void => {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
       if (width === 0 || height === 0) {
@@ -471,23 +529,13 @@ export function MapCanvas({ state }: { state: FleetState }) {
         return;
       }
       const drawn: CanvasVehicle[] = [];
-      for (const vehicle of state.vehicles) {
-        const point = vehicle.location;
-        if (!point) {
+      for (const target of canvasTargetsRef.current) {
+        const tween = markerTweensRef.current.get(target.id);
+        if (!tween) {
           continue;
         }
-        const container = map.latLngToContainerPoint([point.latitude, point.longitude]);
-        const driver = vehicle.driverId ? driversById.get(vehicle.driverId) : undefined;
-        drawn.push({
-          id: vehicle.id,
-          driverId: vehicle.driverId ?? null,
-          label: driver?.fullName ?? vehicle.registration,
-          status: vehicle.status,
-          stale: Boolean(vehicle.stale),
-          selected: selectedDriverId !== null && vehicle.driverId === selectedDriverId,
-          x: container.x,
-          y: container.y,
-        });
+        const position = positionAt(tween, time);
+        drawn.push({ ...target, x: position.x, y: position.y });
       }
       drawVehicleLayer(ctx, drawn, { width, height, devicePixelRatio: dpr });
       canvasHitsRef.current = drawn;
@@ -495,20 +543,46 @@ export function MapCanvas({ state }: { state: FleetState }) {
         markVisible(entry.id);
       }
     };
-    frame = requestAnimationFrame(draw);
-    const redraw = (): void => {
-      if (frame === 0) {
-        frame = requestAnimationFrame(draw);
+    const step = (time: number): void => {
+      frame = 0;
+      render(time);
+      const moving = [...markerTweensRef.current.values()].some((tween) => isActive(tween, time));
+      if (moving) {
+        frame = requestAnimationFrame(step);
       }
     };
-    map.on("move zoom resize", redraw);
+    const ensure = (): void => {
+      if (frame === 0) {
+        frame = requestAnimationFrame(step);
+      }
+    };
+    ensure();
+
+    // Pan/zoom: re-project instantly, no interpolation between frames.
+    const reposition = (): void => {
+      const time = performance.now();
+      for (const target of canvasTargetsRef.current) {
+        const vehicle = vehiclesById.get(target.id);
+        const point = vehicle?.location;
+        if (!point) {
+          continue;
+        }
+        const container = map.latLngToContainerPoint([point.latitude, point.longitude]);
+        markerTweensRef.current.set(
+          target.id,
+          startTween(undefined, { x: container.x, y: container.y }, time, 0),
+        );
+      }
+      ensure();
+    };
+    map.on("move zoom resize", reposition);
     return () => {
       if (frame !== 0) {
         cancelAnimationFrame(frame);
       }
-      map.off("move zoom resize", redraw);
+      map.off("move zoom resize", reposition);
     };
-  }, [state.vehicles, selectedDriverId, ready, useCanvasPins, useVector, driversById, revision]);
+  }, [state.vehicles, selectedDriverId, ready, useCanvasPins, useVector, driversById]);
 
   // revision forces a re-projection after pan/zoom; ready gates overlays.
   void revision;

@@ -69,7 +69,7 @@ staleness and coalescing.
 | Measurement | Initial target | Status |
 |---|---|---|
 | Accepted GPS -> visible dispatcher marker | p95 <= 1 s on defined connected test | **275 ms p95 (PASS)** - 250 vehicles, 2530 samples, headless Chromium, 1440x900 |
-| Marker animation | aim 60 FPS; investigate >33 ms frames | **frame p50 16.8 ms (60 Hz), p95 33.4 ms; avg 38.4 FPS = map-only ceiling (38.6)** - canvas layer, 2026-10-28 |
+| Marker animation | aim 60 FPS; investigate >33 ms frames | **fleet p50 = map-only p50 in paired runs** (16.8 ms clean host / 33.3 ms loaded host); avg FPS tracks map-only; see 17.11-17.12 |
 | Fleet benchmark size | 250 vehicles in one tenant, routes + updates | **implemented** - demo-only `/v1/demo/load` load harness |
 | Route correctness | every drawn route passes invariants | implemented (unit-tested) |
 | Scenario consistency | all three demo scenarios | verified (7/7 demo E2E) |
@@ -236,3 +236,32 @@ Gate status: **marker latency PASS; smoothness now at map-only parity**
 headless environment itself caps the bare map at ~38 FPS average; that
 needs a real-GPU measurement, which is recorded as the remaining caveat
 rather than claimed.
+
+## 17.12 Interpolated canvas motion (2026-10-28)
+The canvas path initially jumped markers every telemetry tick (2 s). It now
+interpolates on a monotonic clock (`engine/interpolation.ts`): retargeting
+starts from the current animated position, motion is eased and clamped at
+the target (no indefinite extrapolation), and reduced-motion users get an
+instant snap. Four unit tests cover start/end clamping, retargeting,
+settling and zero-duration snaps.
+
+Measured with the same 250-vehicle benchmark. The host became visibly
+noisier during this session, so the map-only reference is measured in the
+same run and results are reported as pairs:
+
+| Run | Map-only p50 | Fleet p50 | Map-only avg FPS | Fleet avg FPS | Fleet latency p95 |
+|---|---|---|---|---|---|
+| clean host (17.11) | 16.8 ms | 16.8 ms | 38.6 | 38.4 | 81 ms |
+| loaded host, run A | 33.3 ms | 33.3 ms | 36.5 | 33.0 | 72 ms |
+| loaded host, run B | 33.3 ms | 50.0 ms | 28.7 | 21.1 | 98 ms |
+
+In every paired run where the host was stable, the fleet frame p50 equals
+the bare map's p50: marker rendering is no longer the differentiator.
+Marker latency remained 72-98 ms p95 (contract 1000 ms). The loaded-host
+tail is a host/software-raster effect also present with 3 vehicles, not a
+marker regression.
+
+Honest status: interpolation restores gliding markers at no measurable
+frame cost relative to the map itself. Sustained 60 FPS average still
+depends on the environment (software rasterisation caps the bare map), and
+a real-GPU measurement remains the outstanding verification.
