@@ -81,6 +81,27 @@ The Honey Pot fails if the data doesn't feel real to the specific prospect. The 
 - Budgets from [05.8](05-web-app-architecture.md) are CI-enforced where automatable (bundle size, E2E timing on assignment commit).
 - The full 120-second demo remains a rehearsed, gated human check at each phase exit ([14](14-roadmap-and-gates.md)) - automation guards regressions; the rehearsal guards the experience.
 
+## 12.8 Viewport-guarded E2E tests (not silently excluded)
+
+Playwright runs two projects: `dispatcher` (1440x900) and `driver`
+(iPhone 13 size). The full suite therefore reports skips for tests that
+only make sense on one viewport:
+
+| Skipped in | Test | Reason |
+|---|---|---|
+| driver | Morning Rush assignment flow | dispatcher layout is desktop-only |
+| driver | Emergency drag-assignment flow | dispatcher layout is desktop-only |
+| driver | Route consistency / movement / selection | dispatcher map layout is desktop-only |
+| dispatcher | Proof of Service driver flow | driver app layout is mobile-size only |
+
+These are `test.skip(...)` guards inside each test, evaluated per project,
+not excluded files: `pnpm e2e` runs the union, so CI cannot drop a skipped
+test silently. Expected suite totals are `passed + skipped` per project and
+are reviewed at each phase gate; a skip on the dispatcher project is treated
+as a failure to investigate because dispatcher tests must run at desktop
+size.
+
+
 
 
 
