@@ -94,3 +94,44 @@ staleness and coalescing.
 No live OSRM/VROOM integration, no native build, no auth/tenant/database
 changes, no default-mode changes. Demo fixtures remain the default and are
 labelled demo data.
+
+## 17.8 Alignment audit: route line vs road centreline (2026-10-28)
+Following a report of a route polyline appearing parallel-offset from the
+road, each diagnostic hypothesis was checked against the actual data path.
+
+1. **Coordinate order** - now single boundary helpers (`engine/projection.ts`):
+   GeoJSON/OSRM sources get `[longitude, latitude]`, Leaflet gets
+   `[latitude, longitude]`. Unit tests assert both orders for the same point.
+2. **CRS** - fixtures store raw WGS84; both engines project WGS84 themselves.
+   No EPSG:3857 conversion exists in the pipeline.
+3. **Snapping** - the generator now passes `radiuses=120` per waypoint and
+   records each waypoint's snap distance (`snapMetres`) in the fixture. The
+   certification test enforces `0 <= snap <= 100 m`. Observed maxima:
+   VAN-02 58.2 m (morning-rush/emergency) and 57.4 m (proof), VAN-04 and
+   CAR-03 38.4 m. A 50 m radius was rejected by OSRM (`NoSegment`) because
+   several stop coordinates are venue points up to ~58 m from the drivable
+   edge. These distances describe where a **stop marker** sits relative to
+   the carriageway; they do not move the route line, which follows OSRM's
+   snapped centreline.
+4. **Rendering offset** - no `line-offset` is applied in either engine;
+   caps/joins are defaults; both engines consume the same `GeoPoint[]`.
+5. **Simplification** - replaced "keep every 5th vertex" with full OSRM
+   geometry plus 1.5 m Douglas-Peucker. Measured maximum deviation of the
+   old (every-5th) vertices from the new road-following polyline: **1.5 m**
+   across all nine fixtures. Downsampling was therefore not a source of a
+   multi-metre visual offset.
+
+**Conclusion.** The committed route geometry is the OSRM road centreline
+within 1.5 m (the simplification tolerance), coordinate order and CRS are
+guarded by tests, and no stylistic line offset exists. A visible parallel
+offset larger than ~2 m against the rendered base map is therefore not
+explained by this pipeline. The plausible remaining causes are base-map
+generalisation at the current zoom (the vector style generalises road
+geometry differently from full-resolution data) or comparing against a
+mockup/label rather than the rendered carriageway. Closing that visual
+question needs the exact engine (vector or raster), zoom level and a
+screenshot of this application, not a reference mockup.
+
+Stop pins can legitimately sit up to ~58 m from the carriageway because
+they are venue coordinates; the system keeps that truth rather than moving
+markers onto roads.

@@ -20,6 +20,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
 import { reconcileRoutes, routesChanged } from "./engine/routes";
+import { toGeoJsonCoordinates, toLeafletLatLngs } from "./engine/projection";
 import type { RoutePathLike } from "./engine/geo";
 import {
   DEFAULT_ENGINE,
@@ -57,7 +58,7 @@ function routeGeoJson(routes: RoutePathLike[]): GeoJSON.FeatureCollection {
       properties: { vehicleId: route.vehicleId, driverId: route.driverId ?? "" },
       geometry: {
         type: "LineString",
-        coordinates: route.points.map((p) => [p.longitude, p.latitude]),
+        coordinates: toGeoJsonCoordinates(route.points),
       },
     })),
   };
@@ -278,7 +279,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
     polylinesRef.current = routeSet.routes.map((route) => {
       const selected = selectedDriverId !== null && route.driverId === selectedDriverId;
       return L.polyline(
-        route.points.map((p) => [p.latitude, p.longitude] as [number, number]),
+        toLeafletLatLngs(route.points),
         {
           color: selected ? "#38BDF8" : "#4F8CFF",
           weight: selected ? 5 : 3,
@@ -536,4 +537,5 @@ export function MapCanvas({ state }: { state: FleetState }) {
     </section>
   );
 }
+
 

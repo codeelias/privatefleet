@@ -9,6 +9,15 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.31 - Map alignment audit: full-resolution geometry, snap audit, coordinate-order boundary (2026-10-28)
+- Response to a reported route-line offset: checked coordinate order, CRS, snapping, rendering offset and simplification against the actual data path (docs/17.8).
+- Coordinate order is now enforced at one boundary: `engine/projection.ts` emits `[lng, lat]` for GeoJSON/MapLibre and `[lat, lng]` for Leaflet, with unit tests asserting both for the same point.
+- Fixtures regenerated: full-resolution OSRM geometry with 1.5 m Douglas-Peucker simplification (replacing every-5th-vertex sampling), `radiuses=120` per waypoint, and each waypoint's snap distance recorded. Certification rejects snaps outside 0-100 m; observed maxima are 58.2 m (VAN-02), 57.4 m (proof VAN-02), 38.4 m (VAN-04, CAR-03). A 50 m radius was rejected by OSRM (NoSegment) because some stop coordinates are venue points up to ~58 m from the drivable edge.
+- Measured old-vs-new geometry deviation: max **1.5 m** across all nine fixtures, so vertex downsampling was not the cause of a multi-metre visual offset.
+- Honest conclusion recorded: geometry is OSRM centreline within 1.5 m, order/CRS are test-guarded and no line-offset exists; a larger parallel offset against the rendered base map is most plausibly base-map generalisation at the current zoom, and needs engine + zoom + an application screenshot to diagnose. No claim is made that this change fixes a >2 m visual offset.
+- Verification: API 23/23 (fixture certification includes the snap audit), web unit 15/15, demo E2E 10 passed / 10 skipped, typecheck 6/6, lint 6/6, build 5/5, encoding clean.
+- Still pending for the quality gate: the reproducible 250-vehicle benchmark and recorded p95 latency/frame times (docs/17.5).
+- Pushes remain paused (owner directive); local commits only.
 ### v1.30 - Map quality standard foundation: validated routes, ordered telemetry, protected baseline (2026-10-28)
 - Protected baseline rule documented (docs/17): every change must pass the full gate set and measurably improve quality, or it is reverted. Baseline recorded at `73639a8` with green gates.
 - New pure map-engine modules with unit tests (12 cases): `geo.ts` (coordinate validity, route invariants, stable geometry signatures), `routes.ts` (valid/invalid reconciliation, last-verified-route retention, change detection), `telemetry.ts` (monotonic ordering by sequence + capture time, invalid-sample rejection, staleness, newest-per-vehicle coalescing).
@@ -269,6 +278,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

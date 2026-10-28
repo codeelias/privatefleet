@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { fleetState, resetScenario, WEB } from "./helpers";
 
+// The scenario sweep asserts every route point; allow a generous budget.
+test.describe.configure({ timeout: 120_000 });
+
 /**
  * Route-correctness acceptance (docs/16, ADR-0013).
  *
@@ -143,6 +146,7 @@ test("Live map: selecting a vehicle highlights its route", async ({ page, isMobi
   await expect(page.locator("path.leaflet-interactive")).toHaveCount(3);
   await expect(page.getByText(/Route geometry unavailable/)).toHaveCount(0);
 });
+
 
 
 

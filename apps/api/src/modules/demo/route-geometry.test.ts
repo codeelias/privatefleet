@@ -1,7 +1,8 @@
 /**
- * Fixture certification (docs/16.5, ADR-0013): proves, for every demo
- * scenario, that the committed road geometry was generated through the
- * assigned stops in the approved order and that it starts at the driver.
+ * Fixture certification (docs/16.5, docs/17, ADR-0013): proves, for every
+ * demo scenario, that the committed road geometry was generated through
+ * the assigned stops in the approved order, starts at the driver, and
+ * records how far each requested stop was snapped to the drivable road.
  *
  * Order is certified from the generator's engine-snapped waypoint
  * indices, because proximity alone cannot order stops on an out-and-back
@@ -15,6 +16,8 @@ import { ROUTE_GEOMETRY } from "./route-geometry.js";
 
 const SCENARIOS: ScenarioName[] = ["morning-rush", "emergency", "proof"];
 const TOLERANCE_M = 120;
+/** Explicit snap audit limit; the generator rejects worse waypoints. */
+const MAX_SNAP_M = 100;
 
 function metresBetween(
   a: { latitude: number; longitude: number },
@@ -28,7 +31,10 @@ function metresBetween(
   return Math.sqrt(x * x + y * y);
 }
 
-function expectedWaypoints(scenario: ScenarioName, driver: number): Array<{ latitude: number; longitude: number }> {
+function expectedWaypoints(
+  scenario: ScenarioName,
+  driver: number,
+): Array<{ latitude: number; longitude: number }> {
   const seed = DRIVER_SEEDS[driver];
   if (!seed) {
     return [];
@@ -42,7 +48,11 @@ function expectedWaypoints(scenario: ScenarioName, driver: number): Array<{ lati
     waypoints.push({ latitude: job.pickup.latitude, longitude: job.pickup.longitude });
     waypoints.push({ latitude: job.dropoff.latitude, longitude: job.dropoff.longitude });
   }
-  return waypoints;
+  // Match the generator: consecutive duplicate stops are one waypoint for
+  // OSRM (it rejects them otherwise).
+  return waypoints.filter(
+    (point, index) => index === 0 || metresBetween(waypoints[index - 1]!, point) > 1,
+  );
 }
 
 describe("demo route geometry fixtures", () => {
@@ -61,9 +71,17 @@ describe("demo route geometry fixtures", () => {
         expect(first).toBeTruthy();
         expect(metresBetween(first!, seed.start)).toBeLessThan(TOLERANCE_M);
 
+        // Snap audit: every requested waypoint was within the documented
+        // 120 m search radius and at most the 100 m acceptance limit.
+        const waypoints = expectedWaypoints(scenario, driverIndex);
+        expect(fixture.snapMetres.length).toBe(waypoints.length);
+        for (const snap of fixture.snapMetres) {
+          expect(snap).toBeGreaterThanOrEqual(0);
+          expect(snap).toBeLessThanOrEqual(MAX_SNAP_M);
+        }
+
         // Every assigned stop, in the approved order, certified by the
         // generator's engine-snapped indices.
-        const waypoints = expectedWaypoints(scenario, driverIndex);
         expect(fixture.waypoints.length).toBe(waypoints.length);
         let previousIndex = -1;
         let previousExpected: { latitude: number; longitude: number } | undefined;
@@ -90,4 +108,3 @@ describe("demo route geometry fixtures", () => {
     });
   }
 });
-
