@@ -331,6 +331,25 @@ describe("driver actions reach dispatch", () => {
     const jobB = state.jobs.find((job) => job.id === fleet.driverB.jobId);
     expect(jobB?.status).toBe("assigned");
 
+    // The other driver skips their stop with a reason (skip path).
+    const tokenB = await driverLogin(fleet.driverB.id);
+    const skip = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${fleet.driverB.jobId}/stops/${fleet.driverB.stopId}/skip`,
+      headers: { ...authed(tokenB), "idempotency-key": randomUUID() },
+      payload: { driverId: fleet.driverB.id, reason: "Customer unavailable" },
+    });
+    expect(skip.statusCode).toBe(200);
+    expect((skip.json() as { status: string }).status).toBe("skipped");
+    const dispatchB = await app.inject({
+      method: "GET",
+      url: "/v1/fleet/state",
+      headers: authed(fleet.ownerToken),
+    });
+    const skippedJob = (dispatchB.json() as { jobs: Array<{ id: string; status: string }> }).jobs.find(
+      (candidate) => candidate.id === fleet.driverB.jobId,
+    );
+    expect(skippedJob?.status).toBe("skipped");
     // Exactly one completion event was recorded for the command.
     const events = (await migrator.sql`
       SELECT count(*)::int AS count FROM job_events
@@ -340,4 +359,6 @@ describe("driver actions reach dispatch", () => {
     expect(events[0]?.count).toBe(1);
   });
 });
+
+
 

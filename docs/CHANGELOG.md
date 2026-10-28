@@ -9,6 +9,15 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.29 - Phase 3 complete: offline queue contract tests, conflict banners, skip coverage (2026-10-28)
+- Offline queue contract tests for BOTH driver clients (`apps/driver/src/shared/client.test.ts`, `apps/driver-expo/src/queue.test.ts`, 3 each): a network failure keeps the command pending with the same idempotency key across retries; a 4xx becomes an explicit conflict carrying the server `uiMessage` and is persisted with `status: conflict`; concurrent flushes share one in-flight run (fetch called once).
+- Conflict-aware sync banner in both apps: conflicts render the danger tone with "N action(s) need attention - refresh your queue"; pending commands show the queued count with the retry explanation; offline copy unchanged.
+- Driver lifecycle test now also covers `skip` with a reason: the driver token skips their stop, and the dispatcher's fleet view shows the job `skipped`.
+- Root `test` task excludes the e2e package (`--filter=!@privatefleet/e2e`); browser gates stay explicit (`pnpm e2e`, `pnpm e2e:auth`).
+- Phase 3 objective evidence: unit/integration 29 (API 23 + driver 3 + Expo 3); `pnpm e2e:auth` 8/8 including RN-web and Expo driver workflows that complete a real assigned job and prove the dispatcher sees the authorised update; demo E2E 7 passed / 7 skipped; typecheck 6/6, lint 6/6, build 5/5, encoding clean.
+- Known limitation (documented in ADR-0009): native iOS/Android builds need EAS credentials or a local toolchain; the verified transports are RN-web and Expo-web.
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.28 - Phase 3: Expo driver application, verified end-to-end on web (2026-10-28)
 - New `apps/driver-expo` workspace app: Expo SDK 53 / React Native 0.79 / react-native-web, `app.json` for iOS, Android and web (SPA export), babel + tsconfig wired for Metro.
 - The Expo app implements the same server contract as the RN-web driver: PIN device login (`/v1/auth/driver-login`), tenant-scoped `/v1/driver/queue`, shift start, arrive/complete/skip with idempotency keys, session refresh with single-flight + forced refresh on 401, and a durable offline queue in AsyncStorage (pending on network failure, explicit conflict on 4xx, one flush at a time). Hold-to-confirm uses the single-fire ref pattern so a hold cannot spam commands.

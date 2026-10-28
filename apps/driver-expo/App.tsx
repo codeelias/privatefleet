@@ -88,6 +88,7 @@ export default function App() {
   const [queue, setQueue] = useState<DriverQueue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(0);
+  const [conflicts, setConflicts] = useState(0);
   const [screen, setScreen] = useState<"login" | "shift" | "active" | "pod">("login");
   const [stopId, setStopId] = useState<string | null>(null);
   const [tenantSlug, setTenantSlug] = useState("");
@@ -101,6 +102,8 @@ export default function App() {
       const next = await api.driverQueue();
       setQueue(next);
       setPending(await pendingCount());
+      const stored = await loadQueue();
+      setConflicts(stored.filter((command) => command.status === "conflict").length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load your queue");
     }
@@ -315,7 +318,11 @@ export default function App() {
       <Text style={styles.brand}>NORTHSTAR TRANSPORT</Text>
       <Text style={styles.title}>Good morning, {session.driver.fullName.split(" ")[0]}</Text>
       <Text style={styles.subtitle}>
-        {pending > 0 ? `${pending} action(s) waiting to sync` : "Connected - actions sync immediately"}
+        {conflicts > 0
+          ? `${conflicts} action(s) need attention - refresh your queue.`
+          : pending > 0
+            ? `${pending} action(s) waiting to sync`
+            : "Connected - actions sync immediately"}
       </Text>
       {error && <Text style={styles.error}>{error}</Text>}
       {jobs.length === 0 && <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />}

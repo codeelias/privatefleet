@@ -19,6 +19,7 @@ import type { DriverDto } from "@privatefleet/contracts";
 import {
   api,
   createFleetSocket,
+  conflictCount,
   enqueue,
   flush,
   nextStops,
@@ -621,19 +622,19 @@ export function DriverApp() {
 
 function SyncBanner({ online }: { online: boolean }) {
   const pending = pendingCount();
+  const conflicts = conflictCount();
+  const tone =
+    conflicts > 0 ? colors.danger : online && pending === 0 ? colors.success : colors.warning;
   return (
-    <View
-      style={[
-        styles.syncBanner,
-        { backgroundColor: online && pending === 0 ? colors.success : colors.warning },
-      ]}
-    >
+    <View style={[styles.syncBanner, { backgroundColor: tone }]}>
       <Text style={styles.syncText}>
-        {online
-          ? pending === 0
-            ? "Synced"
-            : `Queued locally - will sync (${pending})`
-          : "No signal. Your progress is saved locally and will sync automatically."}
+        {conflicts > 0
+          ? `${conflicts} action(s) need attention - refresh your queue.`
+          : online
+            ? pending === 0
+              ? "Synced"
+              : `Queued locally - will sync (${pending})`
+            : "No signal. Your progress is saved locally and will sync automatically."}
       </Text>
     </View>
   );
