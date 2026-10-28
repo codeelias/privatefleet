@@ -205,6 +205,20 @@ export const api = {
     return session;
   },
   driverQueue: () => request<DriverQueue>("/v1/driver/queue"),
+  telemetry: (
+    samples: Array<{
+      latitude: number;
+      longitude: number;
+      capturedAt: string;
+      accuracyMetres?: number;
+      headingDeg?: number;
+      speedMps?: number;
+    }>,
+  ) =>
+    request<{ accepted: number; rejected: number }>("/v1/telemetry", {
+      method: "POST",
+      body: JSON.stringify({ samples }),
+    }),
   driverStartShift: () => request<DriverDto>("/v1/driver/shift/start", { method: "POST" }),
   fleetState: () => request<FleetState>("/v1/fleet/state"),
   startShift: (driverId: string) =>

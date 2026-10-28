@@ -100,6 +100,17 @@ Real telemetry ingestion now exists (not demo-only):
   `apps/api/src/lib/realtime.test.ts` (2: tenant room isolation,
   unauthenticated rejection).
 
-Remaining for Phase 4 completeness: geofence transitions, per-device
-rate limits, background location on the Expo app, and an end-to-end
-field-style test through the driver app.
+Device side (2026-10-28): the driver app now has a "Share location" control
+that watches browser/device geolocation, buffers a bounded window with
+retry-on-failure semantics, and posts batches through the authenticated
+endpoint. Per-device rate limits (10 batches / 10 s) return 429 with
+`Retry-After` and an actionable `uiMessage`.
+
+Verified end-to-end by `apps/e2e/tests-auth/driver-telemetry.spec.ts`: a
+real browser geolocation change moves the dispatcher snapshot within the
+acceptance tolerance, using the authorised tenant snapshot.
+
+Remaining for Phase 4 completeness: geofence transitions, background
+location on the Expo native app (foreground is implemented), and
+horizontal-scale state for the in-memory rate limiter.
+

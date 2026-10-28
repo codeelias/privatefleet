@@ -29,6 +29,7 @@ import {
   type DriverQueue,
   type DriverStoredSession,
 } from "./shared/client";
+import { createLocationReporter, type LocationStatus } from "./shared/location";
 import { colors, touch } from "./theme";
 
 type Screen =
@@ -135,6 +136,9 @@ export function DriverApp() {
   const [view, setView] = useState<Screen>({ name: "pick" });
   const [error, setError] = useState<string | null>(null);
   const [online, setOnline] = useState(navigator.onLine);
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>("idle");
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
+  const locationReporterRef = useRef<ReturnType<typeof createLocationReporter> | null>(null);
   const [recipientName, setRecipientName] = useState("");
   const [notes, setNotes] = useState("");
   const [reason, setReason] = useState<string>(SKIP_REASONS[0]);
@@ -364,6 +368,24 @@ export function DriverApp() {
     );
   }
 
+  function toggleLocation(): void {
+    if (locationStatus === "sharing") {
+      locationReporterRef.current?.stop();
+      setLocationStatus("idle");
+      return;
+    }
+    const reporter =
+      locationReporterRef.current ??
+      createLocationReporter({
+        onStatus: (status, message) => {
+          setLocationStatus(status);
+          setLocationMessage(message ?? null);
+        },
+      });
+    locationReporterRef.current = reporter;
+    reporter.start();
+  }
+
   if (view.name === "shift") {
     const driver = queue?.driver;
     const [next, ...rest] = stops;
@@ -379,6 +401,31 @@ export function DriverApp() {
               </Text>
             </View>
             <Chip label="On shift" tone="on" />
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.cardTitle}>Location sharing</Text>
+              <Chip
+                label={locationStatus === "sharing" ? "Sharing" : "Paused"}
+                tone={locationStatus === "sharing" ? "on" : "neutral"}
+              />
+            </View>
+            <Text style={styles.muted}>
+              {locationStatus === "sharing"
+                ? "Dispatch receives your position while this screen is open."
+                : "Location is not being shared."}
+            </Text>
+            {locationMessage && <Text style={styles.error}>{locationMessage}</Text>}
+            <Pressable
+              accessibilityRole="button"
+              onPress={toggleLocation}
+              style={[styles.primaryButton, { marginTop: 10 }]}
+            >
+              <Text style={styles.primaryButtonText}>
+                {locationStatus === "sharing" ? "Stop sharing location" : "Share location"}
+              </Text>
+            </Pressable>
           </View>
 
           {next ? (

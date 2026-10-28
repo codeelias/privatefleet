@@ -9,6 +9,7 @@ import { makeAuthGuard } from "../auth/guard.js";
 import type { DbHandle } from "../../db/client.js";
 import type { RealtimeBus } from "../../lib/realtime.js";
 import { ingestTelemetry, TrackingError } from "./service.js";
+import { TelemetryRateLimiter } from "./rate-limit.js";
 
 function requireDriver(
   request: { auth?: { role: string; userId: string } },
@@ -35,6 +36,8 @@ export function registerTrackingRoutes(
   handle: DbHandle,
 ): void {
   const guard = makeAuthGuard(auth);
+  // Burst ~1/2 s, sustained ~10 pings/10 s per device (docs/09.6).
+  const limiter = new TelemetryRateLimiter(10_000, 10);
 
   app.post("/v1/telemetry", { preHandler: guard }, async (request, reply) => {
     const driverId = requireDriver(request, reply);
@@ -42,6 +45,19 @@ export function registerTrackingRoutes(
       return reply;
     }
     const tenantId = request.auth?.tenantId ?? "";
+    const decision = limiter.check(`${tenantId}:${driverId}`);
+    if (!decision.allowed) {
+      reply.header("retry-after", String(decision.retryAfterSeconds ?? 1));
+      return reply.status(429).send({
+        type: "https://privatefleet.example/errors/telemetry-rate-limited",
+        title: "Too many location updates",
+        status: 429,
+        code: "TELEMETRY_RATE_LIMITED",
+        detail: "The device is reporting faster than the ingestion policy allows",
+        uiMessage: "Location updates are arriving too quickly. Your device will retry shortly.",
+        retryAfterSeconds: decision.retryAfterSeconds,
+      });
+    }
     const batch = TelemetryBatchSchema.parse(request.body);
     try {
       const outcome = await ingestTelemetry(handle, tenantId, driverId, batch);
@@ -64,3 +80,4 @@ export function registerTrackingRoutes(
     }
   });
 }
+

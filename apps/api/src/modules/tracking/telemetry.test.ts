@@ -196,6 +196,31 @@ describe("GPS telemetry ingestion", () => {
     expect(await otherState()).toBe(otherBefore);
   });
 
+  it("rate limits a device that reports too quickly", async () => {
+    const session = await seededDriver(`tel-rate-${randomUUID().slice(0, 6)}`);
+    const base = Date.now() - 120_000;
+    for (let index = 0; index < 10; index += 1) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/telemetry",
+        headers: { authorization: `Bearer ${session.token}` },
+        payload: {
+          samples: [sample(51.5, -0.12, new Date(base + index * 1_000).toISOString())],
+        },
+      });
+      expect(response.statusCode).toBe(200);
+    }
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/v1/telemetry",
+      headers: { authorization: `Bearer ${session.token}` },
+      payload: { samples: [sample(51.6, -0.13, new Date().toISOString())] },
+    });
+    expect(blocked.statusCode).toBe(429);
+    expect((blocked.json() as { code: string }).code).toBe("TELEMETRY_RATE_LIMITED");
+    expect(blocked.headers["retry-after"]).toBeTruthy();
+  });
+
   it("requires a driver device token", async () => {
     const anonymous = await app.inject({
       method: "POST",
@@ -227,3 +252,4 @@ describe("GPS telemetry ingestion", () => {
     expect((ownerPing.json() as { code: string }).code).toBe("DRIVER_DEVICE_ONLY");
   });
 });
+

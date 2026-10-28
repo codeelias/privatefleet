@@ -9,6 +9,14 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.38 - Phase 4: device location sharing, bounded retry buffer and per-device rate limits (2026-10-28)
+- Driver app "Share location" control: browser/device geolocation -> bounded sample buffer (50) -> batched authenticated posts every 5 s; failed batches merge back ahead of the cap so retries never lose location truth.
+- New `apps/driver/src/shared/location-buffer.ts` with unit tests for cap, ordered drain and failure merge.
+- Per-device telemetry rate limit (10 batches / 10 s, in-memory): 429 + `Retry-After` + uiMessage; unit and API integration coverage.
+- Browser acceptance `driver-telemetry.spec.ts`: granted geolocation moves through the real driver UI and API, and the dispatcher's authorised snapshot shows the position within 120 m; stale flag false.
+- Verification: auth + driver acceptance 9/9, API 31/31, driver unit 6/6, web 21/21, demo untouched; typecheck 6/6, lint 6/6, build 5/5, encoding clean.
+- Remaining Phase 4: geofence transitions, Expo native background location, shared limiter state at scale.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.37 - Phase 4: real GPS telemetry ingestion and authenticated tenant rooms (2026-10-28)
 - New `POST /v1/telemetry` for driver devices: batches of 1-50 samples, vehicle derived from the authenticated driver, never the body.
 - Durable cold history `location_points` (server-assigned monotonic `sequence_no`, unique per vehicle) plus hot `vehicles` position update in one tenant-scoped transaction; RLS includes the new table.
@@ -325,6 +333,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 
