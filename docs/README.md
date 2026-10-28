@@ -2,7 +2,7 @@
 
 Working title for the white-label fleet dispatch & tracking platform.
 
-**Status: v1.4 - APPROVED 2026-10-27.** The package is the frozen build contract for Phase 1: 11 ADRs accepted, all 21 decisions approved, driver theme resolved to light. No application code exists yet, and none will be written until the Phase 0 gate passes (a named design partner says yes) per [14](14-roadmap-and-gates.md).
+**Status: Phase 1 demo FROZEN 2026-10-28.** The demo runs from one command with no Docker dependency; the real Postgres/telemetry/routing modules are implemented behind demo mode but Phase 4/5 build work is paused pending a signed pilot (see [16b - Production deployment runbook](16-production-deployment-runbook.md)). Next commercial action: the 120-second rehearsal and prospect meetings per [14](14-roadmap-and-gates.md).
 
 ## How to use this package
 
@@ -31,6 +31,9 @@ Working title for the white-label fleet dispatch & tracking platform.
 | 13 | [Development Methodology](13-development-methodology.md) | Git workflow, PRs, DoD, ADR process, releases, cadence. |
 | 14 | [Roadmap & Gates](14-roadmap-and-gates.md) | Phases 0-6 with entry/exit gates, non-goals, risks. |
 | 15 | [Infrastructure & Deployment](15-infrastructure-and-deployment.md) | Environments, Compose services, backups, costs. |
+| 16 | [Routing Engine Architecture](16-routing-engine-architecture.md) | Route intelligence layers, provider design, map matching. |
+| 16b | [Production Deployment Runbook](16-production-deployment-runbook.md) | Post-signature OSRM/VROOM + Postgres provisioning, acceptance gate, rollback. |
+| 17 | [Map & Routing Quality Standard](17-map-routing-quality.md) | Measured map/route quality gates, benchmark, true-paint metrics. |
 | - | [adr/](adr/README.md) | Architecture Decision Records - why each significant decision was made. |
 | - | [CHANGELOG.md](CHANGELOG.md) | Version history and the re-runnable verification checks. |
 | - | [open-decisions.md](open-decisions.md) | Items awaiting your approval, with recommendations. |
@@ -61,6 +64,7 @@ The primary visual source is the Figma master design **`Fleet Operations - UI UX
 - A PR that changes an interface, state machine, or database shape **must** update the relevant document in the same PR.
 - Significant decisions are recorded in `docs/adr/`; a code change that contradicts a recorded decision must first supersede that ADR.
 - The [open-decisions.md](open-decisions.md) list shrinks as you approve items; approved items become ADRs or move into the main documents.
+
 
 
 

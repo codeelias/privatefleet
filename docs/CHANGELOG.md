@@ -9,6 +9,14 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.42 - Phase 1 demo frozen: boot verified, deployment runbook, Phase 4/5 paused (2026-10-28)
+- Owner directive: pause Phase 4/5 build work (no Docker services, real OSM extracts, multi-vehicle routing or native background GPS) until a design partner signs a pilot contract. No application code changed in this freeze.
+- Demo boot verified from a clean start: `pnpm dev` -> demo API on 4000 (`readyz`: demoMode=true, repositoryMode=demo), dispatcher `http://localhost:5173`, driver `http://localhost:5174` (Vite binds localhost; `127.0.0.1` is not served by plain `pnpm dev`). Fleet state: 3 vehicles, 12 jobs, 3 routes, demoMode=true.
+- Full regression at freeze: API 40/40; demo E2E 13 passed/13 skipped; auth + driver + live-routing acceptance 10/10; web 21/21; driver 6/6; Expo 3/3; typecheck 6/6; lint 6/6; build 5/5; encoding clean.
+- New [16b - Production deployment runbook](16-production-deployment-runbook.md): pinned OSRM v5.25.0 and VROOM v1.13.0, Geofabrik Greater London extract with SHA-256, extract/partition/customize commands, service health checks, Postgres/API env, real-service acceptance gate, rollback and known limitations.
+- Docker deployment attempt recorded honestly: the host at 192.168.1.128 is reachable over SSH (Docker Desktop 4.95.0, engine 29.8.2), but image pulls from that SSH session are blocked by Docker Desktop's credential helper; no containers were installed, no production services were started, and the host configuration was restored exactly as found. The container-backed gate remains the first post-signature task.
+- Frozen baseline unchanged: demo remains default and internet-independent for boot (public map tiles are the only online dependency; routes and markers still render without them).
+- Pushes remain paused (owner directive); local commit only. Next action is commercial, not engineering.
 ### v1.41 - Phase 5: dispatcher live-proposal UI and end-to-end publish acceptance (2026-10-28)
 - Route Optimisation screen now branches on mode: postgres/live shows engine + version + run id, km/min estimates, solved stop order, unassigned-work warning, and publishes via the stale-version-checked approval endpoint; demo mode keeps the seeded simulated proposal unchanged.
 - New web API calls `runOptimizationLive` and `approveLivePlan`; live publish reports the published route version.
@@ -357,6 +365,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 
