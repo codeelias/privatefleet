@@ -217,6 +217,8 @@ export const optimizationRuns = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
     routeId: uuid("route_id"),
+    /** All routes published from this run (fleet plans have several). */
+    routeIds: jsonb("route_ids").$type<string[]>(),
     inputHash: text("input_hash").notNull(),
     engine: text("engine").notNull(),
     engineVersion: text("engine_version").notNull(),

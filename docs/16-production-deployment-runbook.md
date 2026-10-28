@@ -37,15 +37,23 @@ Activated by this runbook (post-signature):
 
 ## 3. Pinned routing services
 
-| Component | Pinned version | Notes |
-|---|---|---|
-| OSRM backend | `osrm/osrm-backend:v5.25.0` | Last official Docker Hub tag (Docker Hub verified 2026-10-28; `v5.27.1` does not exist on Hub) |
-| VROOM | `vroomvrp/vroom-docker:v1.13.0` | Latest stable Hub tag; only `v1.14.0-rc.*` exists above it |
-| OSM data | Geofabrik `greater-london-latest.osm.pbf` | 129,863,196 bytes, sha256 `CFD508553AF738965A75F9D90D7390F4C552EF981813526E7C52A2F8F88BBD0D`, downloaded 2026-10-28; ODbL attribution required |
-| Profile | OSRM `car.lua` (image default) | Document any change; profiles change ETAs |
+| Component | Pinned tag | Registry manifest digest | Local image id | Platform |
+|---|---|---|---|---|
+| OSRM backend | `osrm/osrm-backend:v5.25.0` | `sha256:bdfa60e64ae1376bff6ff5605991be50600132a27469a4a9e77c23afd3a6d555` | `sha256:a16438df8826cf5a3545f99d0f6f30a65b58c4a7ec2beaa17d1073f9ee30bd16` | linux/amd64 |
+| VROOM | `vroomvrp/vroom-docker:v1.13.0` | `sha256:2e417553320bf68a25f6614ba8bdc31b0b2fc1172f8c25518c4656f488031c2a` | `sha256:ae19c566626665e016a200a5749c87f55bff35674d51e0b50fd3ce3236b64071` | linux/amd64 |
+| OSM data | Geofabrik `greater-london-latest.osm.pbf` | n/a (file) | 129,863,196 bytes; sha256 `CFD508553AF738965A75F9D90D7390F4C552EF981813526E7C52A2F8F88BBD0D`; downloaded 2026-10-28 | ODbL attribution required |
+| Profile | OSRM `car.lua` (image default) | n/a | Prepared with MLD partition + customize | Document any profile change |
 
-Record the exact digest actually deployed (`docker image inspect --format`)
-in the customer deployment log; tags are mutable.
+Immutable identifiers: the registry manifest digests above are the tag
+contents on 2026-10-28; the local image ids are the config digests actually
+loaded on the host. Because the images were loaded offline with `docker load`
+(the SSH session could not use Docker Desktop's credential helper), the host
+`RepoDigests` entries equal the config digests rather than the registry
+manifest digests:
+`osrm/osrm-backend@sha256:a16438d...` and
+`vroomvrp/vroom-docker@sha256:ae19c56...`. Record both in the customer
+deployment log and verify with `docker image inspect` before the gate. Tags
+alone are not immutable.
 
 ## 4. Prepare the OSRM dataset
 
@@ -182,17 +190,39 @@ DATABASE_URL=<app role> MIGRATION_DATABASE_URL=<owner> AUTH_JWT_SECRET=<secret> 
 pnpm --filter @privatefleet/api exec tsx src/db/routing-live-gate.ts
 ```
 
-Result (2026-10-28): engine `osrm+vroom v1`; propose 146 ms; 4 unique matrix
-locations for 3 shipments; 6 ordered stops; 0 unassigned; 16,692 m and
-2,697 s; 1,465 geometry points; stale approval `409 ROUTE_VERSION_STALE`;
-published version 2; snapshot version 2 with 1,465 route points; 1
-optimization run, 6 route_stops, 1 `route.published` outbox event; 642 ms
-end to end.
+Single-driver result (2026-10-28): engine `osrm+vroom`; propose 146 ms;
+4 unique matrix locations for 3 shipments; 6 ordered stops; 0 unassigned;
+16,692 m / 2,697 s; 1,465 geometry points; stale approval
+`409 ROUTE_VERSION_STALE`; published version 2; snapshot version 2 with
+1,465 route points; 1 run, 6 route_stops, 1 `route.published` outbox event;
+642 ms end to end.
 
-Outage check (`--expect-unavailable`, VROOM URL unreachable): propose returned
-`502 VROOM_UNAVAILABLE`; `GET /v1/fleet/state` stayed `200` with unchanged
-`routeVersion: 1` and zero routes - a routing outage does not damage the
-published plan or manual dispatch.
+### 9.1 Fleet-wide gate (2026-10-28)
+`tsx src/db/fleet-live-gate.ts` against the same real services:
+
+- 3 eligible vehicles, 12 paired shipments, 8 unique matrix locations
+  (duplicate stop coordinates deduplicated), propose 241 ms.
+- 2 unassigned single-stop jobs surfaced explicitly with reason
+  `MISSING_PICKUP_OR_DROPOFF` (never silently dropped).
+- 3 solved routes carrying 5 / 5 / 2 shipments; 58,494 m and 9,500 s total;
+  pickup-before-dropoff pairing validated per route.
+- publish: version 2, 3 route versions in one transaction, snapshot returns
+  3 routes, 24 route_stops, 3 `route.published` events; 781 ms end to end.
+
+### 9.2 Preservation gate (2026-10-28)
+Two-phase test with the real VROOM container stopped between phases:
+
+1. Publish a fleet plan (version 2, 3 routes, 24 route_stops), record each
+   route's point count and geometry SHA-256.
+2. Stop VROOM; inject a new unassigned job (arrives during the outage).
+3. Verify: `routeVersion` still 2, 3 routes with identical geometry
+   checksums, 24 route_stops unchanged; fleet proposal returns
+   `502 VROOM_UNAVAILABLE`; dispatcher manually assigns the new job ->
+   HTTP 200.
+4. Restart VROOM; published geometry still unchanged after manual dispatch.
+
+This proves a routing outage neither destroys nor mutates the last published
+plan, and manual dispatch remains available without routing services.
 
 Real-service defects found and fixed by this gate (none were visible against
 fakes): VROOM rejects `amount` without matching vehicle capacity; VROOM
@@ -203,7 +233,17 @@ or VROOM rejects the matrix.
 
 ## 10. What is NOT proven yet (updated)
 
-- Multi-vehicle optimisation is not implemented (one driver per proposal).
+**Deployment claim:** the gates above passed in the controlled environment
+described here (local Docker Desktop host, SSH tunnel, harness-seeded tenant).
+They establish integration correctness, not a customer production
+deployment; production provisioning, TLS, backups and the restore drill are
+covered by sections 6-8 and remain to be executed with the signed pilot.
+
+- Capacity, skills/capabilities and per-stop service durations are supported
+  by the VROOM adapter where supplied, but the current domain model has no
+  capacity/skills fields, so fleet plans do not yet constrain them.
+- The dispatcher UI still shows the single-driver live proposal; the fleet
+  proposal endpoints are API-tested but not yet rendered in the workbench.
 - Native background GPS/geofencing is not implemented; staleness is surfaced
   honestly.
 - Rate limiting is process-local; horizontal API scaling needs shared state.

@@ -135,3 +135,31 @@ The gate exposed four adapter defects invisible to fakes, now fixed:
 amount/capacity mismatch, non-integer VROOM ids, float matrix entries, and
 duplicate matrix locations. Evidence and commands live in [16b - Production
 deployment runbook](16-production-deployment-runbook.md) section 9.
+
+
+## 10.9 Fleet-wide multi-vehicle optimisation (2026-10-28)
+`planFleet` builds one VROOM request for all eligible vehicles and pending
+shipment pairs (deduplicated matrix locations, integer ids and matrices,
+per-vehicle road geometry in the exact solved order). The proposal persists
+the full fleet snapshot it solved against (assignments, expected fleet
+version, dataset id) in `optimization_runs`, and its input hash includes
+assignment state so a changed fleet cannot reuse a stale proposal.
+
+Approval is one tenant transaction against the current fleet version:
+verify assignments unchanged (`409 ROUTE_VERSION_STALE` otherwise),
+supersede previous published routes for the affected vehicles, insert every
+new route + ordered route_stops at one shared version, update job
+assignments, link the run through `route_ids`, and emit one
+`route.published` event per route. Concurrent approvals collapse to one
+publication; a failed insert rolls back every route and event.
+
+Evidence: 5 deterministic fake-service tests (multi-vehicle solve,
+unassigned surface, atomic publish, stale + concurrent approvals, rollback,
+cache invalidation, tenant isolation); real-service fleet gate (3 vehicles,
+12 shipments, 8 matrix locations, 3 routes of 5/5/2 shipments, version 2,
+781 ms); preservation gate with VROOM stopped (geometry checksums and route
+version unchanged, typed 502, manual assignment 200).
+
+Not yet modelled: capacity/skills constraints and per-stop service durations
+(adapter support exists; domain fields do not), and dispatcher UI rendering
+of fleet proposals.

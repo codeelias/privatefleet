@@ -9,6 +9,17 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.44 - Fleet-wide multi-vehicle planning with atomic publication (2026-10-28)
+- `planFleet`: one VROOM solve over many vehicles/shipments, deduplicated matrix locations, integer ids/matrices, per-vehicle road geometry in solved order, explicit unassigned work.
+- Fleet proposal service + endpoints (`POST /v1/optimization/fleet-run`, `POST /v1/optimization/fleet/:runId/approve`): persisted run with full solved snapshot (assignments, expected fleet version, dataset id), assignment-aware input hash.
+- Atomic publication in one tenant transaction: stale version/assignment snapshot -> 409 ROUTE_VERSION_STALE, all affected routes superseded and reinserted at one shared version, route_stops, job reassignments, per-route outbox events, `route_ids` linkage; concurrent approvals idempotent; failed insert rolls back everything.
+- Real-service fleet gate: 3 vehicles, 12 shipments, 8 matrix locations, routes 5/5/2, 58,494 m / 9,500 s, version 2, 24 route_stops, 3 events, 781 ms.
+- Real-service preservation gate: published plan (geometry SHA-256, version, stops) unchanged with VROOM stopped; proposal 502 VROOM_UNAVAILABLE; a new job manually assigned (200) without routing; geometry unchanged after.
+- Evidence tightening: full registry manifest digests + local image ids + platform + dataset SHA in the runbook; controlled-environment deployment claim clarified.
+- Verification: API 45/45 (5 new fleet tests incl. rollback/concurrency/cache/tenant isolation), demo E2E 13/13, auth acceptance 10/10, typecheck 6/6, lint 6/6, build 5/5.
+- Remaining: capacity/skills/service-duration constraints not modelled; fleet proposal not yet rendered in the dispatcher UI; native background tracking.
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.43 - Real OSRM/VROOM deployment gate passed (2026-10-28)
 - Lifted the engineering freeze per owner directive and resumed the real routing deployment gate.
 - Loaded pinned images offline (Docker SSH credential helper unusable): OSRM `osrm/osrm-backend:v5.25.0` (id a16438df8826) and VROOM `vroomvrp/vroom-docker:v1.13.0` (id ae19c5666266); prepared the pinned Geofabrik Greater London extract (sha256 CFD5085...BBD0D) with car.lua + MLD partition/customize on the Docker host.

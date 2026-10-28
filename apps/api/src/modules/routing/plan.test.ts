@@ -27,8 +27,10 @@ function startFake(mode: Mode = "ok"): Promise<Fake> {
       req.on("data", (chunk) => (raw += chunk));
       req.on("end", () => {
         const body = JSON.parse(raw) as {
+          vehicles?: Array<{ id?: number }>;
           shipments?: Array<{ pickup?: { id?: string }; delivery?: { id?: string } }>;
         };
+        const vehicleId = Number(body.vehicles?.[0]?.id ?? 0);
         const shipments = body.shipments ?? [];
         const steps =
           mode === "infeasible"
@@ -52,7 +54,7 @@ function startFake(mode: Mode = "ok"): Promise<Fake> {
             routes:
               mode === "infeasible"
                 ? []
-                : [{ vehicle: 0, distance: 1234, duration: 567, steps }],
+                : [{ vehicle: vehicleId, distance: 1234, duration: 567, steps }],
           }),
         );
       });
@@ -211,4 +213,5 @@ describe("planShipments", () => {
     ).rejects.toMatchObject({ code: "VROOM_UNAVAILABLE" });
   });
 });
+
 

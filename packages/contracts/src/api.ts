@@ -122,6 +122,41 @@ export const LiveOptimizationProposalSchema = z.object({
 });
 export type LiveOptimizationProposal = z.infer<typeof LiveOptimizationProposalSchema>;
 
+export const FleetProposedRouteSchema = z.object({
+  driverId: IdSchema,
+  vehicleId: IdSchema,
+  driverName: z.string(),
+  stops: z.array(LiveProposalStopSchema),
+  geometry: z.array(GeoPointSchema).min(2),
+  distanceMetres: z.number().nonnegative(),
+  durationSeconds: z.number().nonnegative(),
+});
+export type FleetProposedRoute = z.infer<typeof FleetProposedRouteSchema>;
+
+export const FleetOptimizationProposalSchema = z.object({
+  runId: IdSchema,
+  demoMode: z.literal(false),
+  engine: z.literal("osrm+vroom"),
+  engineVersion: z.string(),
+  status: z.literal("succeeded"),
+  scope: z.enum(["fleet", "subset"]),
+  published: z.boolean(),
+  publishedAt: z.string().datetime().optional(),
+  publishedVersion: z.number().int().nonnegative().optional(),
+  inputHash: z.string(),
+  /** Fleet version the proposal must be approved against. */
+  expectedRouteVersion: z.number().int().nonnegative(),
+  matrixSize: z.number().int().nonnegative(),
+  vehicleCount: z.number().int().nonnegative(),
+  shipmentCount: z.number().int().nonnegative(),
+  vehicles: z.array(FleetProposedRouteSchema),
+  unassigned: z.array(
+    z.object({ jobId: IdSchema, reason: z.string().optional() }),
+  ),
+  datasetVersion: z.string(),
+});
+export type FleetOptimizationProposal = z.infer<typeof FleetOptimizationProposalSchema>;
+
 export const RoutePathSchema = z.object({
   vehicleId: IdSchema,
   driverId: IdSchema.optional(),

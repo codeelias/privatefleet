@@ -34,6 +34,7 @@ const server = createServer((req, res) => {
     req.on("end", () => {
       const body = JSON.parse(raw || "{}");
       const shipments = body.shipments ?? [];
+      const vehicleId = Number(body.vehicles?.[0]?.id ?? 0);
       const steps = [
         { type: "start", id: 0 },
         ...shipments.flatMap((shipment) => [
@@ -47,7 +48,7 @@ const server = createServer((req, res) => {
         JSON.stringify({
           code: 0,
           unassigned: [],
-          routes: [{ vehicle: shipments[0]?.vehicle ?? 1, distance: 12_000, duration: 900, steps }],
+          routes: [{ vehicle: vehicleId, distance: 12_000, duration: 900, steps }],
         }),
       );
     });
@@ -86,6 +87,7 @@ server.on("error", (err) => console.error("fake-routing error", err));
 server.listen(port, "127.0.0.1", () => {
   console.log(`fake routing (OSRM+VROOM) on http://127.0.0.1:${port}`);
 });
+
 
 
 
