@@ -21,6 +21,7 @@ import "leaflet/dist/leaflet.css";
 import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
 import { reconcileRoutes, routesChanged } from "./engine/routes";
 import { toGeoJsonCoordinates, toLeafletLatLngs } from "./engine/projection";
+import { markVisible } from "./engine/benchmark";
 import type { RoutePathLike } from "./engine/geo";
 import {
   DEFAULT_ENGINE,
@@ -96,6 +97,10 @@ function VehiclePin({
     id: `pin-${vehicle.id}`,
     data: { driverId: vehicle.driverId, vehicleId: vehicle.id },
   });
+  // Benchmark hook: fires after the marker commits at its new position.
+  useEffect(() => {
+    markVisible(vehicle.id);
+  }, [vehicle.id, x, y]);
   return (
     <div
       ref={setNodeRef}
@@ -537,5 +542,6 @@ export function MapCanvas({ state }: { state: FleetState }) {
     </section>
   );
 }
+
 
 

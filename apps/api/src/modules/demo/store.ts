@@ -95,6 +95,7 @@ export class DemoStore {
   private receipts = new Map<string, AssignResponse>();
   private telemetrySequence = 0;
   private lastRun: OptimizationProposal | undefined;
+  private benchmarkVehicles = 0;
 
   constructor(scenario: ScenarioName) {
     this.reset(scenario);
@@ -764,6 +765,76 @@ export class DemoStore {
     };
   }
 
+  /**
+   * Demo-only benchmark load: adds N synthetic vehicles on closed loops so
+   * the 250-vehicle performance gate exercises the real telemetry path.
+   * Never available in postgres mode (demo routes are not registered).
+   */
+  loadBenchmarkVehicles(count: number): number {
+    const center = { latitude: 51.5074, longitude: -0.1278 };
+    const now = new Date().toISOString();
+    while (this.benchmarkVehicles < count) {
+      const index = this.benchmarkVehicles;
+      const id = `bench-${String(index).padStart(3, "0")}`;
+      const driverId = `bench-driver-${String(index).padStart(3, "0")}`;
+      const radiusLat = 0.02 + (index % 5) * 0.002;
+      const radiusLon = 0.03 + (index % 7) * 0.002;
+      const points = Array.from({ length: 120 }, (_, step) => {
+        const angle = (step / 120) * Math.PI * 2;
+        return {
+          latitude: center.latitude + Math.sin(angle) * radiusLat,
+          longitude: center.longitude + Math.cos(angle) * radiusLon,
+        };
+      });
+      const start = points[0];
+      if (!start) {
+        break;
+      }
+      points.push({ ...start });
+      const { cumulative, total } = cumulativeDistances(points);
+      this.vehicles.set(id, {
+        dto: {
+          id,
+          registration: `BENCH-${String(index).padStart(3, "0")}`,
+          vehicleType: "Van",
+          status: "on_route",
+          driverId,
+          stale: false,
+        },
+        route: points,
+        cumulative,
+        totalDistance: total,
+        distanceAlong: 0,
+        segmentIndex: 0,
+        sequenceNo: 0,
+        lastCapturedAt: now,
+      });
+      this.drivers.set(driverId, {
+        id: driverId,
+        fullName: `Bench Driver ${index}`,
+        status: "on_route",
+        vehicleId: id,
+        lastPingAt: now,
+      });
+      this.benchmarkVehicles += 1;
+    }
+    return this.benchmarkVehicles;
+  }
+
+  clearBenchmarkVehicles(): void {
+    for (const id of [...this.vehicles.keys()]) {
+      if (id.startsWith("bench-")) {
+        this.vehicles.delete(id);
+      }
+    }
+    for (const id of [...this.drivers.keys()]) {
+      if (id.startsWith("bench-driver-")) {
+        this.drivers.delete(id);
+      }
+    }
+    this.benchmarkVehicles = 0;
+  }
+
   fleetState(): FleetState {
     const now = Date.now();
     const vehicles: VehicleDto[] = [...this.vehicles.values()].map((record) => {
@@ -797,6 +868,7 @@ export class DemoStore {
     };
   }
 }
+
 
 
 

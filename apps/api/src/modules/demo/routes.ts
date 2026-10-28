@@ -17,6 +17,7 @@ type Params = Record<string, string | undefined>;
 const ScenarioParamSchema = z.object({ id: ScenarioNameSchema });
 const JobParamSchema = z.object({ jobId: z.string().uuid() });
 const DriverBodySchema = z.object({ driverId: z.string().uuid() });
+const BenchmarkBodySchema = z.object({ count: z.number().int().min(1).max(400) });
 const StopParamSchema = z.object({
   jobId: z.string().uuid(),
   stopId: z.string().uuid(),
@@ -54,6 +55,17 @@ export function registerDemoRoutes(
       scenarios: ["morning-rush", "emergency", "proof"],
       current: store.currentScenario,
     };
+  });
+
+  app.post("/v1/demo/load", async (request) => {
+    const body = BenchmarkBodySchema.parse(request.body);
+    const vehicles = store.loadBenchmarkVehicles(body.count);
+    return { vehicles };
+  });
+
+  app.delete("/v1/demo/load", async () => {
+    store.clearBenchmarkVehicles();
+    return { vehicles: 0 };
   });
 
   app.get("/v1/fleet/state", async () => store.fleetState());
@@ -155,3 +167,4 @@ export function registerDemoRoutes(
     return result;
   });
 }
+

@@ -28,6 +28,7 @@ import {
   staleVehicleIds,
   type TrackMap,
 } from "../features/live-map/engine/telemetry";
+import { markTelemetry, startBenchSampler } from "../features/live-map/engine/benchmark";
 import { KpiCard } from "../shared/ui/KpiCard";
 import { Panel } from "../shared/ui/Panel";
 import { StatusChip } from "../shared/ui/StatusChip";
@@ -109,6 +110,7 @@ function Dashboard({
         return;
       }
       telemetryTrackRef.current = accepted.track;
+      markTelemetry(position.vehicleId);
       queryClient.setQueryData<FleetState>(["fleet"], (old) => {
         if (!old) {
           return old;
@@ -137,6 +139,11 @@ function Dashboard({
       socket.disconnect();
     };
   }, [queryClient]);
+
+  useEffect(() => {
+    // Performance gate instrumentation (no-op unless ?benchmark=1).
+    return startBenchSampler();
+  }, []);
 
   useEffect(() => {
     // Honest staleness: if accepted samples stop arriving, ghost the
@@ -492,4 +499,5 @@ export function App() {
     />
   );
 }
+
 

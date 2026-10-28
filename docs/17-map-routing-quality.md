@@ -68,14 +68,14 @@ staleness and coalescing.
 
 | Measurement | Initial target | Status |
 |---|---|---|
-| Accepted GPS -> visible dispatcher marker | p95 <= 1 s on defined connected test | pending benchmark |
-| Marker animation | aim 60 FPS; investigate >33 ms frames | pending benchmark |
-| Fleet benchmark size | 250 vehicles in one tenant, routes + updates | pending harness |
+| Accepted GPS -> visible dispatcher marker | p95 <= 1 s on defined connected test | **275 ms p95 (PASS)** - 250 vehicles, 2530 samples, headless Chromium, 1440x900 |
+| Marker animation | aim 60 FPS; investigate >33 ms frames | **20.7 FPS, frame p95 133 ms (FAIL)** - baseline recorded 2026-10-28; optimisation next |
+| Fleet benchmark size | 250 vehicles in one tenant, routes + updates | **implemented** - demo-only `/v1/demo/load` load harness |
 | Route correctness | every drawn route passes invariants | implemented (unit-tested) |
 | Scenario consistency | all three demo scenarios | verified (7/7 demo E2E) |
-| Reconnect | fresh snapshot restores without duplicates/reversal | acceptance test next |
-| Stale GPS | ghosted with last-updated, never shown live | implemented; test next |
-| Failure behaviour | router failure retains last verified route | implemented; test next |
+| Reconnect | fresh snapshot restores without duplicates/reversal | **verified** - map-quality acceptance test |
+| Stale GPS | ghosted with last-updated, never shown live | **verified** - map-quality acceptance test |
+| Failure behaviour | router failure retains last verified route | **verified** - malformed-geometry acceptance test |
 | Cross-tenant leakage | zero unauthorised route/location/event | verified (8/8 acceptance) |
 
 ## 17.6 Next increments (in order, each gated)
@@ -135,3 +135,37 @@ screenshot of this application, not a reference mockup.
 Stop pins can legitimately sit up to ~58 m from the carriageway because
 they are venue coordinates; the system keeps that truth rather than moving
 markers onto roads.
+
+## 17.9 Baseline performance record (2026-10-28, quality gate status: PARTIAL)
+Reproducible test: `pnpm --filter @privatefleet/e2e exec playwright test map-benchmark --project=dispatcher`.
+Harness: demo-only `POST /v1/demo/load {count:250}` adds 250 synthetic
+vehicles on closed London loops through the real telemetry path; the
+dispatcher loads `/?benchmark=1`, which records accepted-GPS ->
+visible-marker latency per vehicle (React commit after telemetry) and rAF
+frame deltas for 20 s. No synthetic client-side state: the same socket,
+merge, ordering and render path as production demo mode.
+
+Environment: Windows 11 Pro; Intel Core i7-7700HQ (4C/8T), 32 GB RAM;
+Playwright 1.64.1 headless Chromium (software rasterisation); viewport
+1440x900; demo API and Vite on localhost.
+
+| Metric | Result (baseline) | Contract |
+|---|---|---|
+| Valid samples | 2530 | - |
+| Marker latency p50 | 141.2 ms | - |
+| Marker latency p95 | **275.0 ms** | <= 1000 ms PASS |
+| Marker latency p99 | 331.3 ms | - |
+| Marker latency max | 353.6 ms | - |
+| Frame p50 | 33.4 ms | aim <= 16.7 ms |
+| Frame p95 | **133.3 ms** | investigate > 33 ms FAIL |
+| Effective FPS | **20.7** | aim ~60 FPS FAIL |
+| Frame max | 500 ms | - |
+
+Interpretation: correctness of the pipeline is not in question - every
+accepted sample reached a visible marker well inside one second. The
+failure is smoothness at 250 animated markers: React re-renders the whole
+fleet per telemetry message (~125 msg/s) and each pin animates `left`/`top`
+(continuous layout). The next increment will coalesce telemetry into one
+animation-frame flush and move pins to transform-based animation, then
+re-run this exact benchmark and record the final numbers here. The gate
+stays PARTIAL until frame p95 is materially reduced and re-measured.
