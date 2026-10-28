@@ -169,3 +169,33 @@ fleet per telemetry message (~125 msg/s) and each pin animates `left`/`top`
 animation-frame flush and move pins to transform-based animation, then
 re-run this exact benchmark and record the final numbers here. The gate
 stays PARTIAL until frame p95 is materially reduced and re-measured.
+
+## 17.10 Gated optimisation attempt #1: reverted (2026-10-28)
+Hypothesis: coalescing accepted telemetry into one animation-frame flush
+and moving pin motion from `left`/`top` to a compositor transform would
+lift frame throughput at 250 vehicles.
+
+Method: identical benchmark, four runs per variant on the same machine and
+build, alternating by `git stash` so only the code under test changed.
+
+| Variant | FPS runs | Median FPS | Frame p50 |
+|---|---|---|---|
+| Baseline (per-message updates, left/top animation) | 20.7, 18.2, 17.8 | ~18.0 | **33.4 ms** (all runs) |
+| Coalescing + memoised pins + transform motion | 13.0, 15.9, 15.3, 17.9 | ~15.6 | **50.0 ms** (all runs) |
+| Transform with `willChange` only (first run) | 13.0 | - | 50.1 ms |
+
+Result: the optimisation **regressed** p50 frame time from 33.4 ms to
+50 ms (~15% fewer frames) and did not improve marker latency beyond noise
+(p95 236-285 ms in both variants). The likely cause is 250 promoted
+compositor layers under headless software rasterisation, plus a batch
+commit that re-rendered the fleet array instead of a single vehicle.
+
+Decision (protected-baseline rule): reverted in full; no part of the
+experiment shipped. Marker latency contract remains met; the smoothness
+contract remains failed at ~18 FPS.
+
+Next approach must change how markers are drawn rather than how React
+schedules them: a canvas/WebGL marker layer in the map engine (Leaflet
+canvas renderer or a MapLibre symbol source) is the credible path to
+60 FPS at 250 vehicles. That is a larger rendering change and will be
+gated by this same benchmark plus the full E2E suite before adoption.

@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.33 - Benchmark-driven optimisation attempt reverted (2026-10-28)
+- A/B tested telemetry coalescing + memoised pins + transform-based motion against the recorded baseline, four benchmark runs per variant on the same machine.
+- Result: regression - median FPS ~18.0 baseline vs ~15.6 optimised; frame p50 worsened from 33.4 ms to 50.0 ms consistently; marker latency unchanged within noise (p95 236-285 ms both).
+- Decision: reverted in full under the protected-baseline rule; nothing from the experiment shipped. Marker latency contract still met (p95 ~275 ms); smoothness contract still failed (~18 FPS at 250 vehicles).
+- Conclusion recorded in docs/17.10: scheduling changes cannot fix this; the credible path to 60 FPS is a canvas/WebGL marker layer (Leaflet canvas renderer or MapLibre symbol source), to be gated by the same benchmark and full E2E suite.
+- Verification after revert: web unit 15/15, typecheck clean, encoding clean; working tree equals committed baseline `34edb35`.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.32 - 250-vehicle benchmark harness and baseline (2026-10-28)
 - Demo-only load harness: `POST /v1/demo/load {count}` adds synthetic vehicles on closed London loops through the real simulator/socket path; `DELETE /v1/demo/load` clears them. Never registered outside demo mode.
 - Browser instrumentation gated by `/?benchmark=1`: accepted-GPS -> visible-marker latency per vehicle (React commit) and rAF frame sampling, exposed as `window.__fleetBench.snapshot()`; no-ops otherwise.
@@ -286,6 +293,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 
