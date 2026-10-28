@@ -9,6 +9,16 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.30 - Map quality standard foundation: validated routes, ordered telemetry, protected baseline (2026-10-28)
+- Protected baseline rule documented (docs/17): every change must pass the full gate set and measurably improve quality, or it is reverted. Baseline recorded at `73639a8` with green gates.
+- New pure map-engine modules with unit tests (12 cases): `geo.ts` (coordinate validity, route invariants, stable geometry signatures), `routes.ts` (valid/invalid reconciliation, last-verified-route retention, change detection), `telemetry.ts` (monotonic ordering by sequence + capture time, invalid-sample rejection, staleness, newest-per-vehicle coalescing).
+- App wiring: telemetry handler accepts only newer samples (out-of-order cannot move a marker backwards); a 2 s heartbeat ghosts vehicles after 10 s without fresh data; scenario reset clears accepted-track state.
+- MapCanvas wiring: routes are validated before drawing, only invalid routes are hidden, the last verified route is retained on a routing failure with an honest warning, and the MapLibre route source is updated only when the geometry signature changes instead of on every GPS tick.
+- Audit recorded (docs/17.2): monolith map component, per-telemetry GeoJSON re-serialisation, blind telemetry merge, no validation/retention, no map unit tests.
+- Verification (before and after the change): web unit tests 12/12; repo unit/integration 41 (29 + 12); demo E2E 7 passed / 7 skipped; typecheck 6/6, lint 6/6, build 5/5, encoding clean. No existing behaviour regressed.
+- Pending for the quality gate (documented targets): browser acceptance for stale/reconnect/malformed geometry, and the reproducible 250-vehicle benchmark with p95 GPS-to-visible latency and frame times. Measurements will be recorded in docs/17.5 before the gate is called green.
+- Pushes remain paused (owner directive); local commits only.
+
 ### v1.29 - Phase 3 complete: offline queue contract tests, conflict banners, skip coverage (2026-10-28)
 - Offline queue contract tests for BOTH driver clients (`apps/driver/src/shared/client.test.ts`, `apps/driver-expo/src/queue.test.ts`, 3 each): a network failure keeps the command pending with the same idempotency key across retries; a 4xx becomes an explicit conflict carrying the server `uiMessage` and is persisted with `status: conflict`; concurrent flushes share one in-flight run (fetch called once).
 - Conflict-aware sync banner in both apps: conflicts render the danger tone with "N action(s) need attention - refresh your queue"; pending commands show the queued count with the retry explanation; offline copy unchanged.

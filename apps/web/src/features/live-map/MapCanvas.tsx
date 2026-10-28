@@ -12,13 +12,15 @@
  * - Raster (Leaflet): OpenStreetMap standard tiles (no key) - works
  *   without WebGL, including remote-desktop sessions.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
+import { reconcileRoutes, routesChanged } from "./engine/routes";
+import type { RoutePathLike } from "./engine/geo";
 import {
   DEFAULT_ENGINE,
   needsKeyPreflight,
@@ -47,10 +49,10 @@ function useVectorEngine(): boolean {
   return DEFAULT_ENGINE === "vector";
 }
 
-function routeGeoJson(state: FleetState): GeoJSON.FeatureCollection {
+function routeGeoJson(routes: RoutePathLike[]): GeoJSON.FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: state.routes.map((route) => ({
+    features: routes.map((route) => ({
       type: "Feature",
       properties: { vehicleId: route.vehicleId, driverId: route.driverId ?? "" },
       geometry: {
@@ -150,6 +152,21 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const styleIndexRef = useRef(0);
   const useVector = useVectorEngine() && !vectorFailed;
+
+  // Validated, retained route set: invalid updates never erase the last
+  // verified geometry (docs/17). Static geometry is only pushed to the map
+  // source when its signature changes, not on every GPS update.
+  const lastValidRoutesRef = useRef<RoutePathLike[]>([]);
+  const routeSet = useMemo(
+    () => reconcileRoutes(lastValidRoutesRef.current, state.routes),
+    [state.routes],
+  );
+  const lastRouteSignatureRef = useRef("");
+  useEffect(() => {
+    if (routeSet.routes.length > 0 && !routeSet.usedFallback) {
+      lastValidRoutesRef.current = routeSet.routes;
+    }
+  }, [routeSet]);
 
   // --- Raster engine (Leaflet, default) ---------------------------------
   useEffect(() => {
@@ -258,7 +275,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
       return;
     }
     polylinesRef.current.forEach((line) => line.remove());
-    polylinesRef.current = state.routes.map((route) => {
+    polylinesRef.current = routeSet.routes.map((route) => {
       const selected = selectedDriverId !== null && route.driverId === selectedDriverId;
       return L.polyline(
         route.points.map((p) => [p.latitude, p.longitude] as [number, number]),
@@ -269,7 +286,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
         },
       ).addTo(map);
     });
-  }, [state.routes, useVector, ready, selectedDriverId]);
+  }, [routeSet, useVector, ready, selectedDriverId]);
 
   // --- Vector engine (MapLibre) ----------------------------------------
   useEffect(() => {
@@ -314,9 +331,10 @@ export function MapCanvas({ state }: { state: FleetState }) {
     map.on("load", () => {
       const current = VECTOR_STYLES[styleIndexRef.current] ?? firstStyle;
       setVectorProvider(current.name);
+      lastRouteSignatureRef.current = routeSet.signature;
       map.addSource("vehicle-routes", {
         type: "geojson",
-        data: routeGeoJson(state),
+        data: routeGeoJson(routeSet.routes),
       });
       map.addLayer({
         id: "vehicle-routes-line",
@@ -355,15 +373,18 @@ export function MapCanvas({ state }: { state: FleetState }) {
     };
   }, [useVector]);
 
-  // Update vector route data + selection highlight.
+  // Update vector route data only when the geometry actually changed, and
+  // keep the selection filter current (docs/17: static geometry must not be
+  // re-serialised on every telemetry update).
   useEffect(() => {
     const map = vectorRef.current;
     if (!map || !ready) {
       return;
     }
-    const source = map.getSource("vehicle-routes") as maplibregl.GeoJSONSource | undefined;
-    if (source) {
-      source.setData(routeGeoJson(state));
+    if (routesChanged(lastRouteSignatureRef.current, routeSet.signature)) {
+      lastRouteSignatureRef.current = routeSet.signature;
+      const source = map.getSource("vehicle-routes") as maplibregl.GeoJSONSource | undefined;
+      source?.setData(routeGeoJson(routeSet.routes));
     }
     const selectedLayer = map.getLayer("vehicle-routes-selected");
     if (selectedLayer) {
@@ -373,7 +394,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
         selectedDriverId ?? "",
       ]);
     }
-  }, [state, ready, selectedDriverId]);
+  }, [routeSet, ready, selectedDriverId]);
 
   // Project geo points to container pixels for the overlay layer.
   function project(point: GeoPoint | undefined): { x: number; y: number } | null {
@@ -401,8 +422,13 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const jobs = state.jobs.filter((j) => j.status === "unassigned");
   const selectedRouteMissing =
     selectedDriverId !== null &&
-    !state.routes.some((r) => r.driverId === selectedDriverId && r.points.length >= 2);
-  const routeGeometryMissing = state.routes.length === 0 || selectedRouteMissing;
+    !routeSet.routes.some((r) => r.driverId === selectedDriverId && r.points.length >= 2);
+  const routeGeometryMissing = routeSet.routes.length === 0 || selectedRouteMissing;
+  const routeQualityWarning = routeSet.usedFallback
+    ? "Routing update unavailable - showing the last verified route."
+    : routeSet.invalidCount > 0
+      ? `${routeSet.invalidCount} route(s) hidden - invalid geometry.`
+      : null;
   const status = useVector
     ? `vector map (${vectorProvider})`
     : tilesFailed
@@ -480,6 +506,14 @@ export function MapCanvas({ state }: { state: FleetState }) {
             <p className="absolute bottom-9 left-3 z-30 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
               Route geometry unavailable - showing vehicle positions only. Demo
               routes require the seeded scenario.
+            </p>
+          )}
+          {routeQualityWarning && (
+            <p
+              data-testid="route-quality-warning"
+              className="absolute bottom-16 left-3 z-30 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning"
+            >
+              {routeQualityWarning}
             </p>
           )}
           {tilesFailed ? (

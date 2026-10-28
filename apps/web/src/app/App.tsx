@@ -4,7 +4,7 @@
  * Socket.IO, scenario reset, drag-and-drop assignment (map pins and
  * dispatch lanes) with keyboard/click fallbacks, and screen navigation.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -23,6 +23,11 @@ import { api } from "../shared/api/client";
 import { LoginScreen } from "../features/auth/LoginScreen";
 import { useSession } from "../shared/auth/useSession";
 import { createFleetSocket } from "../shared/realtime/socket";
+import {
+  acceptTelemetry,
+  staleVehicleIds,
+  type TrackMap,
+} from "../features/live-map/engine/telemetry";
 import { KpiCard } from "../shared/ui/KpiCard";
 import { Panel } from "../shared/ui/Panel";
 import { StatusChip } from "../shared/ui/StatusChip";
@@ -84,6 +89,7 @@ function Dashboard({
   const [assignDriverId, setAssignDriverId] = useState<string | undefined>(undefined);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
   const [scenarioBusy, setScenarioBusy] = useState(false);
+  const telemetryTrackRef = useRef<TrackMap>({});
 
   const fleetQuery = useQuery({
     queryKey: ["fleet"],
@@ -96,6 +102,13 @@ function Dashboard({
   useEffect(() => {
     const socket = createFleetSocket();
     socket.on("vehicle.position", (position: VehiclePosition) => {
+      // Out-of-order or duplicate telemetry must never move a marker
+      // backwards (docs/17): accept only samples newer than the last.
+      const accepted = acceptTelemetry(telemetryTrackRef.current, position, Date.now());
+      if (!accepted.accepted) {
+        return;
+      }
+      telemetryTrackRef.current = accepted.track;
       queryClient.setQueryData<FleetState>(["fleet"], (old) => {
         if (!old) {
           return old;
@@ -125,12 +138,36 @@ function Dashboard({
     };
   }, [queryClient]);
 
+  useEffect(() => {
+    // Honest staleness: if accepted samples stop arriving, ghost the
+    // marker instead of showing last-known as live.
+    const timer = setInterval(() => {
+      const stale = staleVehicleIds(telemetryTrackRef.current, Date.now(), 10_000);
+      if (stale.size === 0) {
+        return;
+      }
+      queryClient.setQueryData<FleetState>(["fleet"], (old) => {
+        if (!old) {
+          return old;
+        }
+        return {
+          ...old,
+          vehicles: old.vehicles.map((vehicle) =>
+            stale.has(vehicle.id) ? { ...vehicle, stale: true } : vehicle,
+          ),
+        };
+      });
+    }, 2_000);
+    return () => clearInterval(timer);
+  }, [queryClient]);
+
   async function resetScenario(id: ScenarioName) {
     if (scenarioBusy) {
       return; // no double-fires during a live pitch
     }
     setScenarioBusy(true);
     setScenarioError(null);
+    telemetryTrackRef.current = {};
     try {
       await api.resetScenario(id);
     } catch {
@@ -455,3 +492,4 @@ export function App() {
     />
   );
 }
+
