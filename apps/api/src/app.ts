@@ -80,7 +80,18 @@ export function buildApp(config: AppConfig): {
   demo: DemoContext | undefined;
   postgres: PostgresContext | undefined;
 } {
-  const app = Fastify({ logger: { level: config.logLevel } });
+  const app = Fastify({
+    logger: { level: config.logLevel },
+    // Explicit request ceiling; telemetry batches are <= 50 samples and the
+    // largest normal payload is well under 256 KiB.
+    bodyLimit: 262_144,
+  });
+  app.addHook("onSend", async (_request, reply, payload) => {
+    reply.header("x-content-type-options", "nosniff");
+    reply.header("x-frame-options", "DENY");
+    reply.header("referrer-policy", "no-referrer");
+    return payload;
+  });
   if (config.corsOrigins.length > 0) {
     // Only explicit origins: the Expo web build runs on its own port.
     void app.register(cors, { origin: config.corsOrigins });
@@ -215,6 +226,7 @@ export function buildApp(config: AppConfig): {
 
   return { app, demo, postgres };
 }
+
 
 
 

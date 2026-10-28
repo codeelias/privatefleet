@@ -71,6 +71,7 @@ export interface PlanResult {
   /** Solver-provided descriptions keyed by business id. */
   unassignedReasons: Map<string, string>;
   matrixSize: number;
+  timings: { matrixMs: number; solveMs: number; geometryMs: number };
 }
 
 function epochSeconds(iso: string): number {
@@ -124,10 +125,25 @@ export async function planFleet(
       unassigned: [],
       unassignedReasons: new Map(),
       matrixSize: 0,
+      timings: { matrixMs: 0, solveMs: 0, geometryMs: 0 },
     };
   }
   if (vehicles.length === 0) {
     throw new RoutingError("PLAN_INFEASIBLE", "no eligible vehicles");
+  }
+
+  // VROOM rejects queries above its configured location/task ceiling. Fail
+  // before allocating a matrix or making an unbounded external call.
+  const solverTasks = shipments.length * 2 + jobs.length;
+  const maxTasks = Number(process.env.VROOM_MAX_TASKS ?? 1000);
+  if (solverTasks > maxTasks) {
+    throw new RoutingError(
+      "PLAN_TOO_LARGE",
+      "solver would receive " +
+        solverTasks +
+        " tasks; configured limit is " +
+        maxTasks,
+    );
   }
 
   const locator = locationIndexer();
@@ -141,7 +157,23 @@ export async function planFleet(
   }));
   const jobLocations = jobs.map((job) => locator.indexOf(job.location));
 
+  // Hard guard before any external call: a very large matrix can exhaust
+  // OSRM memory and hang the request. Distinct deduplicated locations are
+  // what matters (jobs at the same address share an index).
+  const maxLocations = Number(process.env.ROUTING_MAX_MATRIX_LOCATIONS ?? 100);
+  if (locator.locations.length > maxLocations) {
+    throw new RoutingError(
+      "PLAN_TOO_LARGE",
+      "matrix needs " +
+        locator.locations.length +
+        " distinct locations; configured limit is " +
+        maxLocations,
+    );
+  }
+
+  const matrixStarted = performance.now();
   const matrices: OsrmMatrix = await clients.matrix(locator.locations);
+  const matrixMs = performance.now() - matrixStarted;
 
   const vroomVehicles: VroomVehicleInput[] = vehicles.map((vehicle) => {
     const depotIndex = depots.get(vehicle.id) ?? 0;
@@ -204,6 +236,7 @@ export async function planFleet(
     return entry;
   });
 
+  const solveStarted = performance.now();
   const solution = await clients.solve(
     vroomVehicles,
     vroomShipments,
@@ -211,7 +244,9 @@ export async function planFleet(
     locator.locations.length,
     vroomJobs,
   );
+  const solveMs = performance.now() - solveStarted;
 
+  const geometryStarted = performance.now();
   const vehicleById = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
   const shipmentById = new Map(shipments.map((shipment) => [shipment.id, shipment]));
   const jobById = new Map(jobs.map((job) => [job.id, job]));
@@ -320,6 +355,11 @@ export async function planFleet(
     unassigned: solution.unassigned,
     unassignedReasons: solution.unassignedReasons,
     matrixSize: locator.locations.length,
+    timings: {
+      matrixMs: Math.round(matrixMs),
+      solveMs: Math.round(solveMs),
+      geometryMs: Math.round(performance.now() - geometryStarted),
+    },
   };
 }
 
@@ -333,4 +373,6 @@ export async function planShipments(
     shipments: request.shipments,
   });
 }
+
+
 

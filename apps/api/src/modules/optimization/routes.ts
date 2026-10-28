@@ -17,7 +17,8 @@ const ApproveBodySchema = z.object({
 });
 const RunParamSchema = z.object({ runId: z.string().uuid() });
 const FleetRunBodySchema = z.object({
-  driverIds: z.array(z.string().uuid()).min(1).optional(),
+  // Bounded: an unbounded array is both a memory and a solver-task vector.
+  driverIds: z.array(z.string().uuid()).min(1).max(100).optional(),
 });
 
 function requireDispatcher(
@@ -150,6 +151,19 @@ export function registerOptimizationRoutes(
   );
 
   function optimizationFailure(err: unknown, reply: FastifyReply): FastifyReply | null {
+    if (err instanceof RoutingError && err.code === "PLAN_TOO_LARGE") {
+      return reply.status(422).send({
+        type: "https://privatefleet.example/errors/plan-too-large",
+        title: "Fleet too large",
+        status: 422,
+        code: "PLAN_TOO_LARGE",
+        detail: err.message,
+        uiMessage:
+          "This fleet is too large to optimise in one pass " +
+          "(task or distinct-location limit). Split the work, then run it again. " +
+          "Nothing was published.",
+      });
+    }
     if (err instanceof RoutingError) {
       const status = err.code === "ROUTING_NOT_CONFIGURED" ? 503 : 502;
       return reply.status(status).send({
@@ -165,6 +179,18 @@ export function registerOptimizationRoutes(
       });
     }
     if (err instanceof OptimizationError) {
+      if (err.code === "ROUTING_INVALID_RESPONSE") {
+        return reply.status(502).send({
+          type: "https://privatefleet.example/errors/routing-invalid-response",
+          title: "Incomplete optimisation result",
+          status: 502,
+          code: "ROUTING_INVALID_RESPONSE",
+          detail: err.message,
+          uiMessage:
+            "The optimisation engine returned an incomplete plan. Nothing was " +
+            "published; refresh and run optimisation again.",
+        });
+      }
       if (err.code === "RUN_NOT_FOUND") {
         return reply.status(404).send({
           type: "https://privatefleet.example/errors/run-not-found",
@@ -254,3 +280,8 @@ export function registerOptimizationRoutes(
     },
   );
 }
+
+
+
+
+

@@ -269,3 +269,40 @@ covered by sections 6-8 and remain to be executed with the signed pilot.
 
 
 
+
+## 12. Pilot hardening evidence (2026-10-28)
+
+See `docs/16c-readiness-report.md` for the full gate report.
+
+**Backup/restore drill (non-destructive):** dump 437 ms, restore 679 ms,
+314,322-byte archive; source and restore matched on all representative table
+counts and job/route/stop checksums; PostGIS 3.4.2, 7 migrations, 16 RLS
+policies restored; runtime role saw 0 foreign jobs and a foreign UPDATE
+affected 0 rows. Temporary restore database dropped afterwards.
+
+**Routing capacity limits (enforced):**
+- OSRM matrix locations: max 100 (`ROUTING_MAX_MATRIX_LOCATIONS`, default 100;
+  the deployed OSRM `max-table-size` rejects larger tables).
+- VROOM solver tasks: max 1000 (`VROOM_MAX_TASKS`, default 1000; task count is
+  `2 x shipments + single-stop jobs`).
+- Oversized fleets return 422 `PLAN_TOO_LARGE` with an actionable message
+  before any matrix/solver call.
+
+**Load smoke (real OSRM/VROOM, synthetic tenant):** 50 vehicles / 500 jobs
+completed in 3.15 s (matrix 237 ms, solve 651 ms, geometry 1.56 s, 45 routes);
+100 vehicles / 850 jobs in 6.34 s (matrix 226 ms, solve 2.12 s, geometry
+2.46 s, 90 routes, 0 unassigned). 100 vehicles / 1000 jobs is 1126 solver
+tasks and is rejected by the task guard in 1.86 s; batch or raise the VROOM
+limit deliberately.
+
+**Rate limiting:** telemetry is limited to 10 batches / 10 s per driver
+(429 `TELEMETRY_RATE_LIMITED`). This limiter is in-memory; it is not shared
+across API instances, so a multi-instance deployment needs a shared limiter.
+
+**Capabilities:** VROOM 1.13 requires integer skill values; capability names
+are mapped per request. Any deployment that bypasses the adapter must not send
+string skills.
+
+**Open before public exposure:** auth rate limiting/lockout, dependency
+advisories (10; see report), scheduled/PITR backups, TLS/reverse proxy and
+public-firewall verification, and 100-van single-batch capacity decision.

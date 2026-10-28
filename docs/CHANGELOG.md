@@ -9,6 +9,16 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.48 - Production-readiness hardening: RLS, restore drill, cache validation, load guards (2026-10-28)
+- RLS probe: runtime role `privatefleet_app`, 16/16 tenant tables have policies; cross-tenant SELECT/UPDATE/DELETE affect 0 rows; foreign INSERT rejected; repeat verification on a restored database.
+- Auth: JWT secret minimum raised to 32 chars; short access TTL and refresh rotation/revocation already covered. Auth rate limiting/lockout remains an open pilot risk.
+- Request hardening: 256 KiB body limit, bounded fleet `driverIds`, nosniff/frame/referrer headers, explicit CORS allowlist.
+- Cache integrity: cached fleet results validated before return; corrupted/legacy results rejected with `ROUTING_INVALID_RESPONSE`; `resultSchemaVersion=2` pins cache identity.
+- Capacity guards: matrix locations <=100 (OSRM limit) and solver tasks <=1000 (VROOM limit) fail fast with 422 `PLAN_TOO_LARGE`.
+- Real defect fixed: VROOM 1.13 requires integer skills; capability names map deterministically to per-request integer ids (string skills caused 400s).
+- Backup/restore drill: 437 ms dump, 679 ms restore, identical counts/checksums, app-role isolation verified, temp DB dropped. No automated backup/PITR yet.
+- Load smoke (real services): 50/500 = 3.15 s; 100/850 = 6.34 s (90 routes, 0 unassigned); 100/1000 rejected cleanly (1126 > 1000 tasks, 1.86 s).
+- Verification: API 55/55, auth E2E 11/11, demo E2E 13 passed / 13 skipped, web 21/21, typecheck 6/6, lint 6/6, build 5/5. Report: `docs/16c-readiness-report.md`. Pilot readiness CONDITIONAL.
 ### v1.47 - Fleet dispatcher UI: review and atomic approval (2026-10-28)
 - Optimization screen live mode now runs the verified fleet endpoints (`POST /v1/optimization/fleet-run`, `POST /v1/optimization/fleet/:runId/approve`) instead of the single-driver presentation. Demo mode and its fixture workflow are unchanged.
 - Renders one route panel per vehicle with ordered stops, explicit SINGLE JOB / PICKUP / DELIVERY labels, per-route distance and duration, fleet totals, solver arrival times only when absolute, and a structured unassigned-work panel with human reasons (MISSING_SKILL, CAPACITY_EXCEEDED, etc.).
@@ -410,6 +420,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

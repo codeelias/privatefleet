@@ -49,6 +49,19 @@ export class VroomClient {
     if (matrices.durations.length !== locationCount) {
       throw new RoutingError("ROUTING_INVALID_RESPONSE", "matrix/location count mismatch");
     }
+    // VROOM 1.13 skill values are integers, while the domain models
+    // capability names. Map names deterministically to per-request ids.
+    const skillIds = new Map<string, number>();
+    const skillId = (name: string): number => {
+      const existing = skillIds.get(name);
+      if (existing !== undefined) {
+        return existing;
+      }
+      const next = skillIds.size + 1;
+      skillIds.set(name, next);
+      return next;
+    };
+
     const numericUnit = new Map<number, NumericUnit>();
     const bodyShipments = shipments.map((shipment, index) => {
       const pickupId = index * 2 + 1;
@@ -84,7 +97,7 @@ export class VroomClient {
         location_index: job.locationIndex,
         ...(job.serviceSeconds !== undefined ? { service: job.serviceSeconds } : {}),
         ...(job.timeWindow ? { time_windows: [job.timeWindow] } : {}),
-        ...(job.skills?.length ? { skills: job.skills } : {}),
+        ...(job.skills?.length ? { skills: job.skills.map((name) => skillId(name)) } : {}),
         ...(job.amount ? { amount: job.amount } : {}),
       };
     });
@@ -96,7 +109,9 @@ export class VroomClient {
         end_index: vehicle.endIndex,
         ...(vehicle.capacity ? { capacity: vehicle.capacity } : {}),
         ...(vehicle.timeWindow ? { time_window: vehicle.timeWindow } : {}),
-        ...(vehicle.skills?.length ? { skills: vehicle.skills } : {}),
+        ...(vehicle.skills?.length
+          ? { skills: vehicle.skills.map((name) => skillId(name)) }
+          : {}),
       })),
       shipments: bodyShipments,
       jobs: bodyJobs,
@@ -119,7 +134,11 @@ export class VroomClient {
         signal: controller.signal,
       });
       if (!response.ok) {
-        throw new RoutingError("VROOM_UNAVAILABLE", `VROOM responded ${response.status}`);
+        const detail = await response.text().catch(() => "");
+        throw new RoutingError(
+          "VROOM_UNAVAILABLE",
+          `VROOM responded ${response.status}${detail ? ": " + detail.slice(0, 300) : ""}`,
+        );
       }
       payload = (await response.json()) as VroomResponse;
     } catch (err) {
@@ -202,3 +221,6 @@ export class VroomClient {
     };
   }
 }
+
+
+

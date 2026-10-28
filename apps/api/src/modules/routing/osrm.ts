@@ -49,7 +49,11 @@ export class OsrmClient {
     try {
       const response = await this.fetchFn(url, { signal: controller.signal });
       if (!response.ok) {
-        throw new RoutingError("OSRM_UNAVAILABLE", `OSRM responded ${response.status}`);
+        const detail = await response.text().catch(() => "");
+        throw new RoutingError(
+          "OSRM_UNAVAILABLE",
+          `OSRM responded ${response.status}${detail ? ": " + detail.slice(0, 220) : ""}`,
+        );
       }
       return (await response.json()) as unknown;
     } catch (err) {
@@ -116,3 +120,4 @@ export class OsrmClient {
     };
   }
 }
+

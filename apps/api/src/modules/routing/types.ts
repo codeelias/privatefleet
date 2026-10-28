@@ -10,7 +10,8 @@ export type RoutingErrorCode =
   | "OSRM_UNAVAILABLE"
   | "VROOM_UNAVAILABLE"
   | "ROUTING_INVALID_RESPONSE"
-  | "PLAN_INFEASIBLE";
+  | "PLAN_INFEASIBLE"
+  | "PLAN_TOO_LARGE";
 
 export class RoutingError extends Error {
   constructor(

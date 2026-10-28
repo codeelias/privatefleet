@@ -18,7 +18,7 @@ const EnvSchema = z.object({
     .transform((v) => v === "true"),
   REPOSITORY_MODE: z.enum(["demo", "postgres"]).optional(),
   DATABASE_URL: z.string().url().optional(),
-  AUTH_JWT_SECRET: z.string().min(16).optional(),
+  AUTH_JWT_SECRET: z.string().min(32).optional(),
   AUTH_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   AUTH_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),

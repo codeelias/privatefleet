@@ -257,3 +257,69 @@ describe("proposal completeness invariant", () => {
     ).rejects.toMatchObject({ code: "ROUTING_INVALID_RESPONSE" });
   });
 });
+
+describe("matrix size guard", () => {
+  it("rejects oversized location sets before calling OSRM", async () => {
+    let matrixCalled = false;
+    const clients: RoutingClients = {
+      matrix: async () => {
+        matrixCalled = true;
+        return { durations: [], distances: [] };
+      },
+      route: async (points) => ({ points, distanceMetres: 1, durationSeconds: 1 }),
+      solve: async () => ({
+        orderByVehicle: new Map(),
+        ordersByVehicle: new Map(),
+        arrivalsByVehicle: new Map(),
+        unassigned: [],
+        unassignedReasons: new Map(),
+        routes: [],
+      }),
+    };
+    const jobs = Array.from({ length: 151 }, (_, index) => ({
+      id: "job-" + index,
+      location: { latitude: 51.5 + index * 0.0001, longitude: -0.1 },
+    }));
+    await expect(
+      planFleet(clients, {
+        vehicles: [{ id: 0, depot: { latitude: 51.4, longitude: -0.2 } }],
+        shipments: [],
+        jobs,
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_TOO_LARGE" });
+    expect(matrixCalled).toBe(false);
+  });
+});
+
+describe("solver task guard", () => {
+  it("rejects more than the configured VROOM task count before any external call", async () => {
+    let matrixCalled = false;
+    const clients: RoutingClients = {
+      matrix: async () => {
+        matrixCalled = true;
+        return { durations: [], distances: [] };
+      },
+      route: async (points) => ({ points, distanceMetres: 1, durationSeconds: 1 }),
+      solve: async () => ({
+        orderByVehicle: new Map(),
+        ordersByVehicle: new Map(),
+        arrivalsByVehicle: new Map(),
+        unassigned: [],
+        unassignedReasons: new Map(),
+        routes: [],
+      }),
+    };
+    const shipments = Array.from({ length: 501 }, (_, index) => ({
+      id: "shipment-" + index,
+      pickup: { latitude: 51.5 + index * 0.0001, longitude: -0.1 },
+      dropoff: { latitude: 51.6 + index * 0.0001, longitude: -0.2 },
+    }));
+    await expect(
+      planFleet(clients, {
+        vehicles: [{ id: 0, depot: { latitude: 51.4, longitude: -0.2 } }],
+        shipments,
+      }),
+    ).rejects.toMatchObject({ code: "PLAN_TOO_LARGE" });
+    expect(matrixCalled).toBe(false);
+  });
+});

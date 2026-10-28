@@ -14,11 +14,16 @@ describe("routing client factory", () => {
   });
 
   it("forwards single-stop jobs through the app routing client to VROOM", async () => {
-    let captured: { jobs?: unknown[]; shipments?: unknown[] } = {};
+    let captured: {
+      jobs?: Array<{ skills?: number[] }>;
+      shipments?: unknown[];
+      vehicles?: Array<{ skills?: number[] }>;
+    } = {};
     const fakeFetch = (async (_url: string, init?: { body?: string }) => {
       captured = JSON.parse(init?.body ?? "{}") as {
-        jobs?: unknown[];
+        jobs?: Array<{ skills?: number[] }>;
         shipments?: unknown[];
+        vehicles?: Array<{ skills?: number[] }>;
       };
       return new Response(
         JSON.stringify({
@@ -57,14 +62,17 @@ describe("routing client factory", () => {
       ],
     };
     const result = await clients.solve(
-      [{ id: 0, startIndex: 0, endIndex: 0 }],
+      [{ id: 0, startIndex: 0, endIndex: 0, skills: ["cold-chain"] }],
       [{ id: "shipment", pickupIndex: 1, deliveryIndex: 2 }],
       matrices,
       3,
-      [{ id: "single", locationIndex: 2 }],
+      [{ id: "single", locationIndex: 2, skills: ["cold-chain"] }],
     );
     expect(captured.jobs).toHaveLength(1);
     expect(captured.shipments).toHaveLength(1);
+    // VROOM 1.13 requires integer skill values; names map consistently.
+    expect(captured.vehicles?.[0]?.skills).toEqual([1]);
+    expect(captured.jobs?.[0]?.skills).toEqual([1]);
     expect(result.ordersByVehicle.get(0)).toEqual([
       { kind: "shipment", id: "shipment" },
       { kind: "job", id: "single" },

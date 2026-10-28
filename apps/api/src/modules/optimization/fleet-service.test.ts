@@ -331,6 +331,47 @@ describe("fleet optimisation", () => {
     expect(unassigned?.reason).toBe("CAPACITY_EXCEEDED");
   });
 
+
+  it("validates cached proposals and rejects a result missing service stops", async () => {
+    const { tenantId } = await setup();
+    const first = await createFleetProposal(runtime, fakeClients, tenantId);
+
+    const rows = await migrator.sql`
+      SELECT request->>'resultSchemaVersion' AS schema_version
+      FROM optimization_runs WHERE id = ${first.runId}
+    `;
+    expect((rows[0] as unknown as { schema_version: string }).schema_version).toBe("2");
+
+    // Corrupt the persisted result: drop all service stops while leaving the
+    // single-stop count and totals intact (legacy result shape).
+    await migrator.sql`
+      UPDATE optimization_runs
+      SET result = jsonb_set(
+        result,
+        '{vehicles}',
+        (
+          SELECT coalesce(jsonb_agg(
+            jsonb_set(
+              route,
+              '{stops}',
+              coalesce((
+                SELECT jsonb_agg(stop)
+                FROM jsonb_array_elements(route->'stops') AS stop
+                WHERE stop->>'stopType' <> 'service'
+              ), '[]'::jsonb)
+            )
+          ), '[]'::jsonb)
+          FROM jsonb_array_elements(result->'vehicles') AS route
+        )
+      )
+      WHERE tenant_id = ${tenantId} AND id = ${first.runId}
+    `;
+
+    await expect(createFleetProposal(runtime, fakeClients, tenantId)).rejects.toMatchObject({
+      code: "ROUTING_INVALID_RESPONSE",
+    });
+  });
+
   it("never exposes another tenant's proposal or publication", async () => {
     const tenantA = await setup();
     const tenantB = await setup();

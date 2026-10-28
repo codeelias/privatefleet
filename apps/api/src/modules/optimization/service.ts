@@ -19,11 +19,15 @@ export type OptimizationErrorCode =
   | "RUN_NOT_FOUND"
   | "RUN_NOT_READY"
   | "ROUTE_VERSION_STALE"
-  | "CONSTRAINTS_INCOMPLETE";
+  | "CONSTRAINTS_INCOMPLETE"
+  | "ROUTING_INVALID_RESPONSE";
 
 export class OptimizationError extends Error {
-  constructor(readonly code: OptimizationErrorCode) {
-    super(code);
+  constructor(
+    readonly code: OptimizationErrorCode,
+    message?: string,
+  ) {
+    super(message ?? code);
   }
 }
 
@@ -375,5 +379,6 @@ export async function approveProposal(
 }
 
 export { RoutingError };
+
 
 

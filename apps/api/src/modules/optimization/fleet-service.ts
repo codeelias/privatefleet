@@ -321,6 +321,9 @@ export async function createFleetProposal(
       ORDER BY created_at DESC LIMIT 1
     `)) as unknown as Array<{ id: string; result: FleetStoredResult | null }>;
     if (cached[0]?.result) {
+      // Cached proposals are untrusted input too: they must satisfy the same
+      // completeness rules before they can be returned or approved.
+      assertFleetResultComplete(cached[0].result);
       return fleetProposal(cached[0].id, cached[0].result);
     }
 
@@ -437,6 +440,9 @@ export async function createFleetProposal(
            distanceMetres: routes.reduce((sum, route) => sum + route.distanceMetres, 0),
            durationSeconds: routes.reduce((sum, route) => sum + route.durationSeconds, 0),
            unassignedCount: stored.unassigned.length,
+           matrixMs: plan.timings.matrixMs,
+           solveMs: plan.timings.solveMs,
+           geometryMs: plan.timings.geometryMs,
          })}::jsonb,
          'succeeded', now(), now())
       RETURNING id
@@ -447,6 +453,86 @@ export async function createFleetProposal(
     }
     return fleetProposal(runId, stored);
   });
+}
+
+/**
+ * Validate a persisted fleet result. Every stop identity must be coherent:
+ * service jobs exactly once, paired shipments exactly one pickup and one
+ * delivery on the same route, no duplicates or contradictions, and totals
+ * consistent with the routes. Throws ROUTING_INVALID_RESPONSE.
+ */
+export function assertFleetResultComplete(result: FleetStoredResult): void {
+  const serviceStops = result.vehicles.flatMap((route) =>
+    route.stops.filter((stop) => stop.stopType === "service"),
+  );
+  if (serviceStops.length !== result.singleStopJobCount) {
+    throw new OptimizationError(
+      "ROUTING_INVALID_RESPONSE",
+      "cached result service stops do not match single-stop job count",
+    );
+  }
+  const pickupStops = result.vehicles.flatMap((route) =>
+    route.stops.filter((stop) => stop.stopType === "pickup"),
+  );
+  if (pickupStops.length !== result.shipmentCount) {
+    throw new OptimizationError(
+      "ROUTING_INVALID_RESPONSE",
+      "cached result pickup stops do not match shipment count",
+    );
+  }
+  const seenStops = new Set<string>();
+  for (const route of result.vehicles) {
+    const byJob = new Map<string, { pickup: number; dropoff: number; service: number }>();
+    for (const stop of route.stops) {
+      if (seenStops.has(stop.stopId)) {
+        throw new OptimizationError("ROUTING_INVALID_RESPONSE", "duplicate stop identity");
+      }
+      seenStops.add(stop.stopId);
+      const counts = byJob.get(stop.jobId) ?? { pickup: 0, dropoff: 0, service: 0 };
+      counts[stop.stopType] += 1;
+      byJob.set(stop.jobId, counts);
+    }
+    for (const [jobId, counts] of byJob) {
+      const isService = counts.service > 0;
+      const isPaired = counts.pickup > 0 || counts.dropoff > 0;
+      if (isService && isPaired) {
+        throw new OptimizationError(
+          "ROUTING_INVALID_RESPONSE",
+          "job " + jobId + " is both a service stop and a shipment",
+        );
+      }
+      if (isService && counts.service !== 1) {
+        throw new OptimizationError("ROUTING_INVALID_RESPONSE", "duplicate service stop");
+      }
+      if (isPaired && (counts.pickup !== 1 || counts.dropoff !== 1)) {
+        throw new OptimizationError(
+          "ROUTING_INVALID_RESPONSE",
+          "shipment " + jobId + " needs one pickup and one delivery on the same route",
+        );
+      }
+    }
+  }
+  const unassignedIds = new Set<string>();
+  for (const entry of result.unassigned) {
+    if (unassignedIds.has(entry.jobId)) {
+      throw new OptimizationError("ROUTING_INVALID_RESPONSE", "duplicate unassigned job");
+    }
+    unassignedIds.add(entry.jobId);
+    if (result.vehicles.some((route) => route.jobIds.includes(entry.jobId))) {
+      throw new OptimizationError(
+        "ROUTING_INVALID_RESPONSE",
+        "job is both assigned and unassigned",
+      );
+    }
+  }
+  const distance = result.vehicles.reduce((sum, route) => sum + route.distanceMetres, 0);
+  const duration = result.vehicles.reduce((sum, route) => sum + route.durationSeconds, 0);
+  if (Math.abs(distance - result.totalDistanceMetres) > 0.01) {
+    throw new OptimizationError("ROUTING_INVALID_RESPONSE", "cached distance totals mismatch");
+  }
+  if (Math.abs(duration - result.totalDurationSeconds) > 0.01) {
+    throw new OptimizationError("ROUTING_INVALID_RESPONSE", "cached duration totals mismatch");
+  }
 }
 
 function fleetProposal(runId: string, result: FleetStoredResult): FleetOptimizationProposal {
