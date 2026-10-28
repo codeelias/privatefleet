@@ -106,6 +106,8 @@ export const drivers = pgTable(
     fullName: text("full_name").notNull(),
     phone: text("phone"),
     status: driverStatusEnum("status").notNull().default("available"),
+    /** Argon2id hash of the driver PIN (Phase 3 device login). */
+    pinHash: text("pin_hash"),
     vehicleId: uuid("vehicle_id"),
     lastPingAt: timestamp("last_ping_at", { withTimezone: true }),
     createdAt,
@@ -289,4 +291,5 @@ export const tenantScopedTables = [
   idempotencyKeys,
   demoScenarios,
 ] as const;
+
 

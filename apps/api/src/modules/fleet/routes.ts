@@ -30,6 +30,29 @@ const SkipBodySchema = z.object({
 });
 const AlertParamSchema = z.object({ alertId: z.string().uuid() });
 
+/** Driver tokens may only act as themselves; staff tokens may delegate. */
+function activeDriverId(
+  request: { auth?: { role: string; userId: string } },
+  bodyDriverId: string,
+  reply: { status: (code: number) => { send: (payload: unknown) => unknown } },
+): string | null {
+  if (request.auth?.role === "driver") {
+    if (bodyDriverId !== request.auth.userId) {
+      void reply.status(403).send({
+        type: "https://privatefleet.example/errors/stop_not_assigned_to_driver",
+        title: "Request could not be completed",
+        status: 403,
+        code: "STOP_NOT_ASSIGNED_TO_DRIVER",
+        detail: "Driver tokens cannot act for another driver",
+        uiMessage: "This stop is not assigned to you. Pull to refresh your queue.",
+      });
+      return null;
+    }
+    return request.auth.userId;
+  }
+  return bodyDriverId;
+}
+
 function idempotencyKey(request: { headers: Record<string, unknown> }): string | undefined {
   const raw = request.headers["idempotency-key"];
   return typeof raw === "string" && raw.length > 0 ? raw : undefined;
@@ -77,16 +100,20 @@ export function registerFleetRoutes(
   app.post(
     "/v1/jobs/:jobId/stops/:stopId/arrive",
     { preHandler: guard },
-    async (request) => {
+    async (request, reply) => {
       const params = StopParamSchema.parse(request.params as Params);
       const body = DriverBodySchema.parse(request.body);
       const tenantId = request.auth?.tenantId ?? "";
+      const driverId = activeDriverId(request, body.driverId, reply);
+      if (!driverId) {
+        return reply;
+      }
       const result = await fleet.arrive(
         tenantId,
         request.auth?.userId ?? "",
         params.jobId,
         params.stopId,
-        body.driverId,
+        driverId,
         idempotencyKey(request),
       );
       await fleet.publishPending(tenantId);
@@ -97,16 +124,20 @@ export function registerFleetRoutes(
   app.post(
     "/v1/jobs/:jobId/stops/:stopId/complete",
     { preHandler: guard },
-    async (request) => {
+    async (request, reply) => {
       const params = StopParamSchema.parse(request.params as Params);
       const body = CompleteBodySchema.parse(request.body);
       const tenantId = request.auth?.tenantId ?? "";
+      const driverId = activeDriverId(request, body.driverId, reply);
+      if (!driverId) {
+        return reply;
+      }
       const result = await fleet.complete(
         tenantId,
         request.auth?.userId ?? "",
         params.jobId,
         params.stopId,
-        body.driverId,
+        driverId,
         { recipientName: body.recipientName, notes: body.notes },
         idempotencyKey(request),
       );
@@ -118,16 +149,20 @@ export function registerFleetRoutes(
   app.post(
     "/v1/jobs/:jobId/stops/:stopId/skip",
     { preHandler: guard },
-    async (request) => {
+    async (request, reply) => {
       const params = StopParamSchema.parse(request.params as Params);
       const body = SkipBodySchema.parse(request.body);
       const tenantId = request.auth?.tenantId ?? "";
+      const driverId = activeDriverId(request, body.driverId, reply);
+      if (!driverId) {
+        return reply;
+      }
       const result = await fleet.skip(
         tenantId,
         request.auth?.userId ?? "",
         params.jobId,
         params.stopId,
-        body.driverId,
+        driverId,
         body.reason,
         idempotencyKey(request),
       );
@@ -164,4 +199,6 @@ export function registerFleetRoutes(
     return result;
   });
 }
+
+
 

@@ -8,7 +8,12 @@ import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { hash as argonHash, verify as argonVerify } from "@node-rs/argon2";
 import { jwtVerify, SignJWT } from "jose";
 import { sql } from "drizzle-orm";
-import type { AuthSession, AuthTokens } from "@privatefleet/contracts";
+import type {
+  AuthSession,
+  AuthTokens,
+  DriverDto,
+  DriverSession,
+} from "@privatefleet/contracts";
 import type { AppConfig } from "../../config.js";
 import { withTenant, type DbHandle } from "../../db/client.js";
 
@@ -106,6 +111,53 @@ export class AuthService {
     };
   }
 
+  /** Device login for drivers: tenant slug + driver id + PIN. */
+  async driverLogin(input: {
+    tenantSlug: string;
+    driverId: string;
+    pin: string;
+  }): Promise<DriverSession> {
+    const tenantRows = (await this.handle.sql`
+      SELECT id, name, slug FROM auth_tenant_by_slug(${input.tenantSlug})
+    `) as unknown as TenantRow[];
+    const tenant = tenantRows[0];
+    if (!tenant) {
+      throw new AuthError("TENANT_NOT_FOUND", "Unknown workspace");
+    }
+    const rows = await withTenant(this.handle, tenant.id, async (db) => {
+      const result = (await db.execute(sql`
+        SELECT id, tenant_id, full_name, status, vehicle_id, last_ping_at, pin_hash
+        FROM drivers WHERE id = ${input.driverId}
+      `)) as unknown as Array<{
+        id: string;
+        tenant_id: string;
+        full_name: string;
+        status: DriverDto["status"];
+        vehicle_id: string | null;
+        last_ping_at: Date | string | null;
+        pin_hash: string | null;
+      }>;
+      return result;
+    });
+    const driver = rows[0];
+    if (!driver?.pin_hash || !(await argonVerify(driver.pin_hash, input.pin))) {
+      throw new AuthError("INVALID_CREDENTIALS", "Invalid driver credentials");
+    }
+    const tokens = await this.issueTokens(tenant.id, driver.id, "driver");
+    return {
+      driver: {
+        id: driver.id,
+        fullName: driver.full_name,
+        status: driver.status,
+        ...(driver.vehicle_id ? { vehicleId: driver.vehicle_id } : {}),
+        ...(driver.last_ping_at
+          ? { lastPingAt: new Date(driver.last_ping_at).toISOString() }
+          : {}),
+      },
+      tokens,
+    };
+  }
+
   async refresh(refreshToken: string): Promise<AuthTokens> {
     const tokenHash = sha256(refreshToken);
     const rows = (await this.handle.sql`
@@ -191,7 +243,7 @@ export class AuthService {
   private async issueTokens(
     tenantId: string,
     userId: string,
-    role: "owner" | "dispatcher" | "admin",
+    role: "owner" | "dispatcher" | "admin" | "driver",
   ): Promise<AuthTokens> {
     const refreshToken = randomBytes(32).toString("base64url");
     const tokenHash = sha256(refreshToken);
@@ -213,7 +265,7 @@ export class AuthService {
   private async signAccess(
     tenantId: string,
     userId: string,
-    role: "owner" | "dispatcher" | "admin",
+    role: "owner" | "dispatcher" | "admin" | "driver",
   ): Promise<string> {
     return new SignJWT({ tid: tenantId, role })
       .setProtectedHeader({ alg: "HS256" })
@@ -236,5 +288,6 @@ function slugify(name: string): string {
     .replace(/(^-|-$)/g, "")
     .slice(0, 80);
 }
+
 
 

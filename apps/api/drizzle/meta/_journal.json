@@ -15,6 +15,13 @@
       "when": 1793148887085,
       "tag": "0001_right_grey_gargoyle",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793154085734,
+      "tag": "0002_purple_exodus",
+      "breakpoints": true
     }
   ]
 }

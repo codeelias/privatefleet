@@ -499,6 +499,58 @@ export class PgFleetService {
     });
   }
 
+  /** Tenant-scoped driver queue: only this driver's assigned jobs. */
+  async driverQueue(
+    tenantId: string,
+    driverId: string,
+  ): Promise<{ driver: DriverDto; jobs: JobDto[] }> {
+    const state = await this.snapshot(tenantId);
+    const driver = state.drivers.find((candidate) => candidate.id === driverId);
+    if (!driver) {
+      throw new FleetError("JOB_OR_DRIVER_NOT_FOUND");
+    }
+    return {
+      driver,
+      jobs: state.jobs.filter((job) => job.assignedDriverId === driverId),
+    };
+  }
+
+  /** Driver starts a shift: driver and their vehicle go on route. */
+  async startShift(tenantId: string, driverId: string): Promise<DriverDto> {
+    return withTenant(this.handle, tenantId, async (db) => {
+      const rows = (await db.execute(
+        sql`UPDATE drivers SET status = 'on_route', last_ping_at = now()
+            WHERE id = ${driverId}
+            RETURNING id, tenant_id, full_name, status, vehicle_id, last_ping_at`,
+      )) as unknown as Array<{
+        id: string;
+        tenant_id: string;
+        full_name: string;
+        status: DriverDto["status"];
+        vehicle_id: string | null;
+        last_ping_at: Date | string | null;
+      }>;
+      const driver = rows[0];
+      if (!driver) {
+        throw new FleetError("JOB_OR_DRIVER_NOT_FOUND");
+      }
+      if (driver.vehicle_id) {
+        await db.execute(
+          sql`UPDATE vehicles SET status = 'on_route' WHERE id = ${driver.vehicle_id}`,
+        );
+      }
+      return {
+        id: driver.id,
+        fullName: driver.full_name,
+        status: driver.status,
+        ...(driver.vehicle_id ? { vehicleId: driver.vehicle_id } : {}),
+        ...(driver.last_ping_at
+          ? { lastPingAt: new Date(driver.last_ping_at).toISOString() }
+          : {}),
+      };
+    });
+  }
+
   // --- helpers ---------------------------------------------------------
 
   private async requireStop(
@@ -649,6 +701,7 @@ export class PgFleetService {
     }
   }
 }
+
 
 
 

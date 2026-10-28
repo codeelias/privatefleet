@@ -9,6 +9,15 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.26 - Phase 3: driver device identity and tenant-scoped driver workflow (2026-10-28)
+- Drivers now have device credentials: `drivers.pin_hash` (argon2id) added by migration 0002; `pnpm db:seed` sets demo PIN `1234` for seeded drivers (documented demo data, not a production credential policy).
+- `POST /v1/auth/driver-login` (tenant slug + driver id + PIN) issues a JWT with role `driver` and subject = driver id; wrong PIN, unknown driver and cross-tenant driver ids all return the same 401.
+- Driver device routes in postgres mode: `GET /v1/driver/queue` returns only the token driver's assigned jobs (staff tokens get 403 DRIVER_DEVICE_ONLY), `POST /v1/driver/shift/start` puts the driver and vehicle on route.
+- Token identity is authoritative on job actions: driver tokens can only arrive/complete/skip their own stops; a mismatched body driverId is rejected 403 rather than trusted, so a device cannot spoof another driver.
+- Tests (22/22 total, 7 new): driver login, wrong PIN, staff/tenant rejection on the driver queue, own-jobs-only queue, shift start, spoof rejection, and arrive + complete with idempotent replay where the dispatcher's fleet state shows the completed job, the other driver's job untouched, and exactly one `job.completed` event.
+- Verification: typecheck 5/5, lint 5/5, build 4/4, demo E2E 7 passed / 7 skipped.
+- Remaining for Phase 3: driver web UI in postgres mode (login, real queue, offline command queue conflict surfacing) and the Expo native scaffold; disk headroom (~2.8 GB) must be confirmed before pulling Expo dependencies.
+
 ### v1.25 - Phase 3 entry slice: scenario-wide route consistency, certified stop order, distance-based movement, auth hardening (2026-10-28)
 - Assignment truth extracted to `modules/demo/assignments.ts`, shared by the in-memory store and the route-fixture generator, so board assignments, rendered geometry and simulated movement cannot drift apart.
 - Route fixtures now exist for ALL THREE scenarios keyed by scenario and vehicle, including Proof of Service (Sarah's own circuit through the J-198 stops). Each fixture carries the generator's engine-snapped waypoint indices, certifying that OSRM passed the assigned stops in the approved order.

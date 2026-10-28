@@ -15,6 +15,7 @@ import { AuthError, AuthService } from "./modules/auth/service.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
 import { FleetError, PgFleetService } from "./modules/fleet/pg-service.js";
 import { registerFleetRoutes } from "./modules/fleet/routes.js";
+import { registerDriverDeviceRoutes } from "./modules/driver/routes.js";
 import { registerDemoRoutes } from "./modules/demo/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
@@ -173,6 +174,7 @@ export function buildApp(config: AppConfig): {
     const fleet = new PgFleetService(db, bus);
     registerAuthRoutes(app, auth);
     registerFleetRoutes(app, auth, fleet);
+    registerDriverDeviceRoutes(app, auth, fleet);
     app.addHook("onClose", async () => {
       await closeDb(db);
     });
@@ -186,3 +188,4 @@ export function buildApp(config: AppConfig): {
 
   return { app, demo, postgres };
 }
+

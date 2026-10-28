@@ -27,6 +27,7 @@ export interface SeedResult {
   drivers: number;
   vehicles: number;
   jobs: number;
+  driverPin: string;
 }
 
 export function slugify(name: string): string {
@@ -45,6 +46,8 @@ export async function seedTenant(
   const userId = randomUUID();
   const slug = options.slug ?? `${slugify(options.tenantName)}-${randomUUID().slice(0, 6)}`;
   const passwordHash = await argonHash(options.password);
+  // Demo driver PINs (Phase 3 device login). Real drivers get a dispatcher-set PIN.
+  const driverPinHash = await argonHash("1234");
 
   const sql = handle.sql;
   if (options.slug) {
@@ -80,9 +83,9 @@ export async function seedTenant(
         ${index === 1 ? "on_route" : "available"}, ${driverId})
     `;
     await sql`
-      INSERT INTO drivers (id, tenant_id, full_name, status, vehicle_id, last_ping_at)
+      INSERT INTO drivers (id, tenant_id, full_name, status, pin_hash, vehicle_id, last_ping_at)
       VALUES (${driverId}, ${tenantId}, ${seed.fullName},
-        ${index === 1 ? "on_route" : "available"}, ${vehicleId}, now())
+        ${index === 1 ? "on_route" : "available"}, ${driverPinHash}, ${vehicleId}, now())
     `;
     vehicles += 1;
     drivers += 1;
@@ -125,6 +128,7 @@ export async function seedTenant(
     drivers,
     vehicles,
     jobs,
+    driverPin: "1234",
   };
 }
 
@@ -158,6 +162,7 @@ if (process.argv[1] && process.argv[1].endsWith("seed.ts")) {
     process.exitCode = 1;
   });
 }
+
 
 
 

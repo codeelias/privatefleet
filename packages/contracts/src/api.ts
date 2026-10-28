@@ -144,6 +144,27 @@ export const RefreshRequestSchema = z.object({
 });
 export type RefreshRequest = z.infer<typeof RefreshRequestSchema>;
 
+// --- Phase 3 driver device auth (docs/06) -----------------------------
+
+export const DriverLoginRequestSchema = z.object({
+  tenantSlug: z.string().min(1).max(120),
+  driverId: IdSchema,
+  pin: z.string().min(4).max(32),
+});
+export type DriverLoginRequest = z.infer<typeof DriverLoginRequestSchema>;
+
+export const DriverSessionSchema = z.object({
+  driver: DriverDtoSchema,
+  tokens: AuthTokensSchema,
+});
+export type DriverSession = z.infer<typeof DriverSessionSchema>;
+
+export const DriverQueueSchema = z.object({
+  driver: DriverDtoSchema,
+  jobs: z.array(JobDtoSchema),
+});
+export type DriverQueue = z.infer<typeof DriverQueueSchema>;
+
 
 export const FleetStateSchema = z.object({
   tenantId: IdSchema,
