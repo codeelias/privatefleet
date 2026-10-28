@@ -194,12 +194,14 @@ ROUTING_DATASET_ID=greater-london-2026-10-28 \
 pnpm --filter @privatefleet/api exec tsx src/db/fleet-live-gate.ts
 ```
 
-Single-driver result (2026-10-28): engine `osrm+vroom`; propose 146 ms;
-4 unique matrix locations for 3 shipments; 6 ordered stops; 0 unassigned;
-16,692 m / 2,697 s; 1,465 geometry points; stale approval
-`409 ROUTE_VERSION_STALE`; published version 2; snapshot version 2 with
-1,465 route points; 1 run, 6 route_stops, 1 `route.published` outbox event;
-642 ms end to end.
+Single-driver result (re-run 2026-10-28 at `194149b`, direct LAN URLs):
+engine `osrm+vroom v1`; propose 174 ms; 4 unique matrix locations for 3
+shipments; 6 ordered stops; 0 unassigned; 16,692 m / 2,697 s; 1,465 geometry
+points; stale approval `409 ROUTE_VERSION_STALE`; published version 2;
+snapshot version 2 with 1,465 route points; 1 run, 6 route_stops, 1
+`route.published` outbox event; 716 ms end to end. Outage run
+(`--expect-unavailable`, VROOM unreachable): `502 VROOM_UNAVAILABLE`,
+snapshot `200` with unchanged `routeVersion: 1` and zero routes.
 
 ### 9.1 Fleet-wide gate (2026-10-28)
 `tsx src/db/fleet-live-gate.ts` against the same real services:
