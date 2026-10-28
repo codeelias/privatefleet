@@ -271,6 +271,50 @@ export async function planFleet(
     throw new RoutingError("PLAN_INFEASIBLE", "solver produced no plan");
   }
 
+  // Fail closed: every submitted business unit must be accounted for exactly
+  // once, either assigned to a route or explicitly unassigned by the solver.
+  const submitted = [
+    ...shipments.map((shipment) => ({ kind: "shipment" as const, id: shipment.id })),
+    ...jobs.map((job) => ({ kind: "job" as const, id: job.id })),
+  ];
+  const known = new Set(submitted.map((unit) => unit.kind + ":" + unit.id));
+  const assigned = new Set<string>();
+  for (const route of planned) {
+    for (const unit of route.orderedUnits) {
+      const key = unit.kind + ":" + unit.id;
+      if (!known.has(key)) {
+        throw new RoutingError(
+          "ROUTING_INVALID_RESPONSE",
+          "solver returned an unknown task identity",
+        );
+      }
+      if (assigned.has(key)) {
+        throw new RoutingError(
+          "ROUTING_INVALID_RESPONSE",
+          "solver assigned the same task to more than one route",
+        );
+      }
+      assigned.add(key);
+    }
+  }
+  const unassignedSet = new Set(solution.unassigned);
+  for (const unit of submitted) {
+    const key = unit.kind + ":" + unit.id;
+    const explicitlyUnassigned = unassignedSet.has(unit.id);
+    if (!assigned.has(key) && !explicitlyUnassigned) {
+      throw new RoutingError(
+        "ROUTING_INVALID_RESPONSE",
+        "solver omitted a submitted " + unit.kind + " without declaring it unassigned",
+      );
+    }
+    if (assigned.has(key) && explicitlyUnassigned) {
+      throw new RoutingError(
+        "ROUTING_INVALID_RESPONSE",
+        "solver both assigned and unassigned the same task",
+      );
+    }
+  }
+
   return {
     vehicles: planned,
     unassigned: solution.unassigned,
@@ -289,3 +333,4 @@ export async function planShipments(
     shipments: request.shipments,
   });
 }
+

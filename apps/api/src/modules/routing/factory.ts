@@ -26,7 +26,7 @@ export function createRoutingClients(
   return {
     matrix: (points) => osrm.matrix(points),
     route: (points) => osrm.route(points),
-    solve: (vehicles, shipments, matrices, locationCount) =>
-      vroom.solve(vehicles, shipments, matrices, locationCount),
+    solve: (vehicles, shipments, matrices, locationCount, jobs) =>
+      vroom.solve(vehicles, shipments, matrices, locationCount, jobs),
   };
 }

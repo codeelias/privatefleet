@@ -263,3 +263,4 @@ covered by sections 6-8 and remain to be executed with the signed pilot.
 - Keep the previous container image digests and the previous `greater-london`
   extract until the new deployment passes the section 7 gate.
 
+

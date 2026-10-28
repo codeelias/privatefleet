@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.46 - Fix single-stop job loss at the routing factory; identity-level real gate (2026-10-28)
+- Root cause proven: `createRoutingClients` wrapped `VroomClient.solve` without forwarding the new fifth `jobs` argument. The direct service trace passed jobs explicitly (26 stops); the real HTTP app path silently dropped them before VROOM (24 stops, 0 service stops). Cache and controller mapping were ruled out by tracing the fresh service result.
+- Fix: the factory now forwards `jobs`; regression test captures the outgoing VROOM body and asserts the job step maps back to the domain id.
+- Planner completeness invariant is now fail-closed: every submitted job/shipment must be assigned exactly once or explicitly unassigned by the solver; unknown, duplicated, contradictory or omitted units throw `ROUTING_INVALID_RESPONSE`. Cached fleet results include `resultSchemaVersion: 2` in their input hash so pre-fix results cannot be served.
+- Real OSRM/VROOM gate now asserts persisted identities, not just counts: 12 paired shipments + 2 single-stop jobs -> 14 business units, 26 route_stops (16/6/4), 2 persisted service stops, per-route shipment counts 7/3/2, pickup-before-dropoff per route, persisted job assignments equal the approved proposal, version 2, 3 outbox events.
+- Verification: API 49/49 (factory forwarding + completeness invariant added); demo E2E 13 passed / 13 skipped; auth E2E 10/10; typecheck 6/6, lint 6/6, build 5/5.
+- Dispatcher fleet UI remains untouched/unwired; next increment resumes it on this verified base. Pushes remain paused.
 ### v1.45 - Domain constraints and single-stop jobs in fleet optimisation (2026-10-28)
 - Migration 0006: `vehicles.capacity_units`, `vehicles.required_capabilities`, `jobs.required_capabilities`, `jobs.service_seconds` (tenant-scoped; null/empty means unconstrained, no silent defaults).
 - VROOM adapter now supports single-stop **jobs** alongside paired shipments, vehicle/job skills, capacity, service durations and integer matrices; solution parsing preserves interleaved solved order and solver-provided arrival times.
@@ -394,6 +401,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

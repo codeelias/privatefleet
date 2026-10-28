@@ -64,13 +64,14 @@ try {
       scope: string;
       vehicleCount: number;
       shipmentCount: number;
+      singleStopJobCount: number;
       matrixSize: number;
       expectedRouteVersion: number;
       datasetVersion: string;
       vehicles: Array<{
         driverId: string;
         vehicleId: string;
-        stops: Array<{ jobId: string; stopType: string }>;
+        stops: Array<{ jobId: string; stopType: string; stopId: string }>;
         geometry: Array<{ latitude: number; longitude: number }>;
         distanceMetres: number;
         durationSeconds: number;
@@ -90,14 +91,20 @@ try {
       if (route.geometry.length < 2) {
         throw new Error("route geometry too short");
       }
-      for (let index = 0; index < route.stops.length; index += 2) {
+      for (let index = 0; index < route.stops.length; ) {
+        const stop = route.stops[index]!;
+        if (stop.stopType === "service") {
+          index += 1;
+          continue;
+        }
         if (
-          route.stops[index]?.stopType !== "pickup" ||
+          stop.stopType !== "pickup" ||
           route.stops[index + 1]?.stopType !== "dropoff" ||
-          route.stops[index]?.jobId !== route.stops[index + 1]?.jobId
+          route.stops[index + 1]?.jobId !== stop.jobId
         ) {
           throw new Error("pickup/dropoff pairing or precedence violated");
         }
+        index += 2;
       }
     }
 
@@ -136,6 +143,81 @@ try {
       throw new Error(`snapshot has ${published.length} published routes`);
     }
 
+    const persisted = (await migrator.sql`
+      SELECT r.vehicle_id, rs.sequence_no, rs.job_stop_id, js.job_id, js.stop_type
+      FROM route_stops rs
+      JOIN routes r ON r.id = rs.route_id
+      JOIN job_stops js ON js.id = rs.job_stop_id
+      WHERE r.tenant_id = ${seeded.tenantId} AND r.version = ${approval.version}
+      ORDER BY r.vehicle_id, rs.sequence_no
+    `) as unknown as Array<{
+      vehicle_id: string;
+      sequence_no: number;
+      job_stop_id: string;
+      job_id: string;
+      stop_type: string;
+    }>;
+
+    const expectedByVehicle = new Map(
+      proposal.vehicles.map((route) => [route.vehicleId, route.stops.map((stop) => stop.stopId)]),
+    );
+    const actualByVehicle = new Map<string, string[]>();
+    for (const row of persisted) {
+      const list = actualByVehicle.get(row.vehicle_id) ?? [];
+      list.push(row.job_stop_id);
+      actualByVehicle.set(row.vehicle_id, list);
+    }
+    for (const [vehicleId, expected] of expectedByVehicle) {
+      const actual = actualByVehicle.get(vehicleId) ?? [];
+      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        throw new Error(
+          `persisted stop identities for vehicle ${vehicleId} do not match the approved proposal`,
+        );
+      }
+    }
+    const proposalServiceStops = proposal.vehicles.flatMap((route) =>
+      route.stops.filter((stop) => stop.stopType === "service"),
+    );
+    if (proposalServiceStops.length !== proposal.singleStopJobCount) {
+      throw new Error("proposal service stop count does not match single-stop job count");
+    }
+    const persistedServiceStopIds = new Set(
+      persisted
+        .filter((row) => proposalServiceStops.some((stop) => stop.stopId === row.job_stop_id))
+        .map((row) => row.job_stop_id),
+    );
+    if (persistedServiceStopIds.size !== proposalServiceStops.length) {
+      throw new Error("persisted service stop identities do not match the proposal");
+    }
+    const submitted = new Set<string>();
+    for (const route of proposal.vehicles) {
+      for (const stop of route.stops) {
+        submitted.add(stop.jobId);
+      }
+    }
+    for (const entry of proposal.unassigned) {
+      submitted.add(entry.jobId);
+    }
+    if (submitted.size !== proposal.shipmentCount + proposal.singleStopJobCount) {
+      throw new Error("submitted business units are not fully accounted for");
+    }
+
+    const routeJobs = new Map<string, string | null>();
+    for (const route of proposal.vehicles) {
+      for (const stop of route.stops) {
+        routeJobs.set(stop.jobId, route.driverId);
+      }
+    }
+    for (const [jobId, driverId] of routeJobs) {
+      const rows = (await migrator.sql`
+        SELECT assigned_driver_id FROM jobs WHERE tenant_id = ${seeded.tenantId} AND id = ${jobId}
+      `) as unknown as Array<{ assigned_driver_id: string | null }>;
+      const stored = rows[0]?.assigned_driver_id ?? null;
+      if (stored !== driverId) {
+        throw new Error("persisted job assignment does not match the approved proposal");
+      }
+    }
+
     const stops = await migrator.sql`
       SELECT count(*)::int AS count FROM route_stops rs
       JOIN routes r ON r.id = rs.route_id
@@ -160,9 +242,10 @@ try {
           unassigned: proposal.unassigned.length,
           unassignedReasons: proposal.unassigned.map((entry) => entry.reason ?? "unassigned"),
           proposedRoutes: proposal.vehicles.length,
-          routeShipmentCounts: proposal.vehicles.map((route) =>
-            Math.round(route.stops.length / 2),
+          routeShipmentCounts: proposal.vehicles.map(
+            (route) => route.stops.filter((stop) => stop.stopType === "pickup").length,
           ),
+          routeStopCounts: proposal.vehicles.map((route) => route.stops.length),
           totalDistanceMetres: Math.round(
             proposal.vehicles.reduce((sum, route) => sum + route.distanceMetres, 0),
           ),
@@ -173,6 +256,10 @@ try {
           snapshotVersion: fleet.routeVersion,
           publishedRoutes: published.length,
           routeStops: (stops[0] as { count: number }).count,
+          persistedServiceStops: persistedServiceStopIds.size,
+          persistedStopIdentitiesMatch: true,
+          submittedUnitsAccountedFor: submitted.size,
+          assignmentsMatchProposal: true,
           outboxEvents: (events[0] as { count: number }).count,
           totalMs: Date.now() - startedAt,
         },
@@ -191,4 +278,6 @@ try {
   await closeDb(migrator);
 }
 process.exit(exitCode);
+
+
 

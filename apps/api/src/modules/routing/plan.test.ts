@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { GeoPoint } from "@privatefleet/contracts";
 import { OsrmClient } from "./osrm.js";
 import { VroomClient } from "./vroom.js";
-import { planShipments } from "./plan.js";
-import { RoutingError } from "./types.js";
+import { planFleet, planShipments } from "./plan.js";
+import { RoutingError, type RoutingClients } from "./types.js";
 
 type Mode = "ok" | "infeasible" | "bad-geometry";
 
@@ -215,3 +215,45 @@ describe("planShipments", () => {
 });
 
 
+
+describe("proposal completeness invariant", () => {
+  it("rejects a solver result that silently omits a submitted single-stop job", async () => {
+    const depot = { latitude: 51.5, longitude: -0.1 };
+    const clients: RoutingClients = {
+      matrix: async () => ({
+        durations: [
+          [0, 1, 1],
+          [1, 0, 1],
+          [1, 1, 0],
+        ],
+        distances: [
+          [0, 1, 1],
+          [1, 0, 1],
+          [1, 1, 0],
+        ],
+      }),
+      route: async (points) => ({ points, distanceMetres: 1, durationSeconds: 1 }),
+      solve: async () => ({
+        orderByVehicle: new Map([[0, ["shipment"]]]),
+        ordersByVehicle: new Map([[0, [{ kind: "shipment" as const, id: "shipment" }]]]),
+        arrivalsByVehicle: new Map(),
+        unassigned: [],
+        unassignedReasons: new Map(),
+        routes: [{ vehicleId: 0, distanceMetres: 1, durationSeconds: 1 }],
+      }),
+    };
+    await expect(
+      planFleet(clients, {
+        vehicles: [{ id: 0, depot }],
+        shipments: [
+          {
+            id: "shipment",
+            pickup: { latitude: 51.51, longitude: -0.11 },
+            dropoff: { latitude: 51.52, longitude: -0.12 },
+          },
+        ],
+        jobs: [{ id: "single-job", location: { latitude: 51.53, longitude: -0.13 } }],
+      }),
+    ).rejects.toMatchObject({ code: "ROUTING_INVALID_RESPONSE" });
+  });
+});

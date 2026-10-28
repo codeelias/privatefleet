@@ -292,6 +292,9 @@ export async function createFleetProposal(
       engine: ENGINE,
       engineVersion: ENGINE_VERSION,
       datasetVersion: DATASET_VERSION,
+      // Bump when persisted fleet-result semantics change; old cached results
+      // must never be served as valid proposals.
+      resultSchemaVersion: 2,
       scope: selected ? "subset" : "fleet",
       expectedRouteVersion,
       vehicles,
