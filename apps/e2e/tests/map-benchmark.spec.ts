@@ -18,19 +18,42 @@ test("250-vehicle fleet: marker latency and frame times", async ({
   test.setTimeout(300_000);
 
   await resetScenario("morning-rush");
+
+  // Map-only reference: same page, 3 demo vehicles, no load. Separates
+  // map/compositor cost from fleet-marker cost in the same environment.
+  await page.goto(`${WEB}/?benchmark=1`);
+  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.waitForTimeout(3_000);
+  const mapOnly = await page.evaluate(() => {
+    const bench = (window as unknown as { __fleetBench?: { snapshot: () => unknown } }).__fleetBench;
+    return bench ? bench.snapshot() : null;
+  });
+  console.log("BENCHMARK_MAP_ONLY", JSON.stringify(mapOnly));
+
   const load = await request.post(`${API}/v1/demo/load`, { data: { count: 250 } });
   expect(load.ok()).toBe(true);
   expect(((await load.json()) as { vehicles: number }).vehicles).toBe(250);
 
   try {
-    await page.goto(`${WEB}/?benchmark=1`);
+    await page.reload();
     await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible({
       timeout: 30_000,
     });
-    // Every loaded vehicle has a marker.
+    // Large fleets render through the single canvas marker layer.
+    const canvas = page.locator('[data-testid="vehicle-canvas"]');
+    await expect(canvas).toBeVisible({ timeout: 30_000 });
     await expect
-      .poll(async () => page.locator('[aria-label^="Select "]').count(), { timeout: 30_000 })
-      .toBeGreaterThanOrEqual(250);
+      .poll(
+        async () =>
+          canvas.evaluate((element) => {
+            const node = element as HTMLCanvasElement;
+            return node.width > 0 && node.height > 0;
+          }),
+        { timeout: 30_000 },
+      )
+      .toBe(true);
 
     // Let telemetry run long enough to collect a representative sample.
     await page.waitForTimeout(20_000);
@@ -43,7 +66,7 @@ test("250-vehicle fleet: marker latency and frame times", async ({
     expect(result).not.toBeNull();
     console.log("BENCHMARK", JSON.stringify(result));
     await testInfo.attach("benchmark.json", {
-      body: JSON.stringify(result, null, 2),
+      body: JSON.stringify({ mapOnly, fleet250: result }, null, 2),
       contentType: "application/json",
     });
 
@@ -58,3 +81,5 @@ test("250-vehicle fleet: marker latency and frame times", async ({
     await request.delete(`${API}/v1/demo/load`);
   }
 });
+
+

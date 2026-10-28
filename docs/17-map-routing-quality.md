@@ -69,7 +69,7 @@ staleness and coalescing.
 | Measurement | Initial target | Status |
 |---|---|---|
 | Accepted GPS -> visible dispatcher marker | p95 <= 1 s on defined connected test | **275 ms p95 (PASS)** - 250 vehicles, 2530 samples, headless Chromium, 1440x900 |
-| Marker animation | aim 60 FPS; investigate >33 ms frames | **20.7 FPS, frame p95 133 ms (FAIL)** - baseline recorded 2026-10-28; optimisation next |
+| Marker animation | aim 60 FPS; investigate >33 ms frames | **frame p50 16.8 ms (60 Hz), p95 33.4 ms; avg 38.4 FPS = map-only ceiling (38.6)** - canvas layer, 2026-10-28 |
 | Fleet benchmark size | 250 vehicles in one tenant, routes + updates | **implemented** - demo-only `/v1/demo/load` load harness |
 | Route correctness | every drawn route passes invariants | implemented (unit-tested) |
 | Scenario consistency | all three demo scenarios | verified (7/7 demo E2E) |
@@ -199,3 +199,40 @@ schedules them: a canvas/WebGL marker layer in the map engine (Leaflet
 canvas renderer or a MapLibre symbol source) is the credible path to
 60 FPS at 250 vehicles. That is a larger rendering change and will be
 gated by this same benchmark plus the full E2E suite before adoption.
+
+## 17.11 Accepted optimisation: canvas markers + coalescing (2026-10-28)
+Baseline: 34edb35 (DOM pins, per-message React commits, left/top animation).
+Final: this increment. Identical benchmark, map-only reference added.
+
+Incremental measurements (same machine, 250 vehicles, 20 s):
+
+| Variant | Marker latency p95 | Frame p50 | Frame p95 | Avg FPS |
+|---|---|---|---|---|
+| Baseline (DOM pins) | 270-275 ms | 33.4 ms | 133 ms | 17.8-20.7 |
+| Canvas markers only | 106 ms | 33.4 ms | 117 ms | 20.6 |
+| + rAF coalescing | 85 ms | 33.3 ms | 50 ms | 34.5 |
+| + sprite cache | 78 ms | 33.3 ms | 50 ms | 36.1 |
+| + 1x canvas backing store | 81 ms | **16.8 ms** | **33.4 ms** | **38.4** |
+| Map-only reference (3 vehicles) | - | 16.8 ms | 33.5 ms | 38.6 |
+
+Result: at 250 vehicles the frame p50 is now 16.8 ms (60 Hz) and p95
+33.4 ms - identical to the map-only reference in the same environment.
+Average FPS (38.4) is bounded by the map/compositor ceiling in headless
+software rasterisation (map-only 38.6), not by marker rendering. Marker
+latency p95 fell 275 ms -> 81 ms.
+
+Decisions:
+- Kept: canvas marker layer for fleets above 40 vehicles (small demo fleets
+  keep the rich DOM pins with initials, tooltips and drag-and-drop);
+  animation-frame telemetry coalescing (business events untouched);
+  sprite-cached markers; 1x backing store for the large-fleet canvas.
+- Trade-offs documented: large-fleet markers do not support drag-and-drop
+  (assignment remains available from the tray) and are drawn at 1x DPR.
+- Earlier rejected experiment (React scheduling/transform motion) remains
+  reverted (docs/17.10).
+
+Gate status: **marker latency PASS; smoothness now at map-only parity**
+(p50 60 Hz). A sustained 60 FPS average was not demonstrated because the
+headless environment itself caps the bare map at ~38 FPS average; that
+needs a real-GPU measurement, which is recorded as the remaining caveat
+rather than claimed.

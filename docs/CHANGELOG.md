@@ -9,6 +9,14 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.34 - Accepted map performance optimisation: canvas markers, coalescing, sprite cache (2026-10-28)
+- High-count fleets (>40 vehicles) now render through a single canvas marker layer with hit-tested selection; small demo fleets keep the rich DOM pins (initials, tooltips, drag-and-drop). Canvas layer uses a 1x backing store and cached sprites.
+- Telemetry is coalesced into one animation-frame flush (newest sample per vehicle) *only* for GPS positions; business events keep their existing socket/outbox path.
+- Measured on the identical 250-vehicle benchmark, with a map-only reference added: marker latency p95 275 ms -> 81 ms; frame p50 33.4 -> 16.8 ms (60 Hz); frame p95 133 -> 33.4 ms; avg FPS 20.7 -> 38.4, equal to the map-only reference (38.6) in the same headless software-raster environment.
+- Gate status recorded honestly: marker latency PASS; smoothness now at map-only parity (p50 60 Hz); sustained 60 FPS average is environment-bounded and needs a real-GPU measurement, documented as the remaining caveat rather than claimed.
+- Rejected experiment (React scheduling + transform motion, docs/17.10) stays reverted.
+- Verification: demo E2E 11 passed / 11 skipped (scenarios, movement, selection, stale, reconnect, malformed geometry, benchmark), web unit 17/17, API 23/23, typecheck 6/6, lint 6/6, build 5/5, encoding clean.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.33 - Benchmark-driven optimisation attempt reverted (2026-10-28)
 - A/B tested telemetry coalescing + memoised pins + transform-based motion against the recorded baseline, four benchmark runs per variant on the same machine.
 - Result: regression - median FPS ~18.0 baseline vs ~15.6 optimised; frame p50 worsened from 33.4 ms to 50.0 ms consistently; marker latency unchanged within noise (p95 236-285 ms both).
@@ -293,6 +301,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

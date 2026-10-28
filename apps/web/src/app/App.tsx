@@ -91,6 +91,7 @@ function Dashboard({
   const [scenarioError, setScenarioError] = useState<string | null>(null);
   const [scenarioBusy, setScenarioBusy] = useState(false);
   const telemetryTrackRef = useRef<TrackMap>({});
+  const pendingPositionsRef = useRef<Map<string, VehiclePosition>>(new Map());
 
   const fleetQuery = useQuery({
     queryKey: ["fleet"],
@@ -102,6 +103,40 @@ function Dashboard({
 
   useEffect(() => {
     const socket = createFleetSocket();
+    // Coalesce accepted telemetry into one flush per animation frame
+    // (docs/17.5): newest sample per vehicle, one React commit. Business
+    // events never take this path.
+    const pending = pendingPositionsRef.current;
+    let handle: number | null = null;
+    const flush = (): void => {
+      handle = null;
+      if (pending.size === 0) {
+        return;
+      }
+      const batch = new Map(pending);
+      pending.clear();
+      queryClient.setQueryData<FleetState>(["fleet"], (old) => {
+        if (!old) {
+          return old;
+        }
+        return {
+          ...old,
+          vehicles: old.vehicles.map((vehicle) => {
+            const position = batch.get(vehicle.id);
+            return position
+              ? {
+                  ...vehicle,
+                  location: {
+                    latitude: position.latitude,
+                    longitude: position.longitude,
+                  },
+                  stale: false,
+                }
+              : vehicle;
+          }),
+        };
+      });
+    };
     socket.on("vehicle.position", (position: VehiclePosition) => {
       // Out-of-order or duplicate telemetry must never move a marker
       // backwards (docs/17): accept only samples newer than the last.
@@ -111,32 +146,20 @@ function Dashboard({
       }
       telemetryTrackRef.current = accepted.track;
       markTelemetry(position.vehicleId);
-      queryClient.setQueryData<FleetState>(["fleet"], (old) => {
-        if (!old) {
-          return old;
-        }
-        return {
-          ...old,
-          vehicles: old.vehicles.map((vehicle) =>
-            vehicle.id === position.vehicleId
-              ? {
-                  ...vehicle,
-                  location: {
-                    latitude: position.latitude,
-                    longitude: position.longitude,
-                  },
-                  stale: false,
-                }
-              : vehicle,
-          ),
-        };
-      });
+      pending.set(position.vehicleId, position);
+      if (handle === null) {
+        handle = requestAnimationFrame(flush);
+      }
     });
     socket.on("event", () => {
       void queryClient.invalidateQueries({ queryKey: ["fleet"] });
     });
     return () => {
       socket.disconnect();
+      if (handle !== null) {
+        cancelAnimationFrame(handle);
+      }
+      pending.clear();
     };
   }, [queryClient]);
 

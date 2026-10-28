@@ -12,7 +12,7 @@
  * - Raster (Leaflet): OpenStreetMap standard tiles (no key) - works
  *   without WebGL, including remote-desktop sessions.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -22,6 +22,11 @@ import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
 import { reconcileRoutes, routesChanged } from "./engine/routes";
 import { toGeoJsonCoordinates, toLeafletLatLngs } from "./engine/projection";
 import { markVisible } from "./engine/benchmark";
+import {
+  drawVehicleLayer,
+  hitTest,
+  type CanvasVehicle,
+} from "./engine/markers";
 import type { RoutePathLike } from "./engine/geo";
 import {
   DEFAULT_ENGINE,
@@ -158,6 +163,18 @@ export function MapCanvas({ state }: { state: FleetState }) {
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const styleIndexRef = useRef(0);
   const useVector = useVectorEngine() && !vectorFailed;
+  // Large fleets render on one canvas layer; small demo fleets keep the
+  // rich DOM pins (initials, drag-and-drop, tooltips).
+  const useCanvasPins = !useVector && state.vehicles.length > 40;
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasHitsRef = useRef<CanvasVehicle[]>([]);
+  const driversById = useMemo(
+    () => new Map(state.drivers.map((driver) => [driver.id, driver])),
+    [state.drivers],
+  );
+  const toggleSelect = useCallback((driverId: string | null) => {
+    setSelectedDriverId((previous) => (previous === driverId ? null : driverId));
+  }, []);
 
   // Validated, retained route set: invalid updates never erase the last
   // verified geometry (docs/17). Static geometry is only pushed to the map
@@ -423,6 +440,76 @@ export function MapCanvas({ state }: { state: FleetState }) {
     return { x: p.x, y: p.y };
   }
 
+  // Canvas marker layer for large fleets: one draw per state change,
+  // re-projected on map movement. Same coordinates as routes and pins.
+  useEffect(() => {
+    if (!useCanvasPins || !ready) {
+      return;
+    }
+    const map = leafletRef.current;
+    const canvas = canvasRef.current;
+    if (!map || !canvas) {
+      return;
+    }
+    let frame = 0;
+    const draw = (): void => {
+      frame = 0;
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      if (width === 0 || height === 0) {
+        return;
+      }
+      // Large-fleet canvas: 1x backing store. Circles are ~11 px; the 2x
+      // fill cost dominates frame time in software rasterisation.
+      const dpr = 1;
+      if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+      }
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        return;
+      }
+      const drawn: CanvasVehicle[] = [];
+      for (const vehicle of state.vehicles) {
+        const point = vehicle.location;
+        if (!point) {
+          continue;
+        }
+        const container = map.latLngToContainerPoint([point.latitude, point.longitude]);
+        const driver = vehicle.driverId ? driversById.get(vehicle.driverId) : undefined;
+        drawn.push({
+          id: vehicle.id,
+          driverId: vehicle.driverId ?? null,
+          label: driver?.fullName ?? vehicle.registration,
+          status: vehicle.status,
+          stale: Boolean(vehicle.stale),
+          selected: selectedDriverId !== null && vehicle.driverId === selectedDriverId,
+          x: container.x,
+          y: container.y,
+        });
+      }
+      drawVehicleLayer(ctx, drawn, { width, height, devicePixelRatio: dpr });
+      canvasHitsRef.current = drawn;
+      for (const entry of drawn) {
+        markVisible(entry.id);
+      }
+    };
+    frame = requestAnimationFrame(draw);
+    const redraw = (): void => {
+      if (frame === 0) {
+        frame = requestAnimationFrame(draw);
+      }
+    };
+    map.on("move zoom resize", redraw);
+    return () => {
+      if (frame !== 0) {
+        cancelAnimationFrame(frame);
+      }
+      map.off("move zoom resize", redraw);
+    };
+  }, [state.vehicles, selectedDriverId, ready, useCanvasPins, useVector, driversById, revision]);
+
   // revision forces a re-projection after pan/zoom; ready gates overlays.
   void revision;
   const jobs = state.jobs.filter((j) => j.status === "unassigned");
@@ -483,7 +570,26 @@ export function MapCanvas({ state }: { state: FleetState }) {
               </div>
             );
           })}
-          {state.vehicles.map((vehicle) => {
+          {useCanvasPins && (
+            <canvas
+              ref={canvasRef}
+              data-testid="vehicle-canvas"
+              className="absolute inset-0 z-20"
+              onClick={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const id = hitTest(
+                  canvasHitsRef.current,
+                  event.clientX - rect.left,
+                  event.clientY - rect.top,
+                );
+                const hit = canvasHitsRef.current.find((entry) => entry.id === id);
+                if (hit) {
+                  toggleSelect(hit.driverId ?? null);
+                }
+              }}
+            />
+          )}
+          {!useCanvasPins && state.vehicles.map((vehicle) => {
             const pos = project(vehicle.location);
             if (!pos) {
               return null;
@@ -542,6 +648,8 @@ export function MapCanvas({ state }: { state: FleetState }) {
     </section>
   );
 }
+
+
 
 
 
