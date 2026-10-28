@@ -187,6 +187,57 @@ describe("auth lifecycle", () => {
       session.tenant.id,
     );
   });
+
+  it("throttles every account behind a source IP once the IP aggregate limit is reached", async () => {
+    const victim = await register("Depot IP Victim Logistics");
+    createdTenants.push(victim.tenant.id);
+
+    // Dedicated limiter app with the production defaults (5/account, 50/IP,
+    // 60 s window) but a fast unknown-tenant path so no argon work is needed.
+    const local = buildApp(
+      loadConfig({
+        ...process.env,
+        REPOSITORY_MODE: "postgres",
+        DATABASE_URL: APP_DATABASE_URL,
+        AUTH_JWT_SECRET: "test-secret-at-least-16-characters-long",
+        AUTH_ATTEMPT_WINDOW_SECONDS: "60",
+        AUTH_MAX_ATTEMPTS_ACCOUNT: "5",
+        AUTH_MAX_ATTEMPTS_IP: "50",
+        LOG_LEVEL: "error",
+      }),
+    );
+    try {
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const response = await local.app.inject({
+          method: "POST",
+          url: "/v1/auth/login",
+          payload: {
+            tenantSlug: `missing-depot-${attempt}`,
+            email: "ghost@example.test",
+            password: "not-the-password",
+          },
+        });
+        expect([401, 404]).toContain(response.statusCode);
+      }
+
+      // The victim account itself has no failures, but every account behind
+      // this IP is now deliberately throttled until the window expires.
+      const blocked = await local.app.inject({
+        method: "POST",
+        url: "/v1/auth/login",
+        payload: {
+          tenantSlug: victim.tenant.slug,
+          email: victim.user.email,
+          password: "correct horse battery staple",
+        },
+      });
+      expect(blocked.statusCode).toBe(429);
+      expect(blocked.headers["retry-after"]).toBeDefined();
+      expect((blocked.json() as { code: string }).code).toBe("AUTH_RATE_LIMITED");
+    } finally {
+      await local.app.close();
+    }
+  });
 });
 
 describe("row level security (cross-tenant probes)", () => {
@@ -293,6 +344,8 @@ describe("row level security (cross-tenant probes)", () => {
     });
     expect(recovered.statusCode).toBe(200);
   });});
+
+
 
 
 

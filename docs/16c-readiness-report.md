@@ -16,7 +16,7 @@ decision. Nothing here is a substitute for the pilot contract review.
 |---|---|---|
 | Tenant isolation (RLS) | **PASS** | Automated probe as runtime role `privatefleet_app`: 16/16 tenant tables have RLS + policy; cross-tenant SELECT/UPDATE/DELETE affect 0 rows; foreign INSERT rejected; same checks pass on the restored database |
 | Authentication lifecycle | **PASS (core)** | Access TTL default 900 s; rotating refresh tokens with replay rejection and revocation tests; argon2id hashes; minimum JWT secret raised to 32 chars |
-| Auth abuse resistance | **PASS (single instance)** | Dual-key sliding-window limiter on staff login and driver PIN: 5 failures/account/minute and 50 failures/IP/minute; `429 AUTH_RATE_LIMITED` with `Retry-After`; no permanent lockout; shared-IP isolation and recovery tested. In-memory, single-instance only |
+| Auth abuse resistance | **PASS (single-instance, shared-IP behaviour documented and tested)** | Dual-key sliding-window limiter on staff login and driver PIN: 5 failures/account/minute and 50 failures/IP/minute; `429 AUTH_RATE_LIMITED` with `Retry-After`; no permanent lockout. Account isolation and the deliberate IP-aggregate cut-off are both integration-tested. In-memory, single-instance only |
 | Telemetry rate limiting | **PASS (single instance)** | 10 batches / 10 s per driver, 429 `TELEMETRY_RATE_LIMITED` covered by tests; limiter is in-memory and **not shared across API instances** |
 | Request hardening | **PASS (code)** | 256 KiB body limit, bounded fleet `driverIds` (max 100), nosniff/frame/referrer headers, explicit CORS origins; no TLS/WAF verified here |
 | Dependency audit | **PASS (runtime) / OPEN (build tooling)** | Zod upgraded 3.25.76 -> 4.6.6 (advisory resolved; API/contracts/web typecheck and tests pass). Remaining 9 advisories (5 high, 3 moderate, 1 low) are all under the Expo/Metro build toolchain, not the API runtime; see disposition |
@@ -65,6 +65,14 @@ Authentication:
   limiter or sticky routing. Reverse-proxy trust is not configured, so
   `request.ip` is the socket address; set `trustProxy` only for a trusted
   proxy before relying on forwarded IPs.
+- **Shared-IP trade-off (tested, intentional):** exhausting Account A's
+  five-failure bucket does **not** block Account B at the same depot IP;
+  B authenticates successfully while the IP aggregate is below 50. Once the
+  IP aggregate reaches 50 failures within the window, **every** account behind
+  that IP is throttled with `429 AUTH_RATE_LIMITED` and `Retry-After` until
+  the window expires. This is a deliberate anti-spray trade-off for shared
+  egress addresses, not an account-isolation bug; operators must understand
+  that a hostile device on a depot NAT can briefly affect colleagues.
 
 Request hardening added: explicit 256 KiB body limit, max 100 driver ids per
 fleet subset, nosniff/frame/referrer headers, explicit CORS origin allowlist.
@@ -178,8 +186,11 @@ per-request integer ids; without this, any job/vehicle with skills caused
 **Pilot readiness: CONDITIONAL - not signed off.** Tenant isolation, auth
 abuse controls, runtime dependency remediation, restore procedure, cache
 correctness, routing identity and bounded load behaviour now have code-level
-evidence (API 62/62, auth 11/11, demo 13/13, web 21/21, typecheck/lint/build
-green). The remaining gates are operational: TLS/reverse proxy, public
-firewall verification, scheduled/off-host backups and PITR, sustained
-load/concurrency measurement, and Expo/Metro build-tool advisory upgrades. Do
-not expose the API or routing ports publicly until those are complete.
+evidence (API 63/63, auth/fleet 11/11, demo 13/13, web 21/21,
+typecheck/lint/build green). The software is frozen at the handoff commit; the
+remaining gates are operational: TLS/reverse proxy, public firewall
+verification, scheduled/off-host backups and PITR, sustained load/concurrency
+measurement, retention sign-off and Expo/Metro build-tool advisory upgrades.
+Operator runbook: `docs/16d-operational-handoff.md`.
+Do not expose the API or routing ports publicly until every pre-exposure box is
+checked.
