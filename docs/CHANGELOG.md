@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.39 - Phase 5: OSRM/VROOM provider layer behind the validated route contract (2026-10-28)
+- New `apps/api/src/modules/routing/`: OSRM matrix/route adapter with response validation, VROOM matrix-mode shipment solver adapter, and `planShipments` (matrix -> solve -> road geometry -> invariant checks, unassigned work surfaced).
+- Typed routing errors (`ROUTING_NOT_CONFIGURED`, `OSRM_UNAVAILABLE`, `VROOM_UNAVAILABLE`, `ROUTING_INVALID_RESPONSE`, `PLAN_INFEASIBLE`); `OSRM_BASE_URL`/`VROOM_BASE_URL` config requires both or neither.
+- Evidence: 6 provider tests against fake HTTP services (validated plan, infeasible surface, bad geometry, unreachable OSRM/VROOM, factory rules); live OSRM smoke produced a 3x3 matrix and a 524-point 5.18 km geometry for a London request. VROOM had no local Docker, so its adapter is protocol-tested against a fake service; container validation remains a deployment check.
+- Not yet: durable optimization_runs/proposal persistence, preview/publish endpoints with stale-version rejection, dispatcher UI wiring. Demo fixtures remain the default.
+- Verification: API suite green, typecheck/lint/build green.
+- Pushes remain paused (owner directive); local commits only.
 ### v1.38 - Phase 4: device location sharing, bounded retry buffer and per-device rate limits (2026-10-28)
 - Driver app "Share location" control: browser/device geolocation -> bounded sample buffer (50) -> batched authenticated posts every 5 s; failed batches merge back ahead of the cap so retries never lose location truth.
 - New `apps/driver/src/shared/location-buffer.ts` with unit tests for cap, ordered drain and failure merge.
@@ -333,6 +340,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

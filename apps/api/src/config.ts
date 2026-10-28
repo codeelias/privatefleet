@@ -23,6 +23,8 @@ const EnvSchema = z.object({
   AUTH_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   CORS_ORIGINS: z.string().optional(),
+  OSRM_BASE_URL: z.string().url().optional(),
+  VROOM_BASE_URL: z.string().url().optional(),
 });
 
 const DEMO_SECRET = "dev-only-insecure-jwt-secret-change-me";
@@ -38,6 +40,8 @@ export interface AppConfig {
   refreshTtlDays: number;
   logLevel: "fatal" | "error" | "warn" | "info" | "debug" | "trace";
   corsOrigins: string[];
+  osrmBaseUrl: string | undefined;
+  vroomBaseUrl: string | undefined;
   name: string;
   version: string;
 }
@@ -69,6 +73,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     accessTtlSeconds: data.AUTH_ACCESS_TTL_SECONDS,
     refreshTtlDays: data.AUTH_REFRESH_TTL_DAYS,
     logLevel: data.LOG_LEVEL,
+    osrmBaseUrl: data.OSRM_BASE_URL,
+    vroomBaseUrl: data.VROOM_BASE_URL,
     corsOrigins: (data.CORS_ORIGINS ?? "")
       .split(",")
       .map((origin) => origin.trim())
@@ -85,4 +91,5 @@ export function migrationDatabaseUrl(env: NodeJS.ProcessEnv = process.env): stri
     "postgres://privatefleet:privatefleet_dev_pw@127.0.0.1:5432/privatefleet_dev"
   );
 }
+
 

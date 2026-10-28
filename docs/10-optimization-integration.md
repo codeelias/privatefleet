@@ -54,3 +54,32 @@ VROOM is a constraint solver - **not an AI model**. The product never labels it 
 
 
 
+
+## 10.7 Phase 5 implementation status (2026-10-28)
+Provider layer implemented (`apps/api/src/modules/routing/`):
+- `OsrmClient`: `/table` matrix (duration+distance, dimension and
+  finiteness validated) and `/route` full GeoJSON geometry; typed errors
+  for unreachable or malformed responses.
+- `VroomClient`: matrix-mode shipments (paired pickup/delivery), typed
+  rejection of non-zero solver codes, ordered pickup/delivery ids per
+  vehicle, unassigned work surfaced rather than dropped.
+- `planShipments`: OSRM matrix -> VROOM solve -> OSRM geometry for the
+  exact solved order -> geometry invariant checks (finite coordinates,
+  starts at the depot).
+- `createRoutingClients`: live providers exist only when both
+  `OSRM_BASE_URL` and `VROOM_BASE_URL` are configured; config rejects a
+  half-configured pair.
+- `src/db/routing-smoke.ts`: manual smoke against a real OSRM server.
+
+Evidence:
+- Fake-service tests (`plan.test.ts`, `factory.test.ts`, 6 cases):
+  validated plan, infeasible/unassigned surface, malformed geometry
+  rejection, OSRM and VROOM unreachable typed errors, factory rules.
+- Live OSRM smoke: 3x3 matrix, 524-point geometry, 5.18 km / 857 s for a
+  known London request. VROOM runs only via a protocol-faithful fake in
+  this environment (no Docker installed); a real container run remains
+  the deployment check.
+
+Next: durable `optimization_runs` + tenant route persistence, proposal
+preview/publish endpoints with the existing 409 stale-version rejection,
+and dispatcher UI wiring. Demo fixtures stay the default offline path.
