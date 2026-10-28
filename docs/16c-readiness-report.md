@@ -16,10 +16,10 @@ decision. Nothing here is a substitute for the pilot contract review.
 |---|---|---|
 | Tenant isolation (RLS) | **PASS** | Automated probe as runtime role `privatefleet_app`: 16/16 tenant tables have RLS + policy; cross-tenant SELECT/UPDATE/DELETE affect 0 rows; foreign INSERT rejected; same checks pass on the restored database |
 | Authentication lifecycle | **PASS (core)** | Access TTL default 900 s; rotating refresh tokens with replay rejection and revocation tests; argon2id hashes; minimum JWT secret raised to 32 chars |
-| Auth abuse resistance | **NOT VERIFIED** | No login/PIN rate limiting or lockout; no brute-force simulation. Unresolved pilot risk (see below) |
+| Auth abuse resistance | **PASS (single instance)** | Dual-key sliding-window limiter on staff login and driver PIN: 5 failures/account/minute and 50 failures/IP/minute; `429 AUTH_RATE_LIMITED` with `Retry-After`; no permanent lockout; shared-IP isolation and recovery tested. In-memory, single-instance only |
 | Telemetry rate limiting | **PASS (single instance)** | 10 batches / 10 s per driver, 429 `TELEMETRY_RATE_LIMITED` covered by tests; limiter is in-memory and **not shared across API instances** |
 | Request hardening | **PASS (code)** | 256 KiB body limit, bounded fleet `driverIds` (max 100), nosniff/frame/referrer headers, explicit CORS origins; no TLS/WAF verified here |
-| Dependency audit | **OPEN** | `pnpm audit --prod`: 10 advisories (6 high, 3 moderate, 1 low). Includes runtime Zod memory-exhaustion (bounds mitigate but package remains), plus PostCSS/image-size/node-forge/deepmerge largely in Expo build paths |
+| Dependency audit | **PASS (runtime) / OPEN (build tooling)** | Zod upgraded 3.25.76 -> 4.6.6 (advisory resolved; API/contracts/web typecheck and tests pass). Remaining 9 advisories (5 high, 3 moderate, 1 low) are all under the Expo/Metro build toolchain, not the API runtime; see disposition |
 | Network exposure | **PARTIAL** | OSRM/VROOM reachable over LAN and used directly; public-internet exposure **not verified** (operator firewall/VPN decision) |
 | Backup/restore drill | **PASS (drill)** | Separate database restore, identical counts/checksums, app-role isolation verified; no automated backup/PITR yet |
 | Migration/extension recovery | **PASS (verify)** | Restored database has 7 migrations, PostGIS 3.4.2, 16 RLS tables/policies |
@@ -54,20 +54,31 @@ Authentication:
   rotate with replay rejection; logout/revocation paths covered by API and
   browser tests.
 - JWT secret now requires at least 32 characters in production configuration.
-- **Unresolved:** login and driver-PIN endpoints have no attempt-rate limiter
-  or lockout. This is an abuse/DoS decision for the pilot; a naive lockout can
-  itself be used to deny service. Treat as an operator/security decision before
-  public exposure.
+- **Throttling implemented:** staff login and driver PIN verification use a
+  dual-key sliding-window limiter (account/device + source IP). Defaults: 5
+  failures per account per 60 s, 50 failures per IP per 60 s, then
+  `429 AUTH_RATE_LIMITED` with `Retry-After`. There is **no permanent
+  lockout**: the window expires and the legitimate user can retry. A success
+  clears only that account bucket, never the shared IP bucket; shared-IP
+  (depot WiFi) users are independent. State is bounded (10,000 buckets, LRU
+  eviction) and process-local; multi-instance deployments need a shared
+  limiter or sticky routing. Reverse-proxy trust is not configured, so
+  `request.ip` is the socket address; set `trustProxy` only for a trusted
+  proxy before relying on forwarded IPs.
 
 Request hardening added: explicit 256 KiB body limit, max 100 driver ids per
 fleet subset, nosniff/frame/referrer headers, explicit CORS origin allowlist.
 TLS/reverse proxy is not configured or verified in this environment.
 
-Dependency audit: 10 advisories. Runtime-relevant is Zod (memory exhaustion on
-oversized constrained collections); request bounds reduce exposure but do not
-remove the vulnerable package version. PostCSS/image-size/node-forge/deepmerge
-advisories are predominantly Expo/build-tool paths, not the API runtime. Treat
-as remediation work, not silently accepted.
+Dependency audit: Zod was 3.25.76, inside the advisory range; it is now
+resolved to **4.6.6** via the workspace override, with all API/contracts/web
+typechecks and suites passing. `pnpm audit --prod` now reports **9**
+advisories: 5 high (PostCSS file read/path traversal x2, image-size DoS x2,
+node-forge signature verification), 3 moderate (PostCSS x2, uuid bounds) and
+1 low (deepmerge). Every reported path is under `apps/driver-expo`'s Expo/
+Metro/CLI build toolchain; none resolve into the API runtime or deployed
+server bundle. They remain build-machine exposure and require an Expo/Metro
+upgrade path; do not describe the dependency surface as clean.
 
 ## 2. Backup/restore drill (non-destructive)
 
@@ -152,8 +163,8 @@ per-request integer ids; without this, any job/vehicle with skills caused
 
 ## 5. Unresolved operational items
 
-1. Authentication rate limiting/lockout policy and brute-force testing.
-2. Dependency advisories (Zod runtime mitigated by bounds; upgrade path).
+1. Expo/Metro build-tool advisories (9; no API runtime path; upgrade plan required).
+2. Public exposure/TLS and firewall verification.
 3. Scheduled backups, off-host retention, PITR and a recurring restore drill.
 4. TLS/reverse proxy, firewall/public-exposure verification.
 5. 100 vehicles / 1,000 jobs single-batch capacity (task limit); batching or
@@ -164,9 +175,11 @@ per-request integer ids; without this, any job/vehicle with skills caused
 
 ## Conclusion
 
-**Pilot readiness: CONDITIONAL - not signed off.** Tenant isolation, restore
-procedure, cache correctness, routing identity and bounded load behaviour have
-code-level evidence. The open items above are operational/security decisions
-and reproducible hardening work, not hidden failures. Do not expose the API or
-routing ports publicly until TLS, auth abuse controls and firewall verification
-are complete.
+**Pilot readiness: CONDITIONAL - not signed off.** Tenant isolation, auth
+abuse controls, runtime dependency remediation, restore procedure, cache
+correctness, routing identity and bounded load behaviour now have code-level
+evidence (API 62/62, auth 11/11, demo 13/13, web 21/21, typecheck/lint/build
+green). The remaining gates are operational: TLS/reverse proxy, public
+firewall verification, scheduled/off-host backups and PITR, sustained
+load/concurrency measurement, and Expo/Metro build-tool advisory upgrades. Do
+not expose the API or routing ports publicly until those are complete.

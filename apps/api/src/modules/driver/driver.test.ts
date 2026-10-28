@@ -20,6 +20,8 @@ const config = loadConfig({
   REPOSITORY_MODE: "postgres",
   DATABASE_URL: APP_DATABASE_URL,
   AUTH_JWT_SECRET: "test-secret-at-least-16-characters-long",
+  AUTH_ATTEMPT_WINDOW_SECONDS: "1",
+  AUTH_MAX_ATTEMPTS_ACCOUNT: "5",
   LOG_LEVEL: "error",
 });
 
@@ -162,6 +164,30 @@ describe("driver device login", () => {
     expect(unknown.statusCode).toBe(401);
   });
 
+
+  it("throttles repeated wrong PINs and allows the driver to recover", async () => {
+    const wrongPin = () =>
+      app.inject({
+        method: "POST",
+        url: "/v1/auth/driver-login",
+        payload: { tenantSlug: fleet.slug, driverId: fleet.driverB.id, pin: "0000" },
+      });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect((await wrongPin()).statusCode).toBe(401);
+    }
+    const blocked = await wrongPin();
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.headers["retry-after"]).toBeDefined();
+    expect((blocked.json() as { code: string }).code).toBe("AUTH_RATE_LIMITED");
+
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    const recovered = await app.inject({
+      method: "POST",
+      url: "/v1/auth/driver-login",
+      payload: { tenantSlug: fleet.slug, driverId: fleet.driverB.id, pin: "1234" },
+    });
+    expect(recovered.statusCode).toBe(200);
+  });
   it("refuses staff sessions and other tenants on the driver queue", async () => {
     const staff = await app.inject({
       method: "GET",
@@ -359,6 +385,8 @@ describe("driver actions reach dispatch", () => {
     expect(events[0]?.count).toBe(1);
   });
 });
+
+
 
 
 

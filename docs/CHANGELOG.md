@@ -9,6 +9,12 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.49 - Auth abuse controls and Zod 4.6.6 security remediation (2026-10-28)
+- Staff login and driver PIN verification now use a bounded, dual-key sliding-window limiter (account/device + source IP): defaults 5 failures/account/min and 50/IP/min; 429 `AUTH_RATE_LIMITED` with `Retry-After`; no permanent lockout; successful login clears only the account bucket; LRU-bounded state; shared-IP users independent. Unit tests cover threshold, expiry, shared IP, success reset and memory bounds; API integration covers throttle, shared-IP login, recovery and driver PIN.
+- Zod upgraded 3.25.76 -> 4.6.6 via the workspace override (advisory fixed). API/contracts/web/Expo typechecks and suites pass with Zod 4. Remaining 9 publish advisories are all Expo/Metro build-tool paths (PostCSS, image-size, node-forge, uuid, deepmerge), not the API runtime.
+- Docs: readiness report auth-abuse gate PASS (single-instance), dependency gate runtime PASS / build-tooling OPEN; runbook throttling note.
+- Verification: API 62/62, auth/fleet E2E 11/11, demo E2E 13 passed / 13 skipped, web 21/21, typecheck 6/6, lint 6/6, build 5/5.
+
 ### v1.48 - Production-readiness hardening: RLS, restore drill, cache validation, load guards (2026-10-28)
 - RLS probe: runtime role `privatefleet_app`, 16/16 tenant tables have policies; cross-tenant SELECT/UPDATE/DELETE affect 0 rows; foreign INSERT rejected; repeat verification on a restored database.
 - Auth: JWT secret minimum raised to 32 chars; short access TTL and refresh rotation/revocation already covered. Auth rate limiting/lockout remains an open pilot risk.

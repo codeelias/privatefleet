@@ -19,6 +19,8 @@ const config = loadConfig({
   REPOSITORY_MODE: "postgres",
   DATABASE_URL: APP_DATABASE_URL,
   AUTH_JWT_SECRET: "test-secret-at-least-16-characters-long",
+  AUTH_ATTEMPT_WINDOW_SECONDS: "1",
+  AUTH_MAX_ATTEMPTS_ACCOUNT: "5",
   LOG_LEVEL: "error",
 });
 
@@ -231,7 +233,67 @@ describe("row level security (cross-tenant probes)", () => {
     }
     expect(blocked).toBe(true);
   });
-});
+
+  it("throttles repeated login failures, keeps shared IPs usable, and recovers", async () => {
+    const alpha = await register("Throttle Alpha Logistics");
+    const beta = await register("Throttle Beta Logistics");
+    createdTenants.push(alpha.tenant.id, beta.tenant.id);
+
+    const wrong = () =>
+      app.inject({
+        method: "POST",
+        url: "/v1/auth/login",
+        payload: {
+          tenantSlug: alpha.tenant.slug,
+          email: alpha.user.email,
+          password: "definitely-the-wrong-password",
+        },
+      });
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect((await wrong()).statusCode).toBe(401);
+    }
+    const blocked = await wrong();
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.headers["retry-after"]).toBeDefined();
+    expect((blocked.json() as { code: string }).code).toBe("AUTH_RATE_LIMITED");
+
+    // Correct credentials are still throttled during the cooldown (no oracle).
+    const correctDuringCooldown = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: {
+        tenantSlug: alpha.tenant.slug,
+        email: alpha.user.email,
+        password: "correct horse battery staple",
+      },
+    });
+    expect(correctDuringCooldown.statusCode).toBe(429);
+
+    // A different account on the same source IP is not blocked.
+    const betaLogin = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: {
+        tenantSlug: beta.tenant.slug,
+        email: beta.user.email,
+        password: "correct horse battery staple",
+      },
+    });
+    expect(betaLogin.statusCode).toBe(200);
+
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    const recovered = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: {
+        tenantSlug: alpha.tenant.slug,
+        email: alpha.user.email,
+        password: "correct horse battery staple",
+      },
+    });
+    expect(recovered.statusCode).toBe(200);
+  });});
+
 
 
 

@@ -21,6 +21,9 @@ const EnvSchema = z.object({
   AUTH_JWT_SECRET: z.string().min(32).optional(),
   AUTH_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   AUTH_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  AUTH_ATTEMPT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+  AUTH_MAX_ATTEMPTS_ACCOUNT: z.coerce.number().int().positive().default(5),
+  AUTH_MAX_ATTEMPTS_IP: z.coerce.number().int().positive().default(50),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   CORS_ORIGINS: z.string().optional(),
   OSRM_BASE_URL: z.string().url().optional(),
@@ -38,6 +41,9 @@ export interface AppConfig {
   jwtSecret: string;
   accessTtlSeconds: number;
   refreshTtlDays: number;
+  authAttemptWindowSeconds: number;
+  authMaxAttemptsAccount: number;
+  authMaxAttemptsIp: number;
   logLevel: "fatal" | "error" | "warn" | "info" | "debug" | "trace";
   corsOrigins: string[];
   osrmBaseUrl: string | undefined;
@@ -72,6 +78,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     jwtSecret: data.AUTH_JWT_SECRET ?? DEMO_SECRET,
     accessTtlSeconds: data.AUTH_ACCESS_TTL_SECONDS,
     refreshTtlDays: data.AUTH_REFRESH_TTL_DAYS,
+    authAttemptWindowSeconds: data.AUTH_ATTEMPT_WINDOW_SECONDS,
+    authMaxAttemptsAccount: data.AUTH_MAX_ATTEMPTS_ACCOUNT,
+    authMaxAttemptsIp: data.AUTH_MAX_ATTEMPTS_IP,
     logLevel: data.LOG_LEVEL,
     osrmBaseUrl: data.OSRM_BASE_URL,
     vroomBaseUrl: data.VROOM_BASE_URL,
@@ -91,5 +100,6 @@ export function migrationDatabaseUrl(env: NodeJS.ProcessEnv = process.env): stri
     "postgres://privatefleet:privatefleet_dev_pw@127.0.0.1:5432/privatefleet_dev"
   );
 }
+
 
 

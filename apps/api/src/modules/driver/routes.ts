@@ -4,8 +4,9 @@
  * fleet module and enforce the token's driver identity there.
  */
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { AuthService } from "../auth/service.js";
+import { AuthError, type AuthService } from "../auth/service.js";
 import { makeAuthGuard } from "../auth/guard.js";
+import type { AuthAttemptLimiter } from "../auth/rate-limit.js";
 import type { PgFleetService } from "../fleet/pg-service.js";
 
 function requireDriver(
@@ -30,13 +31,44 @@ export function registerDriverDeviceRoutes(
   app: FastifyInstance,
   auth: AuthService,
   fleet: PgFleetService,
+  limiter: AuthAttemptLimiter,
 ): void {
   const guard = makeAuthGuard(auth);
 
-  app.post("/v1/auth/driver-login", async (request) => {
+  app.post("/v1/auth/driver-login", async (request, reply) => {
     const { DriverLoginRequestSchema } = await import("@privatefleet/contracts");
     const input = DriverLoginRequestSchema.parse(request.body);
-    return auth.driverLogin(input);
+    const accountKey =
+      "driver:" +
+      input.tenantSlug.trim().toLowerCase() +
+      ":" +
+      input.driverId.trim().toLowerCase();
+    const ipKey = "ip:" + request.ip;
+    const decision = limiter.check(accountKey, ipKey);
+    if (!decision.allowed) {
+      reply.header("retry-after", String(decision.retryAfterSeconds));
+      return reply.status(429).send({
+        type: "https://privatefleet.example/errors/auth-rate-limited",
+        title: "Too many attempts",
+        status: 429,
+        code: "AUTH_RATE_LIMITED",
+        detail: "Authentication attempts are temporarily throttled",
+        uiMessage: "Too many sign-in attempts. Wait a moment and try again.",
+      });
+    }
+    try {
+      const session = await auth.driverLogin(input);
+      limiter.recordSuccess(accountKey);
+      return session;
+    } catch (err) {
+      if (
+        err instanceof AuthError &&
+        (err.code === "INVALID_CREDENTIALS" || err.code === "TENANT_NOT_FOUND")
+      ) {
+        limiter.recordFailure(accountKey, ipKey);
+      }
+      throw err;
+    }
   });
 
   app.get("/v1/driver/queue", { preHandler: guard }, async (request, reply) => {

@@ -14,6 +14,7 @@ import { closeDb, createDb, type DbHandle } from "./db/client.js";
 import { createRealtimeBus, type RealtimeBus } from "./lib/realtime.js";
 import { AuthError, AuthService } from "./modules/auth/service.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
+import { AuthAttemptLimiter } from "./modules/auth/rate-limit.js";
 import { FleetError, PgFleetService } from "./modules/fleet/pg-service.js";
 import { registerFleetRoutes } from "./modules/fleet/routes.js";
 import { registerDriverDeviceRoutes } from "./modules/driver/routes.js";
@@ -196,9 +197,15 @@ export function buildApp(config: AppConfig): {
       verifyToken: (token) => auth.verifyAccess(token),
     });
     const fleet = new PgFleetService(db, bus);
-    registerAuthRoutes(app, auth);
+    const authAttemptLimiter = new AuthAttemptLimiter({
+      windowMs: config.authAttemptWindowSeconds * 1000,
+      maxAccountFailures: config.authMaxAttemptsAccount,
+      maxIpFailures: config.authMaxAttemptsIp,
+      maxEntries: 10_000,
+    });
+    registerAuthRoutes(app, auth, authAttemptLimiter);
     registerFleetRoutes(app, auth, fleet);
-    registerDriverDeviceRoutes(app, auth, fleet);
+    registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter);
     registerTrackingRoutes(app, auth, bus, db);
     const routingClients =
       config.osrmBaseUrl && config.vroomBaseUrl

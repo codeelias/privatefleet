@@ -308,3 +308,13 @@ string skills.
 **Open before public exposure:** auth rate limiting/lockout, dependency
 advisories (10; see report), scheduled/PITR backups, TLS/reverse proxy and
 public-firewall verification, and 100-van single-batch capacity decision.
+
+
+**Auth attempt throttling (2026-10-28):** staff login and driver PIN use a
+process-local, dual-key sliding-window limiter
+(`AUTH_ATTEMPT_WINDOW_SECONDS=60`, `AUTH_MAX_ATTEMPTS_ACCOUNT=5`,
+`AUTH_MAX_ATTEMPTS_IP=50`). Exceeding either bound returns
+`429 AUTH_RATE_LIMITED` with `Retry-After`; there is no permanent lockout.
+The limiter is **not shared across API instances**; use sticky routing or a
+shared limiter before scaling out. Do not trust forwarded client-IP headers
+unless Fastify `trustProxy` is enabled for a known proxy.
