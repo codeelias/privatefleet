@@ -267,15 +267,15 @@ describe("fleet optimisation", () => {
       WHERE j.tenant_id = ${tenantId} AND j.status = 'assigned'
       LIMIT 1
     `;
-    const jobId = (pairedRows[0] as { id: string }).id;
+    const jobId = (pairedRows[0] as unknown as { id: string }).id;
     const currentDriver = (
-      pairedRows[0] as { assigned_driver_id: string | null }
+      pairedRows[0] as unknown as { assigned_driver_id: string | null }
     ).assigned_driver_id;
     expect(jobId).toBeTruthy();
     const drivers = await migrator.sql`
       SELECT id FROM drivers WHERE tenant_id = ${tenantId} ORDER BY id
     `;
-    const otherDriver = (drivers as Array<{ id: string }>).find(
+    const otherDriver = (drivers as unknown as Array<{ id: string }>).find(
       (driver) => driver.id !== currentDriver,
     )?.id;
     expect(otherDriver).toBeTruthy();
@@ -296,7 +296,7 @@ describe("fleet optimisation", () => {
       WHERE j.tenant_id = ${tenantId} AND j.status = 'assigned'
       LIMIT 1
     `;
-    const jobId = (jobRows[0] as { id: string }).id;
+    const jobId = (jobRows[0] as unknown as { id: string }).id;
     await migrator.sql`
       UPDATE jobs SET required_capabilities = ARRAY['refrigerated']
       WHERE id = ${jobId}
@@ -322,7 +322,7 @@ describe("fleet optimisation", () => {
       WHERE j.tenant_id = ${tenantId} AND j.status = 'assigned'
       LIMIT 1
     `;
-    const jobId = (jobRows[0] as { id: string }).id;
+    const jobId = (jobRows[0] as unknown as { id: string }).id;
     await migrator.sql`
       UPDATE vehicles SET capacity_units = 0 WHERE tenant_id = ${tenantId}
     `;
@@ -349,6 +349,8 @@ describe("fleet optimisation", () => {
     expect(fleetB.routes).toHaveLength(0);
   });
 });
+
+
 
 
 
