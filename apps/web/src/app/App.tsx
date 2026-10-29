@@ -342,6 +342,7 @@ function Dashboard({
                   <KpiCard label="Jobs in progress" value={String(inProgress)} sub={`${unassigned.length} unassigned`} />
                   <KpiCard label="Unassigned" value={String(unassigned.length)} sub={`${urgent} urgent`} tone={urgent > 0 ? "warning" : undefined} />
                   <KpiCard label="At-risk stops" value={String(atRisk)} sub="needs attention" tone={atRisk > 0 ? "danger" : undefined} />
+                  {state.demoMode && (
                   <div className="ml-auto flex items-center gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
                       Demo scenario
@@ -362,6 +363,7 @@ function Dashboard({
                       </button>
                     ))}
                   </div>
+                  )}
                   {scenarioError && (
                     <p className="rounded-lg border border-status-warning/50 bg-status-warning/10 px-3 py-1.5 text-xs text-status-warning">
                       {scenarioError}
@@ -523,6 +525,7 @@ export function App() {
     />
   );
 }
+
 
 
 

@@ -61,7 +61,6 @@ export function validateRoutePath(route: RoutePathLike): RouteValidation {
     return { valid: false, errors, lengthMetres: 0 };
   }
   let lengthMetres = 0;
-  let duplicates = 0;
   for (let index = 0; index < route.points.length; index += 1) {
     const point = route.points[index];
     if (!isValidGeoPoint(point)) {
@@ -72,13 +71,7 @@ export function validateRoutePath(route: RoutePathLike): RouteValidation {
     if (previous && isValidGeoPoint(previous)) {
       const distance = haversineMetres(previous, point!);
       lengthMetres += distance;
-      if (distance < 0.01) {
-        duplicates += 1;
-      }
     }
-  }
-  if (duplicates > 0) {
-    errors.push(`${duplicates} zero-length segment(s)`);
   }
   if (lengthMetres === 0 && errors.length === 0) {
     errors.push("route has no length");

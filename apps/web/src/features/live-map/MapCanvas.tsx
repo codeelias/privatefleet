@@ -241,6 +241,17 @@ export function MapCanvas({ state }: { state: FleetState }) {
     () => new Map(state.drivers.map((driver) => [driver.id, driver])),
     [state.drivers],
   );
+  // Vehicles without a GPS fix still need a visible, honestly ghosted marker:
+  // use the start of their published route rather than dropping them.
+  const routeStartByVehicle = useMemo(
+    () =>
+      new Map(
+        state.routes
+          .filter((route) => route.points.length >= 2)
+          .map((route) => [route.vehicleId, route.points[0]!]),
+      ),
+    [state.routes],
+  );
   const toggleSelect = useCallback((driverId: string | null) => {
     setSelectedDriverId((previous) => (previous === driverId ? null : driverId));
   }, []);
@@ -587,7 +598,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
     }> = [];
 
     for (const vehicle of state.vehicles) {
-      const point = vehicle.location;
+      const point = vehicle.location ?? routeStartByVehicle.get(vehicle.id);
       if (!point) {
         continue;
       }
@@ -666,7 +677,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
       const time = performance.now();
       for (const target of canvasTargetsRef.current) {
         const vehicle = vehiclesById.get(target.id);
-        const point = vehicle?.location;
+        const point = vehicle?.location ?? routeStartByVehicle.get(target.id);
         if (!point) {
           continue;
         }
@@ -685,7 +696,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
       }
       map.off("move zoom resize", reposition);
     };
-  }, [state.vehicles, selectedDriverId, ready, useCanvasPins, useVector, driversById]);
+  }, [state.vehicles, state.routes, selectedDriverId, ready, useCanvasPins, useVector, driversById, routeStartByVehicle]);
 
   // revision forces a re-projection after pan/zoom; ready gates overlays.
   void revision;
@@ -774,15 +785,18 @@ export function MapCanvas({ state }: { state: FleetState }) {
             />
           )}
           {!useCanvasPins && state.vehicles.map((vehicle) => {
-            const pos = project(vehicle.location);
+            const pos = project(vehicle.location ?? routeStartByVehicle.get(vehicle.id));
             if (!pos) {
               return null;
             }
             const driver = state.drivers.find((d) => d.id === vehicle.driverId);
+            const markerVehicle = vehicle.location
+              ? vehicle
+              : { ...vehicle, stale: true };
             return (
               <VehiclePin
                 key={vehicle.id}
-                vehicle={vehicle}
+                vehicle={markerVehicle}
                 driverName={driver?.fullName ?? "Driver"}
                 x={pos.x}
                 y={pos.y}
@@ -832,6 +846,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
     </section>
   );
 }
+
 
 
 

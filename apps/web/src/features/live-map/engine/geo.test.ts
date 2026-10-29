@@ -15,15 +15,15 @@ describe("route invariants", () => {
     expect(result.lengthMetres).toBeGreaterThan(1000);
   });
 
-  it("rejects invalid coordinates, short routes and duplicated pairs", () => {
+  it("rejects invalid coordinates and short routes, but tolerates OSRM duplicate points", () => {
     expect(
       validateRoutePath({ vehicleId: "v1", points: [{ latitude: Number.NaN, longitude: 0 }] }).valid,
     ).toBe(false);
     expect(validateRoutePath({ vehicleId: "v1", points: [points[0]!] }).valid).toBe(false);
     const duplicated = [points[0]!, { ...points[0]! }, points[1]!];
     const result = validateRoutePath({ vehicleId: "v1", points: duplicated });
-    expect(result.valid).toBe(false);
-    expect(result.errors.join(" ")).toMatch(/zero-length/);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
   });
 
   it("produces a stable signature and one that changes with geometry", () => {
@@ -39,3 +39,4 @@ describe("route invariants", () => {
     expect(routeSignature({ vehicleId: "v1", driverId: "d1", points: moved })).not.toBe(sigA);
   });
 });
+
