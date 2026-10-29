@@ -6,6 +6,7 @@
  */
 import {
   bigint,
+  boolean,
   date,
   doublePrecision,
   index,
@@ -286,6 +287,8 @@ export const jobStops = pgTable(
     status: text("status").notNull().default("pending"),
     arrivedAt: timestamp("arrived_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    failureCode: text("failure_code"),
+    failureNote: text("failure_note"),
   },
   (t) => [
     uniqueIndex("job_stops_job_sequence_uq").on(t.jobId, t.sequence),
@@ -327,12 +330,59 @@ export const alerts = pgTable(
     freshness: text("freshness").notNull(),
     recommendedAction: text("recommended_action").notNull(),
     reference: text("reference"),
+    jobId: uuid("job_id"),
+    stopId: uuid("stop_id"),
     createdAt,
     actedAt: timestamp("acted_at", { withTimezone: true }),
   },
   (t) => [index("alerts_tenant_status_idx").on(t.tenantId, t.status)],
 );
 
+/** Per-tenant proof-of-delivery policy. service_type '*' is the default. */
+export const proofPolicies = pgTable(
+  "proof_policies",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    serviceType: text("service_type").notNull().default("*"),
+    requireRecipient: boolean("require_recipient").notNull().default(true),
+    requireSignature: boolean("require_signature").notNull().default(false),
+    requirePhoto: boolean("require_photo").notNull().default(false),
+    requireFailurePhoto: boolean("require_failure_photo").notNull().default(false),
+    updatedAt,
+  },
+  (t) => [primaryKey({ columns: [t.tenantId, t.serviceType] })],
+);
+
+/** Evidence metadata. Binary media lives in the private evidence store. */
+export const stopEvidence = pgTable(
+  "stop_evidence",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    stopId: uuid("stop_id")
+      .notNull()
+      .references(() => jobStops.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    storageKey: text("storage_key").notNull(),
+    contentHash: text("content_hash").notNull(),
+    mimeType: text("mime_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true }),
+    uploadedBy: uuid("uploaded_by"),
+    createdAt,
+  },
+  (t) => [
+    uniqueIndex("stop_evidence_stop_kind_uq").on(t.stopId, t.kind),
+    index("stop_evidence_job_idx").on(t.jobId),
+  ],
+);
 /** Transactional outbox (ADR-0008): written in the command transaction. */
 export const outbox = pgTable(
   "outbox",
@@ -402,6 +452,8 @@ export const tenantTables = [
   refreshTokens,
   idempotencyKeys,
   demoScenarios,
+  proofPolicies,
+  stopEvidence,
 ] as const;
 
 /** Tables isolated by tenant_id (tenants itself keys on id). */
@@ -417,7 +469,12 @@ export const tenantScopedTables = [
   refreshTokens,
   idempotencyKeys,
   demoScenarios,
+  proofPolicies,
+  stopEvidence,
 ] as const;
+
+
+
 
 
 

@@ -18,7 +18,20 @@ import type {
   RoutePath,
   VehicleDto,
 } from "@privatefleet/contracts";
-import { EVENT_SCHEMA_VERSION } from "@privatefleet/contracts";
+import {
+  EVENT_SCHEMA_VERSION,
+  FAILURE_REASON_CODES,
+  type FailureReasonCode,
+} from "@privatefleet/contracts";
+
+const FAILURE_REASON_LABELS: Record<FailureReasonCode, string> = {
+  RECIPIENT_UNAVAILABLE: "Recipient unavailable",
+  DELIVERY_REFUSED: "Delivery refused",
+  ADDRESS_ACCESS_PROBLEM: "Address or access problem",
+  ITEM_DAMAGED: "Item damaged",
+  VEHICLE_OPERATIONAL_PROBLEM: "Vehicle or operational problem",
+  OTHER: "Delivery exception",
+};
 import type { RealtimeBus } from "../../lib/realtime.js";
 import { withTenant, type Database, type DbHandle } from "../../db/client.js";
 
@@ -32,7 +45,10 @@ export class FleetError extends Error {
       | "STOP_NOT_ASSIGNED_TO_DRIVER"
       | "INVALID_STOP_TRANSITION"
       | "ALERT_NOT_FOUND"
-      | "IDEMPOTENCY_CONFLICT",
+      | "IDEMPOTENCY_CONFLICT"
+      | "EVIDENCE_REQUIRED"
+      | "EVIDENCE_ALREADY_RECORDED"
+      | "FAILURE_REASON_INVALID"
   ) {
     super(code);
   }
@@ -62,6 +78,8 @@ interface StopRow {
   window_end: Date | string | null;
   arrived_at: Date | string | null;
   completed_at: Date | string | null;
+  failure_code: string | null;
+  failure_note: string | null;
 }
 
 interface DriverRow {
@@ -99,6 +117,8 @@ interface AlertRow {
   location: string;
   freshness: string;
   recommended_action: string;
+  job_id: string | null;
+  stop_id: string | null;
   created_at: Date | string;
 }
 
@@ -136,7 +156,7 @@ export class PgFleetService {
       )) as unknown as JobRow[];
       const stops = (await db.execute(
         sql`SELECT id, job_id, sequence, stop_type, address, latitude, longitude, status,
-                   window_start, window_end, arrived_at, completed_at
+                   window_start, window_end, arrived_at, completed_at, failure_code, failure_note
             FROM job_stops ORDER BY job_id, sequence`,
       )) as unknown as StopRow[];
       const drivers = (await db.execute(
@@ -148,7 +168,7 @@ export class PgFleetService {
       )) as unknown as VehicleRow[];
       const alerts = (await db.execute(
         sql`SELECT id, severity, status, title, entity, location, freshness,
-                   recommended_action, created_at
+                   recommended_action, job_id, stop_id, created_at
             FROM alerts ORDER BY created_at DESC`,
       )) as unknown as AlertRow[];
 
@@ -196,6 +216,8 @@ export class PgFleetService {
           ...(iso(stop.window_end) ? { windowEnd: iso(stop.window_end) } : {}),
           ...(iso(stop.arrived_at) ? { arrivedAt: iso(stop.arrived_at) } : {}),
           ...(iso(stop.completed_at) ? { completedAt: iso(stop.completed_at) } : {}),
+          ...(stop.failure_code ? { failureCode: stop.failure_code } : {}),
+          ...(stop.failure_note ? { failureNote: stop.failure_note } : {}),
         });
         stopsByJob.set(stop.job_id, list);
       }
@@ -244,6 +266,8 @@ export class PgFleetService {
           location: alert.location,
           freshness: alert.freshness,
           recommendedAction: alert.recommended_action,
+          ...(alert.job_id ? { relatedJobId: alert.job_id } : {}),
+          ...(alert.stop_id ? { relatedStopId: alert.stop_id } : {}),
           createdAt: iso(alert.created_at) ?? new Date().toISOString(),
           acknowledged: alert.status !== "open",
           audit: [],
@@ -480,6 +504,26 @@ export class PgFleetService {
       if (stop.status !== "arrived" && stop.status !== "pending") {
         throw new FleetError("INVALID_STOP_TRANSITION");
       }
+
+      const contextRows = (await db.execute(
+        sql`SELECT j.service_type FROM jobs j WHERE j.id = ${jobId}`,
+      )) as unknown as Array<{ service_type: string }>;
+      const policy = await this.resolvePolicy(db, tenantId, contextRows[0]?.service_type ?? "*");
+      const evidence = (await db.execute(
+        sql`SELECT id, kind, content_hash FROM stop_evidence WHERE stop_id = ${stopId}`,
+      )) as unknown as Array<{ id: string; kind: string; content_hash: string }>;
+      const kinds = new Set(evidence.map((item) => item.kind));
+
+      if (policy.requireRecipient && !details.recipientName?.trim()) {
+        throw new FleetError("EVIDENCE_REQUIRED");
+      }
+      if (policy.requireSignature && !kinds.has("signature")) {
+        throw new FleetError("EVIDENCE_REQUIRED");
+      }
+      if (policy.requirePhoto && !kinds.has("photo")) {
+        throw new FleetError("EVIDENCE_REQUIRED");
+      }
+
       await db.execute(
         sql`UPDATE job_stops SET status = 'completed', completed_at = now() WHERE id = ${stopId}`,
       );
@@ -489,6 +533,12 @@ export class PgFleetService {
         stopId,
         driverId,
         ...details,
+        proofPolicy: policy,
+        evidence: evidence.map((item) => ({
+          id: item.id,
+          kind: item.kind,
+          contentHash: item.content_hash,
+        })),
       });
       return { stopId, status: "completed", jobStatus };
     });
@@ -500,25 +550,85 @@ export class PgFleetService {
     jobId: string,
     stopId: string,
     driverId: string,
-    reason: string,
+    failure: { reasonCode: FailureReasonCode; note?: string | undefined },
     idempotencyKey: string | undefined,
-  ): Promise<{ stopId: string; status: string; jobStatus: string }> {
+  ): Promise<{ stopId: string; status: string; jobStatus: string; failureCode: FailureReasonCode }> {
     return this.idempotent(tenantId, idempotencyKey, "POST /v1/jobs/:id/stops/:id/skip", async (db) => {
       const stop = await this.requireStop(db, jobId, stopId, driverId);
       if (stop.status === "completed" || stop.status === "skipped") {
         throw new FleetError("INVALID_STOP_TRANSITION");
       }
+      const contextRows = (await db.execute(
+        sql`SELECT s.address, j.service_type FROM job_stops s
+            JOIN jobs j ON j.id = s.job_id
+            WHERE s.id = ${stopId} AND s.job_id = ${jobId}`,
+      )) as unknown as Array<{ address: string; service_type: string }>;
+      const context = contextRows[0];
+      if (!context) throw new FleetError("STOP_NOT_FOUND");
+      const policy = await this.resolvePolicy(db, tenantId, context.service_type);
+      const failureEvidence = (await db.execute(
+        sql`SELECT id, kind, content_hash FROM stop_evidence
+            WHERE stop_id = ${stopId} AND kind = 'failure_photo'`,
+      )) as unknown as Array<{ id: string; kind: string; content_hash: string }>;
+      if (policy.requireFailurePhoto && failureEvidence.length === 0) {
+        throw new FleetError("EVIDENCE_REQUIRED");
+      }
+
+      const failureCode = FAILURE_REASON_CODES.includes(failure.reasonCode)
+        ? failure.reasonCode
+        : "OTHER";
       await db.execute(
-        sql`UPDATE job_stops SET status = 'skipped', completed_at = now() WHERE id = ${stopId}`,
+        sql`UPDATE job_stops
+            SET status = 'skipped', completed_at = now(),
+                failure_code = ${failureCode}, failure_note = ${failure.note ?? null}
+            WHERE id = ${stopId}`,
       );
       const jobStatus = await this.resolveJobStatus(db, jobId);
       await this.eventAndOutbox(db, tenantId, jobId, actorId, "job.skipped", {
         jobId,
         stopId,
         driverId,
-        reason,
+        reasonCode: failureCode,
+        reasonLabel: FAILURE_REASON_LABELS[failureCode],
+        ...(failure.note ? { note: failure.note } : {}),
+        evidence: failureEvidence.map((item) => ({
+          id: item.id,
+          kind: item.kind,
+          contentHash: item.content_hash,
+        })),
       });
-      return { stopId, status: "skipped", jobStatus };
+
+      const alertId = randomUUID();
+      const jobReference = (await db.execute(
+        sql`SELECT reference FROM jobs WHERE id = ${jobId}`,
+      )) as unknown as Array<{ reference: string }>;
+      const reference = jobReference[0]?.reference ?? jobId;
+      const severity = failureCode === "ITEM_DAMAGED" || failureCode === "DELIVERY_REFUSED"
+        ? "urgent"
+        : "at_risk";
+      await db.execute(sql`
+        INSERT INTO alerts
+          (id, tenant_id, severity, status, title, entity, location, freshness,
+           recommended_action, reference, job_id, stop_id)
+        VALUES
+          (${alertId}, ${tenantId}, ${severity}, 'open',
+           ${`${FAILURE_REASON_LABELS[failureCode]} - ${reference}`},
+           ${`Job ${reference}`}, ${context.address},
+           ${`Reported ${new Date().toISOString()}`},
+           'Review the evidence, contact the customer, then retry, reschedule or return to depot.',
+           ${reference}, ${jobId}, ${stopId})
+      `);
+      await this.insertOutbox(
+        db,
+        tenantId,
+        this.outboxEvent(tenantId, "alert", alertId, "alert.created", {
+          alertId,
+          jobId,
+          stopId,
+          reasonCode: failureCode,
+        }),
+      );
+      return { stopId, status: "skipped", jobStatus, failureCode };
     });
   }
 
@@ -534,7 +644,7 @@ export class PgFleetService {
       const rows = (await db.execute(
         sql`UPDATE alerts SET status = ${nextStatus}, acted_at = now()
             WHERE id = ${alertId} RETURNING id, severity, status, title, entity, location,
-              freshness, recommended_action, created_at`,
+              freshness, recommended_action, job_id, stop_id, created_at`,
       )) as unknown as AlertRow[];
       const alert = rows[0];
       if (!alert) {
@@ -621,6 +731,49 @@ export class PgFleetService {
   }
 
   // --- helpers ---------------------------------------------------------
+
+  private async resolvePolicy(
+    db: Database,
+    tenantId: string,
+    serviceType: string,
+  ): Promise<{
+    serviceType: string;
+    requireRecipient: boolean;
+    requireSignature: boolean;
+    requirePhoto: boolean;
+    requireFailurePhoto: boolean;
+  }> {
+    const rows = (await db.execute(
+      sql`SELECT service_type, require_recipient, require_signature, require_photo,
+                 require_failure_photo
+          FROM proof_policies
+          WHERE tenant_id = ${tenantId} AND service_type IN (${serviceType}, '*')
+          ORDER BY CASE WHEN service_type = ${serviceType} THEN 0 ELSE 1 END
+          LIMIT 1`,
+    )) as unknown as Array<{
+      service_type: string;
+      require_recipient: boolean;
+      require_signature: boolean;
+      require_photo: boolean;
+      require_failure_photo: boolean;
+    }>;
+    const row = rows[0];
+    return row
+      ? {
+          serviceType: row.service_type,
+          requireRecipient: row.require_recipient,
+          requireSignature: row.require_signature,
+          requirePhoto: row.require_photo,
+          requireFailurePhoto: row.require_failure_photo,
+        }
+      : {
+          serviceType: "*",
+          requireRecipient: true,
+          requireSignature: false,
+          requirePhoto: false,
+          requireFailurePhoto: false,
+        };
+  }
 
   private async requireStop(
     db: Database,
@@ -770,6 +923,9 @@ export class PgFleetService {
     }
   }
 }
+
+
+
 
 
 

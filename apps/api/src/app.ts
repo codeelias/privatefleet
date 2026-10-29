@@ -23,6 +23,9 @@ import { registerOptimizationRoutes } from "./modules/optimization/routes.js";
 import { createRoutingClients } from "./modules/routing/factory.js";
 import { RoutingError } from "./modules/routing/types.js";
 import { registerDemoRoutes } from "./modules/demo/routes.js";
+import { EvidenceError, EvidenceService } from "./modules/evidence/service.js";
+import { EvidenceStore } from "./modules/evidence/storage.js";
+import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
 export interface DemoContext {
@@ -34,6 +37,7 @@ export interface PostgresContext {
   db: DbHandle;
   auth: AuthService;
   fleet: PgFleetService;
+  evidence: EvidenceService;
   bus: RealtimeBus;
 }
 
@@ -61,6 +65,18 @@ const ERROR_MAP: Record<string, { status: number; uiMessage: string }> = {
   IDEMPOTENCY_CONFLICT: {
     status: 409,
     uiMessage: "This action was already processed with different data. Refresh and try again.",
+  },
+  EVIDENCE_REQUIRED: {
+    status: 422,
+    uiMessage: "Capture the required proof before completing this stop.",
+  },
+  EVIDENCE_ALREADY_RECORDED: {
+    status: 409,
+    uiMessage: "Different proof is already recorded for this stop.",
+  },
+  FAILURE_REASON_INVALID: {
+    status: 400,
+    uiMessage: "Choose a valid failure reason.",
   },
   STOP_NOT_FOUND: {
     status: 404,
@@ -156,7 +172,35 @@ export function buildApp(config: AppConfig): {
         uiMessage,
       });
     }
-    if (err instanceof FleetError) {
+    if (err instanceof EvidenceError) {
+      const status =
+        err.code === "EVIDENCE_REQUIRED"
+          ? 422
+          : err.code === "EVIDENCE_ALREADY_RECORDED"
+            ? 409
+            : err.code === "EVIDENCE_TOO_LARGE"
+              ? 413
+              : err.code === "STOP_NOT_FOUND"
+                ? 404
+                : err.code === "STOP_NOT_ASSIGNED_TO_DRIVER"
+                  ? 403
+                  : 400;
+      return reply.status(status).send({
+        type: `https://privatefleet.example/errors/${err.code.toLowerCase()}`,
+        title: status === 422 ? "Evidence required" : "Evidence could not be recorded",
+        status,
+        code: err.code,
+        detail: err.message,
+        uiMessage:
+          err.code === "EVIDENCE_REQUIRED"
+            ? "Capture the required proof before completing this stop."
+            : err.code === "EVIDENCE_TOO_LARGE"
+              ? "That file is too large. Choose a smaller photo."
+              : err.code === "STOP_NOT_ASSIGNED_TO_DRIVER"
+                ? "This stop is not assigned to you."
+                : "The evidence could not be saved. Try again.",
+      });
+    }    if (err instanceof FleetError) {
       const mapped = ERROR_MAP[err.code];
       if (mapped) {
         return reply.status(mapped.status).send({
@@ -223,6 +267,7 @@ export function buildApp(config: AppConfig): {
       verifyToken: (token) => auth.verifyAccess(token),
     });
     const fleet = new PgFleetService(db, bus);
+    const evidence = new EvidenceService(db, new EvidenceStore(config.evidenceDir));
     const authAttemptLimiter = new AuthAttemptLimiter({
       windowMs: config.authAttemptWindowSeconds * 1000,
       maxAccountFailures: config.authMaxAttemptsAccount,
@@ -231,6 +276,7 @@ export function buildApp(config: AppConfig): {
     });
     registerAuthRoutes(app, auth, authAttemptLimiter);
     registerFleetRoutes(app, auth, fleet);
+    registerEvidenceRoutes(app, auth, fleet, evidence);
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter);
     registerTrackingRoutes(app, auth, bus, db);
     const routingClients =
@@ -249,7 +295,7 @@ export function buildApp(config: AppConfig): {
     app.addHook("onClose", async () => {
       await closeDb(db);
     });
-    postgres = { db, auth, fleet, bus };
+    postgres = { db, auth, fleet, evidence, bus };
   } else {
     const store = new DemoStore("morning-rush");
     const bus = createRealtimeBus(app.server, { demoMode: true });
@@ -259,6 +305,9 @@ export function buildApp(config: AppConfig): {
 
   return { app, demo, postgres };
 }
+
+
+
 
 
 

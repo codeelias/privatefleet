@@ -33,6 +33,8 @@ const TENANT_TABLES = [
   "routes",
   "route_stops",
   "optimization_runs",
+  "proof_policies",
+  "stop_evidence",
 ] as const;
 
 let runtime: DbHandle;

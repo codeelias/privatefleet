@@ -28,6 +28,7 @@ const EnvSchema = z.object({
   CORS_ORIGINS: z.string().optional(),
   OSRM_BASE_URL: z.string().url().optional(),
   VROOM_BASE_URL: z.string().url().optional(),
+  EVIDENCE_DIR: z.string().optional(),
 });
 
 const DEMO_SECRET = "dev-only-insecure-jwt-secret-change-me";
@@ -48,6 +49,7 @@ export interface AppConfig {
   corsOrigins: string[];
   osrmBaseUrl: string | undefined;
   vroomBaseUrl: string | undefined;
+  evidenceDir: string;
   name: string;
   version: string;
 }
@@ -84,6 +86,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     logLevel: data.LOG_LEVEL,
     osrmBaseUrl: data.OSRM_BASE_URL,
     vroomBaseUrl: data.VROOM_BASE_URL,
+    evidenceDir: data.EVIDENCE_DIR ?? `${process.cwd()}/.data/evidence`,
     corsOrigins: (data.CORS_ORIGINS ?? "")
       .split(",")
       .map((origin) => origin.trim())
@@ -100,6 +103,9 @@ export function migrationDatabaseUrl(env: NodeJS.ProcessEnv = process.env): stri
     "postgres://privatefleet:privatefleet_dev_pw@127.0.0.1:5432/privatefleet_dev"
   );
 }
+
+
+
 
 
 

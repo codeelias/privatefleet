@@ -26,7 +26,9 @@ export const AlertDtoSchema = z.object({
   severity: z.enum(["info", "at_risk", "urgent"]),
   title: z.string(),
   relatedJobId: IdSchema.optional(),
+  relatedStopId: IdSchema.optional(),
   relatedVehicleId: IdSchema.optional(),
+  failureCode: z.string().optional(),
   createdAt: z.string().datetime(),
   entity: z.string(),
   location: z.string(),
@@ -36,6 +38,47 @@ export const AlertDtoSchema = z.object({
   audit: z.array(AlertAuditEntrySchema),
 });
 export type AlertDto = z.infer<typeof AlertDtoSchema>;
+
+export const FAILURE_REASON_CODES = [
+  "RECIPIENT_UNAVAILABLE",
+  "DELIVERY_REFUSED",
+  "ADDRESS_ACCESS_PROBLEM",
+  "ITEM_DAMAGED",
+  "VEHICLE_OPERATIONAL_PROBLEM",
+  "OTHER",
+] as const;
+export const FailureReasonCodeSchema = z.enum(FAILURE_REASON_CODES);
+export type FailureReasonCode = z.infer<typeof FailureReasonCodeSchema>;
+
+export const EVIDENCE_KINDS = ["signature", "photo", "failure_photo"] as const;
+export const EvidenceKindSchema = z.enum(EVIDENCE_KINDS);
+export type EvidenceKind = z.infer<typeof EvidenceKindSchema>;
+
+export const StopEvidenceDtoSchema = z.object({
+  id: IdSchema,
+  kind: EvidenceKindSchema,
+  mimeType: z.string(),
+  byteSize: z.number().int().positive(),
+  contentHash: z.string(),
+  capturedAt: z.string().datetime().optional(),
+  uploadedBy: IdSchema.optional(),
+  dataBase64: z.string().optional(),
+});
+export type StopEvidenceDto = z.infer<typeof StopEvidenceDtoSchema>;
+
+export const EvidenceListSchema = z.object({
+  evidence: z.array(StopEvidenceDtoSchema),
+});
+export type EvidenceList = z.infer<typeof EvidenceListSchema>;
+
+export const ProofPolicySchema = z.object({
+  serviceType: z.string(),
+  requireRecipient: z.boolean(),
+  requireSignature: z.boolean(),
+  requirePhoto: z.boolean(),
+  requireFailurePhoto: z.boolean(),
+});
+export type ProofPolicy = z.infer<typeof ProofPolicySchema>;
 
 export const ServiceZoneSchema = z.object({
   id: IdSchema,

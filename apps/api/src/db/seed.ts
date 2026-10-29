@@ -69,6 +69,11 @@ export async function seedTenant(
       ${JSON.stringify({ primary: "#4F8CFF", accent: "#22C55E" })}::jsonb)
   `;
   await sql`
+    INSERT INTO proof_policies (tenant_id, service_type, require_recipient, require_signature, require_photo, require_failure_photo)
+    VALUES (${tenantId}, '*', true, false, false, false)
+    ON CONFLICT (tenant_id, service_type) DO NOTHING
+  `;
+  await sql`
     INSERT INTO users (id, tenant_id, email, password_hash, role)
     VALUES (${userId}, ${tenantId}, ${options.email.toLowerCase()}, ${passwordHash}, 'owner')
   `;
@@ -199,6 +204,7 @@ if (process.argv[1] && process.argv[1].endsWith("seed.ts")) {
     process.exitCode = 1;
   });
 }
+
 
 
 

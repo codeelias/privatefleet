@@ -35,7 +35,8 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'users', 'vehicles', 'drivers', 'jobs', 'job_stops', 'job_events',
     'alerts', 'outbox', 'refresh_tokens', 'idempotency_keys', 'demo_scenarios',
-    'location_points', 'routes', 'route_stops', 'optimization_runs'
+    'location_points', 'routes', 'route_stops', 'optimization_runs',
+    'proof_policies', 'stop_evidence'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
@@ -48,6 +49,11 @@ BEGIN
 END
 $$;
 
+-- Default proof policy for every tenant: recipient required; signature/photo
+-- optional until the operator configures a stricter policy.
+INSERT INTO proof_policies (tenant_id, service_type, require_recipient, require_signature, require_photo, require_failure_photo)
+SELECT id, '*', true, false, false, false FROM tenants
+ON CONFLICT (tenant_id, service_type) DO NOTHING;
 -- --- Grants for the runtime role -------------------------------------
 GRANT USAGE ON SCHEMA public TO privatefleet_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO privatefleet_app;
@@ -112,4 +118,5 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION auth_driver_by_id(uuid) TO privatefleet_app;
+
 

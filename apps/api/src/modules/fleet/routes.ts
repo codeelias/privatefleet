@@ -6,7 +6,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { AssignRequestSchema } from "@privatefleet/contracts";
+import { AssignRequestSchema, FailureReasonCodeSchema } from "@privatefleet/contracts";
 import type { AuthService } from "../auth/service.js";
 import { makeAuthGuard } from "../auth/guard.js";
 import type { PgFleetService } from "./pg-service.js";
@@ -24,10 +24,16 @@ const CompleteBodySchema = z.object({
   recipientName: z.string().optional(),
   notes: z.string().optional(),
 });
-const SkipBodySchema = z.object({
-  driverId: z.string().uuid(),
-  reason: z.string().min(1),
-});
+const SkipBodySchema = z
+  .object({
+    driverId: z.string().uuid(),
+    reasonCode: FailureReasonCodeSchema.optional(),
+    reason: z.string().max(1000).optional(),
+    note: z.string().max(1000).optional(),
+  })
+  .refine((value) => Boolean(value.reasonCode || value.reason), {
+    message: "A structured failure reason is required",
+  });
 const AlertParamSchema = z.object({ alertId: z.string().uuid() });
 
 /** Driver tokens may only act as themselves; staff tokens may delegate. */
@@ -170,7 +176,10 @@ export function registerFleetRoutes(
         params.jobId,
         params.stopId,
         driverId,
-        body.reason,
+        {
+          reasonCode: body.reasonCode ?? "OTHER",
+          note: body.note ?? body.reason,
+        },
         idempotencyKey(request),
       );
       await fleet.publishPending(tenantId);
@@ -206,6 +215,7 @@ export function registerFleetRoutes(
     return result;
   });
 }
+
 
 
 

@@ -36,6 +36,7 @@ interface DriverFixture {
   ownerToken: string;
   driverA: { id: string; vehicleId: string; jobId: string; stopId: string };
   driverB: { id: string; vehicleId: string; jobId: string; stopId: string };
+  driverC: { id: string; vehicleId: string; jobId: string; stopId: string };
 }
 
 async function registerTenant(name: string): Promise<{
@@ -70,7 +71,7 @@ async function registerTenant(name: string): Promise<{
 async function seedDriverFleet(fixture: DriverFixture): Promise<void> {
   const sql = migrator.sql;
   const pinHash = await argonHash("1234");
-  for (const driver of [fixture.driverA, fixture.driverB]) {
+  for (const driver of [fixture.driverA, fixture.driverB, fixture.driverC]) {
     await sql`INSERT INTO vehicles (id, tenant_id, registration, vehicle_type, status, driver_id)
       VALUES (${driver.vehicleId}, ${fixture.tenantId}, ${"VAN-" + randomUUID().slice(0, 4)}, 'Van', 'available', ${driver.id})`;
     await sql`INSERT INTO drivers (id, tenant_id, full_name, status, pin_hash, vehicle_id, last_ping_at)
@@ -104,6 +105,12 @@ beforeAll(async () => {
       stopId: randomUUID(),
     },
     driverB: {
+      id: randomUUID(),
+      vehicleId: randomUUID(),
+      jobId: randomUUID(),
+      stopId: randomUUID(),
+    },
+    driverC: {
       id: randomUUID(),
       vehicleId: randomUUID(),
       jobId: randomUUID(),
@@ -310,6 +317,155 @@ describe("seeded single-stop job (device acceptance fixture)", () => {
   });
 });
 
+describe("proof of delivery and structured failures", () => {
+  const pngBase64 =
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+
+  it("enforces proof policy, stores evidence, and creates a real failure alert", async () => {
+    const token = await driverLogin(fleet.driverC.id);
+    await migrator.sql`
+      INSERT INTO proof_policies
+        (tenant_id, service_type, require_recipient, require_signature, require_photo, require_failure_photo)
+      VALUES (${fleet.tenantId}, 'Pickup', true, true, true, true)
+      ON CONFLICT (tenant_id, service_type) DO UPDATE SET
+        require_recipient = true, require_signature = true, require_photo = true,
+        require_failure_photo = true
+    `;
+
+    const missing = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${fleet.driverC.jobId}/stops/${fleet.driverC.stopId}/complete`,
+      headers: { ...authed(token), "idempotency-key": randomUUID() },
+      payload: { driverId: fleet.driverC.id, recipientName: "Recipient" },
+    });
+    expect(missing.statusCode).toBe(422);
+    expect((missing.json() as { code: string }).code).toBe("EVIDENCE_REQUIRED");
+
+    const before = await app.inject({
+      method: "GET",
+      url: "/v1/fleet/state",
+      headers: authed(fleet.ownerToken),
+    });
+    const beforeStop = (
+      before.json() as { jobs: Array<{ id: string; stops: Array<{ id: string; status: string }> }> }
+    ).jobs
+      .find((job) => job.id === fleet.driverC.jobId)
+      ?.stops.find((stop) => stop.id === fleet.driverC.stopId);
+    expect(beforeStop?.status).toBe("pending");
+
+    const signature = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${fleet.driverC.jobId}/stops/${fleet.driverC.stopId}/evidence`,
+      headers: authed(token),
+      payload: { kind: "signature", pathData: "M10 10 L20 20 L30 10" },
+    });
+    expect(signature.statusCode).toBe(200);
+    expect((signature.json() as { kind: string }).kind).toBe("signature");
+
+    const photo = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${fleet.driverC.jobId}/stops/${fleet.driverC.stopId}/evidence`,
+      headers: authed(token),
+      payload: { kind: "photo", dataBase64: pngBase64 },
+    });
+    expect(photo.statusCode).toBe(200);
+
+    const completeKey = randomUUID();
+    const complete = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${fleet.driverC.jobId}/stops/${fleet.driverC.stopId}/complete`,
+      headers: { ...authed(token), "idempotency-key": completeKey },
+      payload: { driverId: fleet.driverC.id, recipientName: "Recipient", notes: "Left with concierge" },
+    });
+    expect(complete.statusCode).toBe(200);
+    const replay = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${fleet.driverC.jobId}/stops/${fleet.driverC.stopId}/complete`,
+      headers: { ...authed(token), "idempotency-key": completeKey },
+      payload: { driverId: fleet.driverC.id, recipientName: "Recipient", notes: "Left with concierge" },
+    });
+    expect(replay.json()).toEqual(complete.json());
+
+    const evidence = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/${fleet.driverC.jobId}/stops/${fleet.driverC.stopId}/evidence`,
+      headers: authed(fleet.ownerToken),
+    });
+    expect(evidence.statusCode).toBe(200);
+    const evidenceBody = evidence.json() as { evidence: Array<{ kind: string; dataBase64: string }> };
+    expect(evidenceBody.evidence.map((item) => item.kind).sort()).toEqual(["photo", "signature"]);
+    expect(evidenceBody.evidence.every((item) => item.dataBase64.length > 0)).toBe(true);
+
+    const anonymous = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/${fleet.driverC.jobId}/stops/${fleet.driverC.stopId}/evidence`,
+    });
+    expect(anonymous.statusCode).toBe(401);
+
+    const failureJob = randomUUID();
+    const failureStop = randomUUID();
+    await migrator.sql`
+      INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status, assigned_driver_id, assigned_vehicle_id)
+      VALUES (${failureJob}, ${fleet.tenantId}, ${"F-" + randomUUID().slice(0, 4)}, 'Pickup', 'standard', 'assigned', ${fleet.driverC.id}, ${fleet.driverC.vehicleId})
+    `;
+    await migrator.sql`
+      INSERT INTO job_stops (id, tenant_id, job_id, sequence, stop_type, address, latitude, longitude,
+        window_start, window_end, status)
+      VALUES (${failureStop}, ${fleet.tenantId}, ${failureJob}, 1, 'pickup', 'Failure Street, London',
+        51.5, -0.1, now(), now() + interval '1 hour', 'arrived')
+    `;
+    const failurePhoto = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${failureJob}/stops/${failureStop}/evidence`,
+      headers: authed(token),
+      payload: { kind: "failure_photo", dataBase64: pngBase64 },
+    });
+    expect(failurePhoto.statusCode).toBe(200);
+
+    const skipKey = randomUUID();
+    const skip = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${failureJob}/stops/${failureStop}/skip`,
+      headers: { ...authed(token), "idempotency-key": skipKey },
+      payload: { driverId: fleet.driverC.id, reasonCode: "RECIPIENT_UNAVAILABLE", note: "No answer" },
+    });
+    expect(skip.statusCode).toBe(200);
+    expect((skip.json() as { failureCode: string }).failureCode).toBe("RECIPIENT_UNAVAILABLE");
+    const replaySkip = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${failureJob}/stops/${failureStop}/skip`,
+      headers: { ...authed(token), "idempotency-key": skipKey },
+      payload: { driverId: fleet.driverC.id, reasonCode: "RECIPIENT_UNAVAILABLE", note: "No answer" },
+    });
+    expect(replaySkip.json()).toEqual(skip.json());
+
+    const alertRows = (await migrator.sql`
+      SELECT count(*)::int AS count FROM alerts
+      WHERE tenant_id = ${fleet.tenantId} AND job_id = ${failureJob}
+        AND stop_id = ${failureStop} AND status = 'open'
+    `) as unknown as Array<{ count: number }>;
+    expect(alertRows[0]?.count).toBe(1);
+
+    const state = await app.inject({
+      method: "GET",
+      url: "/v1/fleet/state",
+      headers: authed(fleet.ownerToken),
+    });
+    const failedStop = (
+      state.json() as { jobs: Array<{ id: string; stops: Array<{ id: string; failureCode?: string }> }> }
+    ).jobs
+      .find((job) => job.id === failureJob)
+      ?.stops.find((stop) => stop.id === failureStop);
+    expect(failedStop?.failureCode).toBe("RECIPIENT_UNAVAILABLE");
+
+    await migrator.sql`
+      UPDATE proof_policies
+      SET require_signature = false, require_photo = false, require_failure_photo = false
+      WHERE tenant_id = ${fleet.tenantId} AND service_type = 'Pickup'
+    `;
+  });
+});
+
 describe("driver actions reach dispatch", () => {
   it("arrives and completes with idempotent replay, dispatcher sees it", async () => {
     const tokenA = await driverLogin(fleet.driverA.id);
@@ -385,6 +541,7 @@ describe("driver actions reach dispatch", () => {
     expect(events[0]?.count).toBe(1);
   });
 });
+
 
 
 
