@@ -21,6 +21,56 @@ export const AlertAuditEntrySchema = z.object({
 });
 export type AlertAuditEntry = z.infer<typeof AlertAuditEntrySchema>;
 
+export const ImportStopSchema = z.object({
+  sequenceNo: z.number().int().positive(),
+  stopType: z.enum(["pickup", "dropoff", "waypoint"]),
+  address: z.string().min(1).max(300),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  windowStart: z.string().datetime().optional(),
+  windowEnd: z.string().datetime().optional(),
+});
+export type ImportStop = z.infer<typeof ImportStopSchema>;
+
+export const ImportJobSchema = z.object({
+  jobRef: z.string().min(1).max(80),
+  serviceType: z.string().min(1).max(80),
+  priority: z.enum(["standard", "urgent", "stat"]),
+  stops: z.array(ImportStopSchema).min(1).max(20),
+});
+export type ImportJob = z.infer<typeof ImportJobSchema>;
+
+export const ImportPreviewRowSchema = z.object({
+  row: z.number().int().positive(),
+  jobRef: z.string(),
+  stopCount: z.number().int().positive(),
+  address: z.string(),
+  status: z.enum(["valid", "invalid", "duplicate"]),
+  errors: z.array(z.string()),
+});
+export type ImportPreviewRow = z.infer<typeof ImportPreviewRowSchema>;
+
+export const JobImportPreviewSchema = z.object({
+  valid: z.number().int().nonnegative(),
+  invalid: z.number().int().nonnegative(),
+  duplicates: z.number().int().nonnegative(),
+  canCommit: z.boolean(),
+  preview: z.array(ImportPreviewRowSchema),
+  jobs: z.array(ImportJobSchema),
+});
+export type JobImportPreview = z.infer<typeof JobImportPreviewSchema>;
+
+export const JobImportCommitRequestSchema = z.object({
+  jobs: z.array(ImportJobSchema).min(1).max(5000),
+});
+export type JobImportCommitRequest = z.infer<typeof JobImportCommitRequestSchema>;
+
+export const JobImportCommitResponseSchema = z.object({
+  imported: z.number().int().positive(),
+  jobIds: z.array(z.string().uuid()),
+  references: z.array(z.string()),
+});
+export type JobImportCommitResponse = z.infer<typeof JobImportCommitResponseSchema>;
 export const AlertDtoSchema = z.object({
   id: IdSchema,
   severity: z.enum(["info", "at_risk", "urgent"]),
@@ -385,3 +435,4 @@ export const AssignResponseSchema = z.object({
   etaImpactMinutes: z.number().int().nonnegative(),
 });
 export type AssignResponse = z.infer<typeof AssignResponseSchema>;
+

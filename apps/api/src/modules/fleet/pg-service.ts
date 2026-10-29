@@ -14,7 +14,9 @@ import type {
   EventEnvelope,
   FleetState,
   JobDto,
+  JobImportPreview,
   JobStopDto,
+  ImportJob,
   RoutePath,
   VehicleDto,
 } from "@privatefleet/contracts";
@@ -33,6 +35,14 @@ const FAILURE_REASON_LABELS: Record<FailureReasonCode, string> = {
   OTHER: "Delivery exception",
 };
 import type { RealtimeBus } from "../../lib/realtime.js";
+import {
+  buildImportCandidates,
+  candidateToJob,
+  ImportError,
+  validateImportJobs,
+  type ImportCandidate,
+  type ImportServiceArea,
+} from "../import/csv.js";
 import { withTenant, type Database, type DbHandle } from "../../db/client.js";
 
 export class FleetError extends Error {
@@ -678,6 +688,207 @@ export class PgFleetService {
     });
   }
 
+  /** Validate CSV into a preview without writing jobs. */
+  async importPreview(
+    tenantId: string,
+    csv: string,
+    area: ImportServiceArea,
+  ): Promise<JobImportPreview> {
+    return withTenant(this.handle, tenantId, async (db) => {
+      const candidates = buildImportCandidates(csv);
+      await this.applyImportArea(db, candidates, area);
+      await this.applyImportDuplicates(db, candidates);
+      const duplicateCount = candidates.filter((candidate) =>
+        candidate.errors.some((error) => error === "Job reference already exists."),
+      ).length;
+      const invalidCount = candidates.filter(
+        (candidate) =>
+          candidate.errors.length > 0 &&
+          !candidate.errors.includes("Job reference already exists."),
+      ).length;
+      const validCount = candidates.length - duplicateCount - invalidCount;
+      return {
+        valid: validCount,
+        invalid: invalidCount,
+        duplicates: duplicateCount,
+        canCommit: invalidCount === 0 && duplicateCount === 0,
+        preview: candidates.map((candidate) => {
+          const duplicate = candidate.errors.includes("Job reference already exists.");
+          const invalid = candidate.errors.length > 0 && !duplicate;
+          return {
+            row: candidate.firstRow,
+            jobRef: candidate.jobRef,
+            stopCount: candidate.stops.length,
+            address:
+              candidate.stops
+                .map((stop) => stop.address)
+                .filter(Boolean)
+                .join(" -> ") || "(no address)",
+            status: duplicate ? "duplicate" : invalid ? "invalid" : "valid",
+            errors: candidate.errors,
+          } as const;
+        }),
+        jobs: candidates
+          .filter((candidate) => candidate.errors.length === 0)
+          .map(candidateToJob),
+      };
+    });
+  }
+
+  /** Atomically insert the validated preview payload. */
+  async importCommit(
+    tenantId: string,
+    actorId: string,
+    jobsInput: unknown,
+    area: ImportServiceArea,
+    idempotencyKey: string | undefined,
+  ): Promise<{ imported: number; jobIds: string[]; references: string[] }> {
+    return this.idempotent(
+      tenantId,
+      idempotencyKey,
+      "POST /v1/jobs/import/commit",
+      async (db) => {
+        const jobs = validateImportJobs(jobsInput);
+        const candidates = jobs.map((job) => this.importCandidate(job));
+        await this.applyImportArea(db, candidates, area);
+        await this.applyImportDuplicates(db, candidates);
+        const duplicates = candidates.filter((candidate) =>
+          candidate.errors.includes("Job reference already exists."),
+        );
+        if (duplicates.length > 0) {
+          throw new ImportError(
+            "IMPORT_DUPLICATES",
+            `Duplicate job references: ${duplicates.map((candidate) => candidate.jobRef).join(", ")}`,
+          );
+        }
+        const invalid = candidates.filter((candidate) => candidate.errors.length > 0);
+        if (invalid.length > 0) {
+          throw new ImportError(
+            "IMPORT_VALIDATION_FAILED",
+            invalid[0]!.errors[0] ?? "Import validation failed",
+          );
+        }
+
+        const jobIds: string[] = [];
+        const references: string[] = [];
+        for (const candidate of candidates) {
+          const jobId = randomUUID();
+          await db.execute(sql`
+            INSERT INTO jobs
+              (id, tenant_id, reference, service_type, priority, status, version)
+            VALUES
+              (${jobId}, ${tenantId}, ${candidate.jobRef}, ${candidate.serviceType},
+               ${candidate.priority}, 'unassigned', 0)
+          `);
+          for (const [stopIndex, stop] of candidate.stops.entries()) {
+            await db.execute(sql`
+              INSERT INTO job_stops
+                (id, tenant_id, job_id, sequence, stop_type, address, latitude, longitude,
+                 window_start, window_end, status)
+              VALUES
+                (${randomUUID()}, ${tenantId}, ${jobId}, ${stopIndex + 1}, ${stop.stopType},
+                 ${stop.address}, ${stop.latitude}, ${stop.longitude},
+                 ${stop.windowStart}, ${stop.windowEnd}, 'pending')
+            `);
+          }
+          await this.eventAndOutbox(db, tenantId, jobId, actorId, "job.imported", {
+            jobId,
+            reference: candidate.jobRef,
+            serviceType: candidate.serviceType,
+            stopCount: candidate.stops.length,
+          });
+          jobIds.push(jobId);
+          references.push(candidate.jobRef);
+        }
+        return { imported: jobIds.length, jobIds, references };
+      },
+    );
+  }
+
+  private importCandidate(job: ImportJob): ImportCandidate {
+    const now = new Date();
+    const defaultStart = now.toISOString();
+    const defaultEnd = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
+    return {
+      firstRow: 1,
+      jobRef: job.jobRef.trim(),
+      serviceType: job.serviceType.trim(),
+      priority: job.priority,
+      errors: [],
+      stops: job.stops.map((stop, index) => ({
+        row: index + 2,
+        stopType: stop.stopType,
+        address: stop.address.trim(),
+        latitude: stop.latitude,
+        longitude: stop.longitude,
+        windowStart: stop.windowStart ?? defaultStart,
+        windowEnd: stop.windowEnd ?? defaultEnd,
+      })),
+    };
+  }
+
+  private async applyImportArea(
+    db: Database,
+    candidates: ImportCandidate[],
+    area: ImportServiceArea,
+  ): Promise<void> {
+    const points = candidates.flatMap((candidate) =>
+      candidate.stops
+        .filter(
+          (stop) =>
+            stop.latitude !== null &&
+            stop.longitude !== null &&
+            stop.latitude >= -90 &&
+            stop.latitude <= 90 &&
+            stop.longitude >= -180 &&
+            stop.longitude <= 180,
+        )
+        .map((stop) => ({
+          key: `${candidate.jobRef}::${stop.row}`,
+          latitude: stop.latitude,
+          longitude: stop.longitude,
+        })),
+    );
+    if (points.length === 0) return;
+    const rows = (await db.execute(sql`
+      SELECT item->>'key' AS key,
+             ST_DWithin(
+               ST_SetSRID(ST_MakePoint((item->>'longitude')::float8, (item->>'latitude')::float8), 4326)::geography,
+               ST_SetSRID(ST_MakePoint(${area.longitude}, ${area.latitude}), 4326)::geography,
+               ${area.radiusMeters}
+             ) AS in_area
+      FROM jsonb_array_elements(${JSON.stringify(points)}::jsonb) AS item
+    `)) as unknown as Array<{ key: string; in_area: boolean }>;
+    const outside = new Set(
+      rows.filter((row) => !row.in_area).map((row) => row.key.split("::")[0]!),
+    );
+    for (const candidate of candidates) {
+      if (outside.has(candidate.jobRef)) {
+        candidate.errors.push("Address is outside the import service area.");
+      }
+    }
+  }
+
+  private async applyImportDuplicates(
+    db: Database,
+    candidates: ImportCandidate[],
+  ): Promise<void> {
+    const refs = [...new Set(candidates.map((candidate) => candidate.jobRef))];
+    if (refs.length === 0) return;
+    const rows = (await db.execute(
+      sql`SELECT reference FROM jobs WHERE reference IN (${sql.join(
+        refs.map((ref) => sql`${ref}`),
+        sql`, `,
+      )})`,
+    )) as unknown as Array<{ reference: string }>;
+    const existing = new Set(rows.map((row) => row.reference));
+    for (const candidate of candidates) {
+      if (existing.has(candidate.jobRef)) {
+        candidate.errors.push("Job reference already exists.");
+      }
+    }
+  }
+
   /** Tenant-scoped driver queue: only this driver's assigned jobs. */
   async driverQueue(
     tenantId: string,
@@ -923,6 +1134,9 @@ export class PgFleetService {
     }
   }
 }
+
+
+
 
 
 

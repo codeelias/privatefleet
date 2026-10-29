@@ -17,6 +17,7 @@ import { registerAuthRoutes } from "./modules/auth/routes.js";
 import { AuthAttemptLimiter } from "./modules/auth/rate-limit.js";
 import { FleetError, PgFleetService } from "./modules/fleet/pg-service.js";
 import { registerFleetRoutes } from "./modules/fleet/routes.js";
+import { ImportError } from "./modules/import/csv.js";
 import { registerDriverDeviceRoutes } from "./modules/driver/routes.js";
 import { registerTrackingRoutes } from "./modules/tracking/routes.js";
 import { registerOptimizationRoutes } from "./modules/optimization/routes.js";
@@ -102,6 +103,9 @@ export function buildApp(config: AppConfig): {
     // Explicit request ceiling; telemetry batches are <= 50 samples and the
     // largest normal payload is well under 256 KiB.
     bodyLimit: 262_144,
+  });
+  app.addContentTypeParser("text/csv", { parseAs: "string" }, (_request, body, done) => {
+    done(null, body);
   });
   app.addHook("onSend", async (_request, reply, payload) => {
     reply.header("x-content-type-options", "nosniff");
@@ -201,6 +205,31 @@ export function buildApp(config: AppConfig): {
                 : "The evidence could not be saved. Try again.",
       });
     }
+    if (err instanceof ImportError) {
+      const status =
+        err.code === "IMPORT_DUPLICATES"
+          ? 409
+          : err.code === "IMPORT_TOO_LARGE"
+            ? 413
+            : err.code === "IMPORT_INVALID"
+              ? 400
+              : 422;
+      return reply.status(status).send({
+        type: `https://privatefleet.example/errors/${err.code.toLowerCase()}`,
+        title: status === 409 ? "Duplicate job references" : "Import could not be validated",
+        status,
+        code: err.code,
+        detail: err.message,
+        uiMessage:
+          status === 409
+            ? "One or more job references already exist. Change them and preview again."
+            : status === 413
+              ? "That CSV is too large. Split it into smaller batches."
+              : status === 400
+                ? "The CSV could not be read. Check the headers and rows."
+                : "Fix the highlighted rows and preview again.",
+      });
+    }
     if (err instanceof FleetError) {
       const mapped = ERROR_MAP[err.code];
       if (mapped) {
@@ -295,7 +324,7 @@ export function buildApp(config: AppConfig): {
       maxEntries: 10_000,
     });
     registerAuthRoutes(app, auth, authAttemptLimiter);
-    registerFleetRoutes(app, auth, fleet);
+    registerFleetRoutes(app, auth, fleet, config.importServiceArea);
     registerEvidenceRoutes(app, auth, fleet, evidence);
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter);
     registerTrackingRoutes(app, auth, bus, db);
@@ -325,6 +354,10 @@ export function buildApp(config: AppConfig): {
 
   return { app, demo, postgres };
 }
+
+
+
+
 
 
 

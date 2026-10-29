@@ -6,7 +6,12 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { AssignRequestSchema, FailureReasonCodeSchema } from "@privatefleet/contracts";
+import {
+  AssignRequestSchema,
+  FailureReasonCodeSchema,
+  JobImportCommitRequestSchema,
+} from "@privatefleet/contracts";
+import type { ImportServiceArea } from "../import/csv.js";
 import type { AuthService } from "../auth/service.js";
 import { makeAuthGuard } from "../auth/guard.js";
 import type { PgFleetService } from "./pg-service.js";
@@ -35,6 +40,10 @@ const SkipBodySchema = z
     message: "A structured failure reason is required",
   });
 const AlertParamSchema = z.object({ alertId: z.string().uuid() });
+const ImportPreviewBodySchema = z.union([
+  z.object({ csv: z.string().min(1).max(2_100_000) }),
+  z.string().min(1).max(2_100_000),
+]);
 
 /** Driver tokens may only act as themselves; staff tokens may delegate. */
 function activeDriverId(
@@ -68,6 +77,7 @@ export function registerFleetRoutes(
   app: FastifyInstance,
   auth: AuthService,
   fleet: PgFleetService,
+  importArea: ImportServiceArea,
 ): void {
   const guard = makeAuthGuard(auth);
 
@@ -187,6 +197,53 @@ export function registerFleetRoutes(
     },
   );
 
+  app.post(
+    "/v1/jobs/import",
+    { preHandler: guard, bodyLimit: 2_200_000 },
+    async (request, reply) => {
+      if (request.auth?.role === "driver") {
+        return reply.status(403).send({
+          type: "https://privatefleet.example/errors/import_staff_only",
+          title: "Request could not be completed",
+          status: 403,
+          code: "IMPORT_STAFF_ONLY",
+          detail: "Staff role required",
+          uiMessage: "Ask dispatch to import this batch.",
+        });
+      }
+      const body = ImportPreviewBodySchema.parse(request.body);
+      const csv = typeof body === "string" ? body : body.csv;
+      return fleet.importPreview(request.auth?.tenantId ?? "", csv, importArea);
+    },
+  );
+
+  app.post(
+    "/v1/jobs/import/commit",
+    { preHandler: guard, bodyLimit: 2_200_000 },
+    async (request, reply) => {
+      if (request.auth?.role === "driver") {
+        return reply.status(403).send({
+          type: "https://privatefleet.example/errors/import_staff_only",
+          title: "Request could not be completed",
+          status: 403,
+          code: "IMPORT_STAFF_ONLY",
+          detail: "Staff role required",
+          uiMessage: "Ask dispatch to import this batch.",
+        });
+      }
+      const body = JobImportCommitRequestSchema.parse(request.body);
+      const result = await fleet.importCommit(
+        request.auth?.tenantId ?? "",
+        request.auth?.userId ?? "",
+        body.jobs,
+        importArea,
+        idempotencyKey(request),
+      );
+      await fleet.publishPending(request.auth?.tenantId ?? "");
+      return result;
+    },
+  );
+
   app.post("/v1/alerts/:alertId/acknowledge", { preHandler: guard }, async (request) => {
     const params = AlertParamSchema.parse({ alertId: (request.params as Params).alertId });
     const tenantId = request.auth?.tenantId ?? "";
@@ -215,6 +272,9 @@ export function registerFleetRoutes(
     return result;
   });
 }
+
+
+
 
 
 
