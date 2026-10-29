@@ -3,8 +3,14 @@
  * device, localStorage-backed on web). Commands carry stable idempotency
  * keys; 4xx responses surface as explicit conflicts, network failures
  * stay pending for retry, and a single flush runs at a time.
+ *
+ * Evidence is uploaded before a completion/skip is finalised. Signature
+ * vectors are small text; photographs remain in app-private file storage
+ * and only their URI is queued. Local media is deleted only after the
+ * server accepts the command.
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as FileSystem from "expo-file-system";
 import { api, HttpError } from "./api";
 
 type CommandKind = "arrive" | "complete" | "skip";
@@ -16,7 +22,12 @@ export interface QueuedCommand {
   stopId: string;
   driverId: string;
   recipientName?: string;
-  reason?: string;
+  notes?: string;
+  signaturePath?: string;
+  photoUri?: string;
+  failureCode?: string;
+  failureNote?: string;
+  failurePhotoUri?: string;
   capturedAt: string;
   status: "pending" | "accepted" | "conflict";
 }
@@ -61,6 +72,46 @@ export async function flush(): Promise<{ ok: boolean; message?: string; conflict
   return flushInFlight;
 }
 
+async function readPhotoBase64(uri: string): Promise<string> {
+  return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+}
+
+async function removeLocalPhoto(uri: string | undefined): Promise<void> {
+  if (!uri) return;
+  try {
+    await FileSystem.deleteAsync(uri, { idempotent: true });
+  } catch {
+    // The queue already has the accepted server record; cleanup can retry.
+  }
+}
+
+async function uploadEvidence(command: QueuedCommand): Promise<void> {
+  const capturedAt = command.capturedAt;
+  if (command.signaturePath) {
+    await api.uploadEvidence(command.jobId, command.stopId, {
+      kind: "signature",
+      pathData: command.signaturePath,
+      capturedAt,
+    });
+  }
+  if (command.photoUri) {
+    const dataBase64 = await readPhotoBase64(command.photoUri);
+    await api.uploadEvidence(command.jobId, command.stopId, {
+      kind: "photo",
+      dataBase64,
+      capturedAt,
+    });
+  }
+  if (command.failurePhotoUri) {
+    const dataBase64 = await readPhotoBase64(command.failurePhotoUri);
+    await api.uploadEvidence(command.jobId, command.stopId, {
+      kind: "failure_photo",
+      dataBase64,
+      capturedAt,
+    });
+  }
+}
+
 async function flushOnce(): Promise<{ ok: boolean; message?: string; conflict?: boolean }> {
   const queue = await loadQueue();
   for (const command of queue) {
@@ -68,8 +119,17 @@ async function flushOnce(): Promise<{ ok: boolean; message?: string; conflict?: 
       continue;
     }
     try {
+      if (command.kind === "complete" || command.kind === "skip") {
+        await uploadEvidence(command);
+      }
       await dispatch(command);
       command.status = "accepted";
+      // Persist acceptance before deleting local media: a crash after this
+      // point leaves either an accepted command or an orphan local file,
+      // never a pending command whose evidence has disappeared.
+      await saveQueue(queue);
+      await removeLocalPhoto(command.photoUri);
+      await removeLocalPhoto(command.failurePhotoUri);
     } catch (err) {
       if (err instanceof HttpError && err.status >= 400 && err.status < 500) {
         command.status = "conflict";
@@ -79,7 +139,7 @@ async function flushOnce(): Promise<{ ok: boolean; message?: string; conflict?: 
       await saveQueue(queue);
       return {
         ok: false,
-        message: "Offline - your action is saved and will sync automatically.",
+        message: "Offline - your action and evidence are saved and will sync automatically.",
       };
     }
   }
@@ -103,8 +163,11 @@ async function dispatch(command: QueuedCommand): Promise<void> {
       command.jobId,
       command.stopId,
       command.driverId,
-      command.reason ?? "No reason given",
+      command.failureCode ?? "OTHER",
+      command.failureNote,
       command.commandId,
     );
   }
 }
+
+

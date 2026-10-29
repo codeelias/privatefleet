@@ -14,6 +14,7 @@ import type {
   AuthTokens,
   FleetState,
   FleetRoutesResponse,
+  EvidenceList,
   FleetOptimizationProposal,
   LiveOptimizationProposal,
   OptimizationProposal,
@@ -158,6 +159,8 @@ export const api = {
       includeRoutes ? "/v1/fleet/state" : "/v1/fleet/state?includeRoutes=false",
     ),
   fleetRoutes: () => request<FleetRoutesResponse>("/v1/fleet/routes"),
+  stopEvidence: (jobId: string, stopId: string) =>
+    request<EvidenceList>(`/v1/jobs/${jobId}/stops/${stopId}/evidence`),
   scenarios: () => request<ScenariosList>("/v1/demo/scenarios"),
   resetScenario: (id: ScenarioName) =>
     request<ScenariosList>(`/v1/demo/scenarios/${id}/reset`, { method: "POST" }),
@@ -214,6 +217,7 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 
 

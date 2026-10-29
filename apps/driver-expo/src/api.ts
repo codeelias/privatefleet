@@ -4,8 +4,14 @@
  * EXPO_PUBLIC_* at build time).
  */
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:4002";
+// Web builds are served behind Caddy on the same origin; native builds
+// must provide the LAN API URL at build time.
+const API_URL =
+  Platform.OS === "web"
+    ? ""
+    : (process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:4002");
 const SESSION_KEY = "privatefleet.expo.session.v1";
 
 export interface DriverDto {
@@ -188,7 +194,19 @@ export async function driverLogin(input: {
   return next;
 }
 
+export interface EvidenceUpload {
+  kind: "signature" | "photo" | "failure_photo";
+  dataBase64?: string;
+  pathData?: string;
+  capturedAt?: string;
+}
+
 export const api = {
+  uploadEvidence: (jobId: string, stopId: string, input: EvidenceUpload) =>
+    request(`/v1/jobs/${jobId}/stops/${stopId}/evidence`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   driverQueue: () => request<DriverQueue>("/v1/driver/queue"),
   startShift: () => request<DriverDto>("/v1/driver/shift/start", { method: "POST" }),
   arrive: (jobId: string, stopId: string, driverId: string, commandId: string) =>
@@ -209,10 +227,19 @@ export const api = {
       headers: { "idempotency-key": commandId },
       body: JSON.stringify({ driverId, recipientName }),
     }),
-  skip: (jobId: string, stopId: string, driverId: string, reason: string, commandId: string) =>
+  skip: (
+    jobId: string,
+    stopId: string,
+    driverId: string,
+    reasonCode: string,
+    note: string | undefined,
+    commandId: string,
+  ) =>
     request(`/v1/jobs/${jobId}/stops/${stopId}/skip`, {
       method: "POST",
       headers: { "idempotency-key": commandId },
-      body: JSON.stringify({ driverId, reason }),
+      body: JSON.stringify({ driverId, reasonCode, note }),
     }),
 };
+
+

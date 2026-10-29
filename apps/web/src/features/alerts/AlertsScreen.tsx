@@ -4,8 +4,8 @@
  * append auditable events through the outbox pipeline; reassign opens
  * the shared assignment flow.
  */
-import { useState } from "react";
-import type { AlertDto, FleetState } from "@privatefleet/contracts";
+import { useEffect, useState } from "react";
+import type { AlertDto, EvidenceList, FleetState } from "@privatefleet/contracts";
 import { api } from "../../shared/api/client";
 import { Panel } from "../../shared/ui/Panel";
 import { StatusChip } from "../../shared/ui/StatusChip";
@@ -34,8 +34,32 @@ export function AlertsScreen({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<EvidenceList | null>(null);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
   const selected =
     state.alerts.find((a) => a.id === selectedId) ?? open[0] ?? null;
+
+  useEffect(() => {
+    setEvidence(null);
+    setEvidenceError(null);
+    if (!selected?.relatedJobId || !selected.relatedStopId) {
+      return;
+    }
+    let cancelled = false;
+    void api
+      .stopEvidence(selected.relatedJobId, selected.relatedStopId)
+      .then((result) => {
+        if (!cancelled) setEvidence(result);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setEvidenceError(err instanceof Error ? err.message : "Evidence unavailable");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id, selected?.relatedJobId, selected?.relatedStopId]);
 
   async function act(alertId: string, action: "acknowledge" | "resolve") {
     setBusy(true);
@@ -128,7 +152,43 @@ export function AlertsScreen({
                 </p>
                 <p className="mt-1">{selected.recommendedAction}</p>
               </div>
-              <div>
+              {(selected.relatedJobId || selected.relatedStopId) && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                    Delivery evidence
+                  </p>
+                  {evidenceError && (
+                    <p className="mt-1 text-xs text-status-danger">{evidenceError}</p>
+                  )}
+                  {evidence?.evidence.length ? (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      {evidence.evidence.map((item) => (
+                        <div key={item.id} className="rounded-lg border border-command-border bg-command-bg p-2">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                            {item.kind.replace("_", " ")}
+                          </p>
+                          {item.dataBase64 && (
+                            <img
+                              src={`data:${item.mimeType};base64,${item.dataBase64}`}
+                              alt={`${item.kind} evidence`}
+                              className="max-h-32 w-full rounded object-contain"
+                            />
+                          )}
+                          <p className="mt-1 break-all text-[9px] text-text-secondary">
+                            {item.byteSize} bytes · {item.contentHash.slice(0, 12)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    !evidenceError && (
+                      <p className="mt-1 text-xs text-text-secondary">
+                        No evidence attached to this exception.
+                      </p>
+                    )
+                  )}
+                </div>
+              )}              <div>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
                   Audit history
                 </p>
@@ -213,4 +273,5 @@ export function AlertsScreen({
     </div>
   );
 }
+
 

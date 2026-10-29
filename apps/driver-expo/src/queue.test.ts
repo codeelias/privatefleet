@@ -19,6 +19,15 @@ vi.mock("@react-native-async-storage/async-storage", () => ({
   },
 }));
 
+vi.mock("react-native", () => ({ Platform: { OS: "web" } }));
+
+vi.mock("expo-file-system", () => ({
+  documentDirectory: "file:///test/",
+  EncodingType: { Base64: "base64" },
+  readAsStringAsync: async () => "",
+  copyAsync: async () => undefined,
+  deleteAsync: async () => undefined,
+}));
 function jsonResponse(status: number, body: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -116,4 +125,6 @@ describe("expo driver offline queue", () => {
     expect(callCount).toBe(1);
   });
 });
+
+
 

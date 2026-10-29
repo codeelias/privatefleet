@@ -16,10 +16,23 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { Image, PanResponder } from "react-native";
+import Svg, { Path } from "react-native-svg";
+import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
 import { StatusBar } from "expo-status-bar";
 import type { DriverQueue, JobDto, StoredSession } from "./src/api";
 import { api, clearSession, driverLogin, loadSession } from "./src/api";
 import { enqueue, flush, loadQueue, pendingCount } from "./src/queue";
+
+const FAILURE_REASONS = [
+  { code: "RECIPIENT_UNAVAILABLE", label: "Recipient unavailable" },
+  { code: "DELIVERY_REFUSED", label: "Delivery refused" },
+  { code: "ADDRESS_ACCESS_PROBLEM", label: "Address / access issue" },
+  { code: "ITEM_DAMAGED", label: "Item damaged" },
+  { code: "VEHICLE_OPERATIONAL_PROBLEM", label: "Vehicle / operational" },
+  { code: "OTHER", label: "Other" },
+] as const;
 
 const colors = {
   bg: "#F8FAFC",
@@ -96,6 +109,12 @@ export default function App() {
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [recipient, setRecipient] = useState("");
+  const [notes, setNotes] = useState("");
+  const [signaturePath, setSignaturePath] = useState("");
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [failureCode, setFailureCode] = useState<string>(FAILURE_REASONS[0].code);
+  const [failureNote, setFailureNote] = useState("");
+  const [failurePhotoUri, setFailurePhotoUri] = useState<string | null>(null);
 
   const refreshQueue = useCallback(async () => {
     try {
@@ -151,6 +170,12 @@ export default function App() {
     jobId: string;
     stopId: string;
     recipientName?: string;
+    notes?: string;
+    signaturePath?: string;
+    photoUri?: string;
+    failureCode?: string;
+    failureNote?: string;
+    failurePhotoUri?: string;
   }): Promise<void> => {
     if (!session) {
       return;
@@ -163,6 +188,12 @@ export default function App() {
       stopId: command.stopId,
       driverId: session.driver.id,
       recipientName: command.recipientName,
+      notes: command.notes,
+      signaturePath: command.signaturePath,
+      photoUri: command.photoUri,
+      failureCode: command.failureCode,
+      failureNote: command.failureNote,
+      failurePhotoUri: command.failurePhotoUri,
       capturedAt: new Date().toISOString(),
     });
     if (!result.ok) {
@@ -171,6 +202,40 @@ export default function App() {
     await refreshQueue();
   };
 
+  const takePhoto = async (target: "photo" | "failure"): Promise<void> => {
+    setError(null);
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        setError("Camera permission is required to capture proof.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.55,
+        base64: true,
+      });
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+      const asset = result.assets[0];
+      let uri = asset.uri;
+      if (FileSystem.documentDirectory) {
+        const destination = `${FileSystem.documentDirectory}evidence-${Date.now()}.jpg`;
+        await FileSystem.copyAsync({ from: asset.uri, to: destination });
+        uri = destination;
+      } else if (asset.base64) {
+        uri = `data:image/jpeg;base64,${asset.base64}`;
+      }
+      if (target === "photo") {
+        setPhotoUri(uri);
+      } else {
+        setFailurePhotoUri(uri);
+      }
+    } catch {
+      setError("The camera could not be opened on this device.");
+    }
+  };
   if (booting) {
     return (
       <View style={[styles.screen, styles.center]}>
@@ -276,6 +341,10 @@ export default function App() {
         <StatusBar style="dark" />
         <Text style={styles.brand}>PROOF OF DELIVERY</Text>
         <Text style={styles.title}>{stop.address}</Text>
+        <Text style={styles.subtitle}>
+          Capture what this job requires. Evidence syncs before the stop is completed.
+        </Text>
+
         <Text style={styles.label}>Recipient name</Text>
         <TextInput
           accessibilityLabel="Recipient name"
@@ -284,22 +353,121 @@ export default function App() {
           style={styles.input}
           placeholder="Recipient name"
         />
+        <Text style={styles.label}>Delivery notes</Text>
+        <TextInput
+          accessibilityLabel="Delivery notes"
+          value={notes}
+          onChangeText={setNotes}
+          style={styles.input}
+          placeholder="Optional notes"
+        />
+
+        <Text style={styles.label}>Signature</Text>
+        <SignaturePad
+          onChange={(path) => {
+            setSignaturePath(path);
+          }}
+        />
+        {signaturePath ? (
+          <Text style={styles.hint}>Signature captured ({signaturePath.length} path chars).</Text>
+        ) : (
+          <Text style={styles.hint}>Ask the recipient to sign above.</Text>
+        )}
+
+        <Text style={styles.label}>Delivery photo</Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void takePhoto("photo")}
+          style={styles.secondaryButton}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {photoUri ? "Replace photo" : "Take photo"}
+          </Text>
+        </Pressable>
+        {photoUri && (
+          <Image source={{ uri: photoUri }} style={styles.photo} resizeMode="cover" />
+        )}
+
         {error && <Text style={styles.error}>{error}</Text>}
         <Pressable
           accessibilityRole="button"
           onPress={() => {
-            setScreen("shift");
             void runCommand({
               kind: "complete",
               jobId: job.id,
               stopId: stop.id,
               recipientName: recipient,
+              notes,
+              signaturePath,
+              ...(photoUri ? { photoUri } : {}),
             });
+            setScreen("shift");
           }}
           style={[styles.primaryButton, { marginTop: 18 }]}
         >
           <Text style={styles.primaryButtonText}>Complete stop</Text>
         </Pressable>
+
+        <Text style={[styles.label, { marginTop: 26 }]}>Report a failed delivery</Text>
+        <View style={styles.reasonRow}>
+          {FAILURE_REASONS.map((reason) => (
+            <Pressable
+              key={reason.code}
+              accessibilityRole="button"
+              onPress={() => setFailureCode(reason.code)}
+              style={[
+                styles.reasonChip,
+                failureCode === reason.code && { backgroundColor: colors.primary },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.reasonText,
+                  failureCode === reason.code && { color: "#FFFFFF" },
+                ]}
+              >
+                {reason.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <TextInput
+          accessibilityLabel="Failure note"
+          value={failureNote}
+          onChangeText={setFailureNote}
+          style={styles.input}
+          placeholder="What happened? (optional)"
+        />
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void takePhoto("failure")}
+          style={styles.secondaryButton}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {failurePhotoUri ? "Replace exception photo" : "Add exception photo"}
+          </Text>
+        </Pressable>
+        {failurePhotoUri && (
+          <Image source={{ uri: failurePhotoUri }} style={styles.photo} resizeMode="cover" />
+        )}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            void runCommand({
+              kind: "skip",
+              jobId: job.id,
+              stopId: stop.id,
+              failureCode,
+              failureNote,
+              ...(failurePhotoUri ? { failurePhotoUri } : {}),
+            });
+            setScreen("shift");
+          }}
+          style={[styles.dangerButton, { marginTop: 12 }]}
+        >
+          <Text style={styles.primaryButtonText}>Submit failed delivery</Text>
+        </Pressable>
+
         <Pressable
           accessibilityRole="button"
           onPress={() => setScreen("active")}
@@ -374,6 +542,55 @@ export default function App() {
   );
 }
 
+function SignaturePad({ onChange }: { onChange: (path: string) => void }) {
+  const [path, setPath] = useState("");
+  const pathRef = useRef("");
+  const responder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (event) => {
+        const { locationX, locationY } = event.nativeEvent;
+        pathRef.current = `M${Math.round(locationX)} ${Math.round(locationY)}`;
+        setPath(pathRef.current);
+      },
+      onPanResponderMove: (event) => {
+        const { locationX, locationY } = event.nativeEvent;
+        pathRef.current += ` L${Math.round(locationX)} ${Math.round(locationY)}`;
+        setPath(pathRef.current);
+      },
+      onPanResponderRelease: () => onChange(pathRef.current),
+      onPanResponderTerminate: () => onChange(pathRef.current),
+    }),
+  ).current;
+  return (
+    <View style={styles.signature}>
+      <View {...responder.panHandlers} style={StyleSheet.absoluteFill}>
+        <Svg width="100%" height="100%">
+          <Path
+            d={path || "M0 0"}
+            fill="none"
+            stroke="#171816"
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </Svg>
+      </View>
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          pathRef.current = "";
+          setPath("");
+          onChange("");
+        }}
+        style={styles.signatureClear}
+      >
+        <Text style={styles.signatureClearText}>Clear</Text>
+      </Pressable>
+    </View>
+  );
+}
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   center: { justifyContent: "center", alignItems: "center" },
@@ -426,4 +643,46 @@ const styles = StyleSheet.create({
   muted: { fontSize: 12, color: colors.muted, marginTop: 2 },
   stopRow: { paddingVertical: 10, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 8 },
   stopText: { fontSize: 14, color: colors.text },
+  signature: {
+    height: 170,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    marginTop: 6,
+    overflow: "hidden",
+  },
+  signatureClear: {
+    position: "absolute",
+    right: 8,
+    top: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: colors.bg,
+  },
+  signatureClearText: { fontSize: 11, color: colors.muted, fontWeight: "600" },
+  photo: { width: "100%", height: 180, borderRadius: 12, marginTop: 8 },
+  reasonRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 6 },
+  reasonChip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: colors.card,
+  },
+  reasonText: { fontSize: 11, color: colors.text },
+  dangerButton: {
+    backgroundColor: colors.danger,
+    borderRadius: 12,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
 });
+
+
+
+
