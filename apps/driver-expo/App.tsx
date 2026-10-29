@@ -16,7 +16,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Image, PanResponder } from "react-native";
+import { AppState, Image, PanResponder } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
@@ -142,6 +142,44 @@ export default function App() {
       setError(err instanceof Error ? err.message : "Could not load your queue");
     }
   }, []);
+
+  const syncQueue = useCallback(async () => {
+    const result = await flush();
+    if (result.ok) {
+      setError(null);
+    }
+    await refreshQueue();
+  }, [refreshQueue]);
+
+  useEffect(() => {
+    if (pending === 0) {
+      return;
+    }
+    const timer = setInterval(() => {
+      void syncQueue();
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [pending, syncQueue]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void syncQueue();
+      }
+    });
+    const onOnline = (): void => {
+      void syncQueue();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", onOnline);
+    }
+    return () => {
+      subscription.remove();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", onOnline);
+      }
+    };
+  }, [syncQueue]);
 
   useEffect(() => {
     void (async () => {
@@ -701,6 +739,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 });
+
 
 
 
