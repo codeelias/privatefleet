@@ -1,23 +1,27 @@
 /**
  * PrivateFleet visual system.
  *
- * The reference direction is warm field-tool minimalism: an ivory canvas,
- * charcoal map, orange route accent, generous radii and floating paper cards.
- * Semantic tokens keep the dispatcher surfaces consistent across screens.
+ * Warm field-tool chrome around a map-first workspace. Text and control
+ * tokens are chosen for WCAG 2.2 AA contrast on the light application
+ * surfaces; the dark map remains an available, not mandatory, style.
  */
 @import "tailwindcss";
 
 @theme {
-  --color-command-bg: #f2eee4;
-  --color-command-surface: #fbf8f1;
-  --color-command-raised: #e9e1d2;
-  --color-command-border: #d8cfbd;
-  --color-text-primary: #191815;
-  --color-text-secondary: #756e61;
-  --color-brand-primary: #ef842f;
-  --color-status-success: #3e7a5b;
-  --color-status-warning: #b98525;
-  --color-status-danger: #b84c38;
+  --color-command-bg: #f7f4ec;
+  --color-command-surface: #ffffff;
+  --color-command-raised: #eee9de;
+  --color-command-border: #d4cdbf;
+  --color-control-border: #827f77;
+  --color-text-primary: #17212b;
+  --color-text-secondary: #596574;
+  --color-brand-primary: #f28c28;
+  --color-brand-ink: #9a3e00;
+  --color-on-brand: #17212b;
+  --color-focus: #155eef;
+  --color-status-success: #18794e;
+  --color-status-warning: #8a4b08;
+  --color-status-danger: #b42318;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --radius-command: 18px;
 }
@@ -37,13 +41,18 @@ body {
 }
 
 ::selection {
-  background: #ef842f;
-  color: #fffaf2;
+  background: #f28c28;
+  color: #17212b;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
 }
 
 /* Ghost pins never imply a fresh GPS fix (docs/09.7). */
 .stale-ghost {
-  opacity: 0.55;
+  opacity: 0.6;
   filter: grayscale(1);
 }
 
@@ -54,40 +63,48 @@ body {
   }
 }
 
-/* The map is a charcoal instrument panel inside the ivory shell. OSM's
-   light raster is tonally inverted so the same offline-capable tile source
-   matches the reference without a new provider or API key. */
+/* The map is an instrument panel inside the ivory shell. The dark style
+   retains the reference identity; the light style removes the tonal
+   inversion for operators who need maximum label legibility. */
 .pf-map-card .leaflet-tile-pane {
-  filter: grayscale(0.85) invert(0.93) brightness(0.62) contrast(1.08);
+  filter: grayscale(0.68) invert(0.88) brightness(0.8) contrast(1.08);
+  transition: filter 180ms ease;
+}
+.pf-map-card.pf-map-light .leaflet-tile-pane {
+  filter: none;
 }
 .pf-map-card .leaflet-container {
-  background: #171816 !important;
+  background: #202830 !important;
   font-family: inherit !important;
 }
+.pf-map-card.pf-map-light .leaflet-container {
+  background: #e8e4da !important;
+}
 .leaflet-control-attribution {
-  background: rgba(251, 248, 241, 0.9) !important;
-  color: #756e61 !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #596574 !important;
   font-size: 9px !important;
   border-radius: 8px 0 0 0;
 }
 .leaflet-bar a {
-  background: #fbf8f1 !important;
-  color: #191815 !important;
-  border-color: #d8cfbd !important;
+  background: #ffffff !important;
+  color: #17212b !important;
+  border-color: #827f77 !important;
 }
 .leaflet-bar a:hover {
-  background: #f2eee4 !important;
+  background: #f7f4ec !important;
 }
 
 .pf-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #c9bfac transparent;
+  scrollbar-color: #b8afa0 transparent;
 }
 .pf-scroll::-webkit-scrollbar {
   height: 8px;
   width: 8px;
 }
 .pf-scroll::-webkit-scrollbar-thumb {
-  background: #c9bfac;
+  background: #b8afa0;
   border-radius: 999px;
 }
+

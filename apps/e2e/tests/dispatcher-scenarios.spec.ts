@@ -26,6 +26,7 @@ test("Morning Rush: assign J-208 via click flow with impact preview", async ({ p
 
   const trayHeader = page.getByText("Unassigned jobs - drag onto a driver or select");
   await expect(trayHeader).toBeVisible();
+  await trayHeader.click();
 
   const card = page.getByRole("button", { name: /J-208/ }).first();
   await card.click();
@@ -58,6 +59,7 @@ test("Emergency: drag STAT J-208 onto the nearest driver pin", async ({ page }) 
 
   // The urgent STAT alert is visible in the needs-attention panel.
   await expect(page.getByText("J-208 STAT request received")).toBeVisible();
+  await page.getByText("Unassigned jobs - drag onto a driver or select").click();
 
   const handle = page.locator('[aria-label="Drag J-208 to assign"]');
   const pin = page.locator('[title*="Mo Khan"]').first();
@@ -90,3 +92,4 @@ test("Emergency: drag STAT J-208 onto the nearest driver pin", async ({ page }) 
   const res = await fetch(`${API}/v1/demo/scenarios`);
   expect(res.ok).toBeTruthy();
 });
+

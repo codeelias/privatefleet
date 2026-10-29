@@ -87,11 +87,12 @@ export function JobCard({
 
       <div className="flex items-center justify-between border-t border-command-border/70 pt-2.5 text-[10px] text-text-secondary">
         <span>{job.stops.length} {job.stops.length === 1 ? "stop" : "stops"}</span>
-        <span className="font-semibold uppercase tracking-[0.12em] text-brand-primary">
+        <span className="font-semibold uppercase tracking-[0.12em] text-brand-ink">
           Assign {"\u2192"}
         </span>
       </div>
     </button>
   );
 }
+
 

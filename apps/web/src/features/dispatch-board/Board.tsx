@@ -77,7 +77,7 @@ function DriverLane({
         );
       })}
       {isOver && (
-        <span className="absolute -top-5 left-2 text-[10px] font-semibold uppercase tracking-wider text-brand-primary">
+        <span className="absolute -top-5 left-2 text-[10px] font-semibold uppercase tracking-wider text-brand-ink">
           drop to preview impact
         </span>
       )}
@@ -181,3 +181,4 @@ export function DispatchBoard({ state }: { state: FleetState }) {
     </div>
   );
 }
+

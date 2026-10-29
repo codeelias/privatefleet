@@ -146,6 +146,7 @@ function VehiclePin({
   x,
   y,
   selected,
+  lastGpsAt,
   onSelect,
 }: {
   vehicle: VehicleDto;
@@ -153,12 +154,18 @@ function VehiclePin({
   x: number;
   y: number;
   selected: boolean;
+  lastGpsAt?: number | undefined;
   onSelect: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `pin-${vehicle.id}`,
     data: { driverId: vehicle.driverId, vehicleId: vehicle.id },
   });
+  const gpsLabel = vehicle.stale
+    ? lastGpsAt
+      ? `GPS stale (last known, updated ${Math.max(1, Math.round((Date.now() - lastGpsAt) / 60_000))}m ago)`
+      : "GPS stale (last known position)"
+    : vehicle.status;
   // Benchmark hook: fires after the marker commits at its new position.
   useEffect(() => {
     markPainted([vehicle.id]);
@@ -181,12 +188,10 @@ function VehiclePin({
         vehicle.stale ? "stale-ghost" : ""
       } ${isOver ? "scale-125" : ""} ${selected ? "ring-2 ring-brand-primary ring-offset-2 ring-offset-command-bg rounded-full" : ""}`}
       style={{ left: `${x}px`, top: `${y}px`, transition: "left 1.8s linear, top 1.8s linear" }}
-      title={`${driverName} - ${vehicle.registration} - ${
-        vehicle.stale ? "last known" : vehicle.status
-      }`}
+      title={`${driverName} - ${vehicle.registration} - ${gpsLabel}`}
     >
       <span
-        className={`flex h-8 w-8 items-center justify-center rounded-full border-[3px] text-[10px] font-bold text-command-surface shadow-[0_4px_14px_rgba(0,0,0,0.35)] ${colourFor(
+        className={`flex h-8 w-8 items-center justify-center rounded-full border-[3px] text-[10px] font-bold text-on-brand shadow-[0_4px_14px_rgba(0,0,0,0.35)] ${colourFor(
           vehicle,
         )} ${isOver ? "border-brand-primary" : "border-command-surface"} ${
           vehicle.status === "on_route" && !vehicle.stale ? "animate-pulse" : ""
@@ -201,12 +206,33 @@ function VehiclePin({
   );
 }
 
-export function MapCanvas({ state }: { state: FleetState }) {
+export function MapCanvas({
+  state,
+  gpsSeenAt,
+}: {
+  state: FleetState;
+  gpsSeenAt?: ReadonlyMap<string, number>;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const vectorRef = useRef<maplibregl.Map | null>(null);
   const leafletRef = useRef<L.Map | null>(null);
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [vectorFailed, setVectorFailed] = useState(false);
+  const [mapStyle, setMapStyle] = useState<"dark" | "light">(() => {
+    try {
+      return window.localStorage.getItem("pf.map.style") === "light" ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("pf.map.style", mapStyle);
+    } catch {
+      // Storage may be unavailable; the toggle still works for this session.
+    }
+  }, [mapStyle]);
+
   const [vectorProvider, setVectorProvider] = useState<string>(
     VECTOR_STYLES[0]?.name ?? "vector",
   );
@@ -378,18 +404,27 @@ export function MapCanvas({ state }: { state: FleetState }) {
       return;
     }
     polylinesRef.current.forEach((line) => line.remove());
-    polylinesRef.current = routeSet.routes.map((route) => {
+    const next: L.Polyline[] = [];
+    for (const route of routeSet.routes) {
       const selected = selectedDriverId !== null && route.driverId === selectedDriverId;
-      return L.polyline(
-        toLeafletLatLngs(route.points),
-        {
-          color: selected ? "#FFD2A8" : "#EF842F",
-          weight: selected ? 5 : 3,
-          opacity: selected ? 0.95 : 0.72,
-        },
-      ).addTo(map);
-    });
-  }, [routeSet, useVector, ready, selectedDriverId]);
+      const points = toLeafletLatLngs(route.points);
+      const casing = L.polyline(points, {
+        color: mapStyle === "dark" ? "#FFF8EE" : "#FFFFFF",
+        weight: selected ? 9 : 6.5,
+        opacity: selected ? 0.9 : 0.72,
+        interactive: false,
+        className: "pf-route-casing",
+      }).addTo(map);
+      const line = L.polyline(points, {
+        color: selected ? "#FFD2A8" : "#F28C28",
+        weight: selected ? 5 : 3,
+        opacity: selected ? 0.98 : 0.88,
+        className: "pf-route-line",
+      }).addTo(map);
+      next.push(casing, line);
+    }
+    polylinesRef.current = next;
+  }, [routeSet, useVector, ready, selectedDriverId, mapStyle]);
 
   // --- Vector engine (MapLibre) ----------------------------------------
   useEffect(() => {
@@ -438,6 +473,16 @@ export function MapCanvas({ state }: { state: FleetState }) {
       map.addSource("vehicle-routes", {
         type: "geojson",
         data: routeGeoJson(routeSet.routes),
+      });
+      map.addLayer({
+        id: "vehicle-routes-casing",
+        type: "line",
+        source: "vehicle-routes",
+        paint: {
+          "line-color": "#FFF8EE",
+          "line-width": 7,
+          "line-opacity": 0.55,
+        },
       });
       map.addLayer({
         id: "vehicle-routes-line",
@@ -723,7 +768,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
       <div className="absolute inset-0 flex items-center justify-center">
         <div
           data-testid="map-card"
-          className="pf-map-card relative h-[94%] w-[97%] overflow-hidden rounded-[26px] border border-command-border/80 bg-[#171816] shadow-[0_18px_50px_rgba(20,19,16,0.14)]"
+          className={"pf-map-card relative h-[94%] w-[97%] overflow-hidden rounded-[26px] border border-command-border bg-[#202830] shadow-[0_18px_50px_rgba(20,19,16,0.14)] " + (mapStyle === "light" ? "pf-map-light" : "")}
         >
           <div
             className="absolute inset-0 opacity-20"
@@ -734,7 +779,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
             }}
             aria-hidden="true"
           />
-          <div ref={containerRef} className="absolute inset-0 z-10 bg-[#171816]" />
+          <div ref={containerRef} className="absolute inset-0 z-10 bg-[#202830]" />
           {jobs.map((job) => {
             const pickup = job.stops.find((s) => s.stopType === "pickup");
             const pos = project(pickup?.location);
@@ -801,6 +846,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
                 x={pos.x}
                 y={pos.y}
                 selected={selectedDriverId !== null && vehicle.driverId === selectedDriverId}
+                lastGpsAt={gpsSeenAt?.get(vehicle.id)}
                 onSelect={() =>
                   setSelectedDriverId((prev) =>
                     prev === vehicle.driverId ? null : (vehicle.driverId ?? null),
@@ -809,6 +855,24 @@ export function MapCanvas({ state }: { state: FleetState }) {
               />
             );
           })}
+          <button
+            type="button"
+            onClick={() => setMapStyle((value) => (value === "dark" ? "light" : "dark"))}
+            aria-label={mapStyle === "dark" ? "Switch to light map" : "Switch to dark map"}
+            className="absolute right-3 top-3 z-30 flex min-h-9 items-center gap-2 rounded-full border border-command-border bg-command-surface/95 px-3 text-[10px] font-semibold text-text-primary shadow-sm backdrop-blur focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            {mapStyle === "dark" ? (
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z" strokeLinejoin="round" />
+              </svg>
+            )}
+            {mapStyle === "dark" ? "Light map" : "Dark map"}
+          </button>
           <p className="absolute bottom-2 right-3 z-30 rounded-full bg-command-surface/90 px-2 py-1 text-[10px] text-text-secondary">
             Grey ghost pins show last known position - never imply a fresh GPS fix.
           </p>
@@ -846,6 +910,9 @@ export function MapCanvas({ state }: { state: FleetState }) {
     </section>
   );
 }
+
+
+
 
 
 

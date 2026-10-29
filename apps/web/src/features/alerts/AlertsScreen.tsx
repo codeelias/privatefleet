@@ -149,7 +149,7 @@ export function AlertsScreen({
                   type="button"
                   disabled={busy}
                   onClick={() => void act(selected.id, "acknowledge")}
-                  className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-bold text-command-bg hover:brightness-110 disabled:opacity-50"
+                  className="rounded-lg bg-brand-primary px-3 py-1.5 text-xs font-bold text-on-brand hover:brightness-110 disabled:opacity-50"
                 >
                   Acknowledge
                 </button>
@@ -166,7 +166,7 @@ export function AlertsScreen({
                   type="button"
                   disabled={busy}
                   onClick={() => void act(selected.id, "resolve")}
-                  className="rounded-lg bg-status-success px-3 py-1.5 text-xs font-bold text-command-bg hover:brightness-110 disabled:opacity-50"
+                  className="rounded-lg bg-status-success px-3 py-1.5 text-xs font-bold text-on-brand hover:brightness-110 disabled:opacity-50"
                 >
                   Resolve
                 </button>
@@ -213,3 +213,4 @@ export function AlertsScreen({
     </div>
   );
 }
+

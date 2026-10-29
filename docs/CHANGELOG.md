@@ -1,3 +1,12 @@
+### v1.56 - Map-first dispatcher, optional panels, accessibility pass (2026-10-29)
+- Compact 44px fleet overview with expand/collapse and local preference; map uses all remaining height.
+- Selected vehicle is a floating panel with expanded, compact, closed and launcher states; map never reserves a column.
+- Unassigned jobs is a 40px collapsed drawer that expands over the map without resizing it; demo and postgres both start collapsed.
+- Active vehicle KPI now counts non-inactive/non-maintenance vehicles; global socket status is separate from per-vehicle GPS-stale labels.
+- Map light/dark toggle, stronger orange route casing, WCAG-calibrated warm tokens, visible focus and 32px panel controls.
+- Caddy now proxies /socket.io to the API so Global Live reflects the real WebSocket connection.
+- Playwright: one /v1/fleet/routes request across all panel/drawer/overview/style toggles; map height unchanged when drawer opens.
+- Verification: demo 13/13, auth/fleet 11/11, web 21/21, API 65/65, typecheck/lint/build green.
 # Documentation Changelog & Verification Record
 
 Records what changed in the documentation package and the automated checks that keep it trustworthy. Re-run the checks after any PR that touches `docs/` - the docs-as-code rule ([13](13-development-methodology.md)) applies to this file too.
@@ -458,6 +467,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

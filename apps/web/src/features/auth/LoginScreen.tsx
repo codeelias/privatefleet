@@ -52,7 +52,7 @@ export function LoginScreen({ onLogin }: Props) {
   }
 
   const inputClass =
-    "mt-1.5 w-full rounded-xl border border-command-border bg-command-surface px-3.5 py-3 text-sm text-text-primary outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/15 disabled:opacity-60";
+    "mt-1.5 w-full rounded-xl border border-control-border bg-command-surface px-3.5 py-3 text-sm text-text-primary outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/15 disabled:opacity-60";
 
   return (
     <main className="grid min-h-screen bg-command-bg text-text-primary lg:grid-cols-[1.08fr_0.92fr]">
@@ -88,7 +88,7 @@ export function LoginScreen({ onLogin }: Props) {
             <span className="text-[#EF842F]">In view.</span>
           </h1>
           <p className="mt-6 max-w-md text-[14px] leading-relaxed text-[#BDB6A8]">
-            Dispatch, optimise and track your fleet from one calm command surface —
+            Dispatch, optimise and track your fleet from one calm command surface -
             designed for the people moving things in the real world.
           </p>
 
@@ -107,7 +107,7 @@ export function LoginScreen({ onLogin }: Props) {
         </div>
 
         <div className="relative flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-[#8E877A]">
-          <span>LAN deployment · 192.168.1.128</span>
+          <span>LAN deployment 192.168.1.128</span>
           <span>Private by design</span>
         </div>
       </section>
@@ -129,7 +129,7 @@ export function LoginScreen({ onLogin }: Props) {
             <span className="text-xl font-semibold tracking-[-0.03em]">PrivateFleet</span>
           </div>
 
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-primary">
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-ink">
             Dispatch workspace
           </p>
           <h1 className="mt-2 text-[30px] font-semibold leading-tight tracking-[-0.035em]">
@@ -219,10 +219,12 @@ export function LoginScreen({ onLogin }: Props) {
           </div>
 
           <p className="mt-8 text-[10px] uppercase tracking-[0.14em] text-text-secondary">
-            Protected workspace · PrivateFleet
+            Protected workspace - PrivateFleet
           </p>
         </form>
       </section>
     </main>
   );
 }
+
+

@@ -38,7 +38,7 @@ export function TrackingHub({ state }: { state: FleetState }) {
         <button
           type="button"
           onClick={openPreview}
-          className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-command-bg hover:brightness-110"
+          className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand hover:brightness-110"
         >
           Preview as Customer
         </button>
@@ -147,4 +147,5 @@ export function TrackingHub({ state }: { state: FleetState }) {
     </div>
   );
 }
+
 

@@ -146,7 +146,7 @@ export function AssignmentModal({
               type="button"
               disabled={busy || preview.constraintsViolated.length > 0}
               onClick={() => void confirm()}
-              className="mt-3 w-full rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-command-bg hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-3 w-full rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-on-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? "Assigning..." : "Confirm assignment"}
             </button>
@@ -162,3 +162,4 @@ export function AssignmentModal({
     </div>
   );
 }
+

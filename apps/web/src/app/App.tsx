@@ -84,8 +84,21 @@ function Dashboard({
   const [assignDriverId, setAssignDriverId] = useState<string | undefined>(undefined);
   const [scenarioError, setScenarioError] = useState<string | null>(null);
   const [scenarioBusy, setScenarioBusy] = useState(false);
+  const [overviewExpanded, setOverviewExpanded] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem("pf.overview.expanded") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [vehiclePanel, setVehiclePanel] = useState<"expanded" | "compact" | "closed">(
+    "expanded",
+  );
+  const [queueOpen, setQueueOpen] = useState(false);
+  const [socketConnected, setSocketConnected] = useState(false);
   const telemetryTrackRef = useRef<TrackMap>({});
   const pendingPositionsRef = useRef<Map<string, VehiclePosition>>(new Map());
+  const gpsSeenRef = useRef<Map<string, number>>(new Map());
 
   const fleetQuery = useQuery({
     queryKey: ["fleet"],
@@ -111,7 +124,20 @@ function Dashboard({
   );
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem("pf.overview.expanded", overviewExpanded ? "1" : "0");
+    } catch {
+      // Private mode or storage disabled: the workspace still works.
+    }
+  }, [overviewExpanded]);
+
+  // The queue starts collapsed in every mode so the map owns the workspace.
+  // Demo users open it with the same explicit control as production users.
+
+  useEffect(() => {
     const socket = createFleetSocket();
+    socket.on("connect", () => setSocketConnected(true));
+    socket.on("disconnect", () => setSocketConnected(false));
     // Coalesce accepted telemetry into one flush per animation frame
     // (docs/17.5): newest sample per vehicle, one React commit. Business
     // events never take this path.
@@ -154,6 +180,7 @@ function Dashboard({
         return;
       }
       telemetryTrackRef.current = accepted.track;
+      gpsSeenRef.current.set(position.vehicleId, Date.now());
       markTelemetry(position.vehicleId);
       pending.set(position.vehicleId, position);
       if (handle === null) {
@@ -165,6 +192,7 @@ function Dashboard({
     });
     return () => {
       socket.disconnect();
+      setSocketConnected(false);
       if (handle !== null) {
         cancelAnimationFrame(handle);
       }
@@ -240,7 +268,9 @@ function Dashboard({
   }
 
   const openAlerts = state.alerts.filter((a) => !a.acknowledged);
-  const activeVehicles = state.vehicles.filter((v) => !v.stale).length;
+  const activeVehicles = state.vehicles.filter(
+    (v) => v.status !== "inactive" && v.status !== "maintenance",
+  ).length;
   const onRoute = state.vehicles.filter((v) => v.status === "on_route").length;
   const inProgress = state.jobs.filter((j) => j.status !== "unassigned").length;
   const unassigned = state.jobs.filter((j) => j.status === "unassigned");
@@ -266,7 +296,7 @@ function Dashboard({
                 </p>
                 <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
                   <span>Fleet Operations</span>
-                  <span className="px-1 text-command-border">·</span>
+                  <span className="px-1 text-command-border">{"\u00b7"}</span>
                   <span data-testid="tenant-name">{tenantName ?? "Northstar"}</span>
                 </p>
               </div>
@@ -294,7 +324,11 @@ function Dashboard({
               <span className="hidden text-[11px] text-text-secondary 2xl:block">
                 {todayLabel()}
               </span>
-              <StatusChip tone="success" label="Live" pulse />
+              <StatusChip
+                tone={socketConnected ? "success" : "neutral"}
+                label={socketConnected ? "Global live" : "Reconnecting"}
+                pulse={socketConnected}
+              />
               {onSignOut && (
                 <button
                   type="button"
@@ -352,117 +386,218 @@ function Dashboard({
               <TrackingHub state={state} />
             ) : screen === "live" ? (
               <>
-                {/* Fleet summary + demo scenarios */}
-                <div className="flex flex-wrap items-stretch gap-3 px-5 pb-3 pt-4">
-                  <div className="mr-1 hidden min-w-[140px] flex-col justify-center 2xl:flex">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
-                      Fleet overview
-                    </p>
-                    <p className="mt-1 text-[13px] font-medium text-text-primary">
-                      Everything moving, at a glance.
-                    </p>
-                  </div>
-                  <KpiCard label="Active vehicles" value={String(activeVehicles)} sub={`${onRoute} on route`} />
-                  <KpiCard label="Jobs in progress" value={String(inProgress)} sub={`${unassigned.length} unassigned`} />
-                  <KpiCard label="Unassigned" value={String(unassigned.length)} sub={`${urgent} urgent`} tone={urgent > 0 ? "warning" : undefined} />
-                  <KpiCard label="At-risk stops" value={String(atRisk)} sub="needs attention" tone={atRisk > 0 ? "danger" : undefined} />
-                  {state.demoMode && (
-                    <div className="ml-auto flex items-center gap-2 self-center">
+                {/* Compact overview expands in place without moving the map when collapsed */}
+                <div className="px-5 pb-2 pt-3">
+                  <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-2xl border border-command-border bg-command-surface px-2 py-1 shadow-[0_1px_0_rgba(25,24,21,0.03)]">
+                    <button
+                      type="button"
+                      onClick={() => setOverviewExpanded((value) => !value)}
+                      aria-expanded={overviewExpanded}
+                      aria-controls="fleet-overview-detail"
+                      aria-label={overviewExpanded ? "Collapse fleet overview" : "Expand fleet overview"}
+                      className="flex min-h-9 items-center gap-2 rounded-xl px-2 text-left transition-colors hover:bg-command-raised/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                    >
+                      <svg
+                        viewBox="0 0 12 12"
+                        className={"h-3 w-3 text-text-secondary transition-transform " + (overviewExpanded ? "rotate-180" : "")}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        aria-hidden="true"
+                      >
+                        <path d="M2 4.5 6 8.5l4-4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
                       <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-text-secondary">
-                        Demo scenario
+                        Overview
                       </span>
-                      {SCENARIOS.map((scenario) => (
-                        <button
-                          key={scenario.id}
-                          type="button"
-                          onClick={() => void resetScenario(scenario.id)}
-                          disabled={scenarioBusy}
-                          className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
-                            state.scenario === scenario.id
-                              ? "border-brand-primary bg-brand-primary/15 text-brand-primary"
-                              : "border-command-border text-text-secondary hover:text-text-primary"
-                          }`}
-                        >
-                          {scenario.label}
-                        </button>
-                      ))}
+                    </button>
+                    <div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-text-secondary">
+                      <span><strong className="font-semibold tabular-nums text-text-primary">{activeVehicles}</strong> active</span>
+                      <span><strong className="font-semibold tabular-nums text-text-primary">{inProgress}</strong> in progress</span>
+                      <span><strong className="font-semibold tabular-nums text-text-primary">{unassigned.length}</strong> unassigned</span>
+                      <span><strong className={"font-semibold tabular-nums " + (atRisk > 0 ? "text-status-danger" : "text-text-primary")}>{atRisk}</strong> at risk</span>
+                    </div>
+                    {state.demoMode && (
+                      <div className="ml-auto flex items-center gap-1.5">
+                        <span className="hidden text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary 2xl:inline">
+                          Demo
+                        </span>
+                        {SCENARIOS.map((scenario) => (
+                          <button
+                            key={scenario.id}
+                            type="button"
+                            onClick={() => void resetScenario(scenario.id)}
+                            disabled={scenarioBusy}
+                            className={"min-h-8 rounded-full border px-2.5 text-[10px] font-semibold disabled:cursor-not-allowed disabled:opacity-50 " +
+                              (state.scenario === scenario.id
+                                ? "border-brand-primary bg-brand-primary/15 text-brand-ink"
+                                : "border-command-border text-text-secondary hover:text-text-primary")}
+                          >
+                            {scenario.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {overviewExpanded && (
+                    <div id="fleet-overview-detail" className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                      <KpiCard label="Active vehicles" value={String(activeVehicles)} sub={onRoute + " on route"} />
+                      <KpiCard label="Jobs in progress" value={String(inProgress)} sub={unassigned.length + " unassigned"} />
+                      <KpiCard label="Unassigned" value={String(unassigned.length)} sub={urgent + " urgent"} tone={urgent > 0 ? "warning" : undefined} />
+                      <KpiCard label="At-risk stops" value={String(atRisk)} sub="needs attention" tone={atRisk > 0 ? "danger" : undefined} />
                     </div>
                   )}
                   {scenarioError && (
-                    <p className="rounded-xl border border-status-warning/50 bg-status-warning/10 px-3 py-1.5 text-xs text-status-warning">
+                    <p className="mt-1 rounded-xl border border-status-warning/50 bg-status-warning/10 px-3 py-1.5 text-xs text-status-warning">
                       {scenarioError}
                     </p>
                   )}
                 </div>
 
-                <div className="relative flex flex-1 overflow-hidden px-4">
-                  <MapCanvas state={state} />
+                <div className="relative flex min-h-0 flex-1 overflow-hidden px-4 pb-2">
+                  <MapCanvas state={state} gpsSeenAt={gpsSeenRef.current} />
 
-                  {/* Floating vehicle card over the map */}
-                  <aside className="pointer-events-none absolute left-8 top-6 z-30 hidden w-[318px] lg:block">
-                    <div className="pointer-events-auto overflow-hidden rounded-[22px] border border-command-border/80 bg-command-surface/95 shadow-[0_18px_50px_rgba(20,19,16,0.18)] backdrop-blur-xl">
-                      <div className="flex items-center justify-between px-4 pb-3 pt-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
-                          Selected vehicle
-                        </p>
-                        <span className="rounded-full bg-command-raised px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-text-secondary">
-                          Live
+                  {/* Floating selected-vehicle panel: expanded, compact, or closed. */}
+                  {vehiclePanel !== "closed" ? (
+                    <aside className="pointer-events-none absolute left-7 top-4 z-30 hidden w-[318px] lg:block">
+                      <div className="pointer-events-auto overflow-hidden rounded-[22px] border border-command-border bg-command-surface/95 shadow-[0_18px_50px_rgba(20,19,16,0.18)] backdrop-blur-xl">
+                        <div className="flex items-center justify-between px-4 pb-2 pt-3">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
+                            Selected vehicle
+                          </p>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setVehiclePanel(vehiclePanel === "expanded" ? "compact" : "expanded")}
+                              aria-label={vehiclePanel === "expanded" ? "Minimise selected vehicle" : "Expand selected vehicle"}
+                              title={vehiclePanel === "expanded" ? "Minimise panel" : "Expand panel"}
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-[15px] leading-none text-text-secondary transition-colors hover:bg-command-raised hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                            >
+                              {vehiclePanel === "expanded" ? "\u2212" : "+"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setVehiclePanel("closed")}
+                              aria-label="Close selected vehicle"
+                              title="Close panel"
+                              className="flex h-8 w-8 items-center justify-center rounded-full text-[15px] leading-none text-text-secondary transition-colors hover:bg-command-raised hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                            >
+                              {"\u00d7"}
+                            </button>
+                          </div>
+                        </div>
+                        {vehiclePanel === "compact" ? (
+                          <button
+                            type="button"
+                            onClick={() => setVehiclePanel("expanded")}
+                            className="flex w-full items-center gap-2 px-4 pb-3 text-left"
+                            aria-label="Expand selected vehicle details"
+                          >
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-primary/15 text-[11px] font-bold text-brand-ink">
+                              {state.drivers.find((d) => d.id === state.vehicles[0]?.driverId)?.fullName.split(" ").map((p) => p[0]).join("").slice(0, 2) ?? "\u2014"}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[12px] font-semibold">
+                                {state.drivers.find((d) => d.id === state.vehicles[0]?.driverId)?.fullName ?? "No vehicle selected"}
+                              </span>
+                              <span className="block text-[10px] text-text-secondary">Open details</span>
+                            </span>
+                            <span className="text-text-secondary">{"\u203a"}</span>
+                          </button>
+                        ) : (
+                          <>
+                            <div className="px-4 pb-3">
+                              {state.vehicles[0] ? (
+                                <VehicleDetails state={state} vehicleId={state.vehicles[0].id} />
+                              ) : (
+                                <p className="text-sm text-text-secondary">No vehicles on shift.</p>
+                              )}
+                            </div>
+                            <div className="border-t border-command-border/70 px-4 py-3">
+                              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
+                                Needs attention
+                              </p>
+                              {openAlerts.length === 0 ? (
+                                <p className="text-xs text-text-secondary">No current exceptions.</p>
+                              ) : (
+                                <ul className="space-y-2 text-xs text-text-secondary">
+                                  {openAlerts.map((alert) => (
+                                    <li key={alert.id} className="flex items-start gap-2">
+                                      <StatusChip
+                                        tone={alert.severity === "urgent" ? "danger" : "warning"}
+                                        label={alert.severity === "urgent" ? "urgent" : "at risk"}
+                                      />
+                                      {alert.title}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </aside>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setVehiclePanel("expanded")}
+                      className="absolute left-7 top-4 z-30 hidden min-h-9 items-center gap-2 rounded-full border border-command-border bg-command-surface/95 px-3 text-[11px] font-semibold text-text-primary shadow-sm backdrop-blur lg:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      aria-label="Open selected vehicle panel"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" />
+                      Selected vehicle
+                    </button>
+                  )}
+
+                  {/* Bottom work queue overlays the map and never resizes it. */}
+                  <div className="pointer-events-none absolute inset-x-6 bottom-3 z-30">
+                    <div className="pointer-events-auto overflow-hidden rounded-2xl border border-command-border bg-command-surface/95 shadow-[0_-8px_30px_rgba(20,19,16,0.12)] backdrop-blur-xl">
+                      <button
+                        type="button"
+                        onClick={() => setQueueOpen((value) => !value)}
+                        aria-expanded={queueOpen}
+                        aria-controls="unassigned-drawer"
+                        className="flex min-h-10 w-full items-center gap-3 px-3 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-text-secondary">
+                          Unassigned jobs - drag onto a driver or select
                         </span>
-                      </div>
-                      <div className="px-4 pb-4">
-                        {state.vehicles[0] ? (
-                          <VehicleDetails state={state} vehicleId={state.vehicles[0].id} />
-                        ) : (
-                          <p className="text-sm text-text-secondary">No vehicles on shift.</p>
-                        )}
-                      </div>
-                      <div className="border-t border-command-border/70 px-4 py-3">
-                        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
-                          Needs attention
-                        </p>
-                        {openAlerts.length === 0 ? (
-                          <p className="text-xs text-text-secondary">All clear.</p>
-                        ) : (
-                          <ul className="space-y-2 text-xs text-text-secondary">
-                            {openAlerts.map((alert) => (
-                              <li key={alert.id} className="flex items-start gap-2">
-                                <StatusChip
-                                  tone={alert.severity === "urgent" ? "danger" : "warning"}
-                                  label={alert.severity === "urgent" ? "urgent" : "at risk"}
-                                />
-                                {alert.title}
-                              </li>
+                        <span className="rounded-full bg-command-raised px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-primary">
+                          {unassigned.length}
+                        </span>
+                        <svg
+                          viewBox="0 0 12 12"
+                          className={"h-3 w-3 text-text-secondary transition-transform " + (queueOpen ? "rotate-180" : "")}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          aria-hidden="true"
+                        >
+                          <path d="M2 7.5 6 3.5l4 4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      {queueOpen && (
+                        <div id="unassigned-drawer" className="max-h-[38vh] overflow-y-auto border-t border-command-border/70 p-3">
+                          <div className="pf-scroll flex gap-3 overflow-x-auto pb-1">
+                            {unassigned.map((job) => (
+                              <JobCard
+                                key={job.id}
+                                job={job}
+                                onSelect={() => openAssignment(job.id)}
+                              />
                             ))}
-                          </ul>
-                        )}
-                      </div>
+                            {unassigned.length === 0 && (
+                              <p className="py-2 text-xs text-text-secondary">
+                                {state.demoMode
+                                  ? "Queue clear. Reset a scenario to seed new jobs."
+                                  : "No unassigned jobs. Dispatch is clear."}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </aside>
-                </div>
-
-                {/* Parcel tray - drag onto pins, or click */}
-                <div className="border-t border-command-border/80 bg-command-bg px-5 py-3">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-text-secondary">
-                      Unassigned jobs - drag onto a driver or select
-                    </p>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-secondary">
-                      {unassigned.length} parcels
-                    </span>
-                  </div>
-                  <div className="pf-scroll flex gap-3 overflow-x-auto pb-2">
-                    {unassigned.map((job) => (
-                      <JobCard
-                        key={job.id}
-                        job={job}
-                        onSelect={() => openAssignment(job.id)}
-                      />
-                    ))}
-                    {unassigned.length === 0 && (
-                      <p className="py-2 text-xs text-text-secondary">
-                        Queue clear. Reset a scenario to seed new jobs.
-                      </p>
-                    )}
                   </div>
                 </div>
               </>
@@ -529,7 +664,7 @@ function VehicleDetails({ state, vehicleId }: { state: FleetState; vehicleId: st
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-[13px] font-bold text-brand-primary">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-[13px] font-bold text-brand-ink">
           {initials}
         </span>
         <div className="min-w-0 flex-1">
@@ -539,6 +674,11 @@ function VehicleDetails({ state, vehicleId }: { state: FleetState; vehicleId: st
           <p className="mt-0.5 truncate text-[11px] text-text-secondary">
             {vehicle.registration} {"\u00b7"} {vehicle.vehicleType}
           </p>
+          {vehicle.stale && (
+            <p className="mt-1 text-[10px] font-medium text-status-warning">
+              GPS stale Â· last known position
+            </p>
+          )}
         </div>
         <StatusChip
           tone={vehicle.stale ? "stale" : vehicle.status === "on_route" ? "success" : "neutral"}
@@ -623,6 +763,10 @@ export function App() {
     />
   );
 }
+
+
+
+
 
 
 

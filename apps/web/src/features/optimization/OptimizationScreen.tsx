@@ -177,7 +177,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
             type="button"
             onClick={() => void optimise()}
             disabled={busy || (!live && !driverId)}
-            className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-command-bg hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy && !run && !liveRun
               ? "Optimising..."
@@ -323,7 +323,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
                   type="button"
                   onClick={() => void publish()}
                   disabled={busy || approving}
-                  className="rounded-xl bg-status-success px-4 py-2 text-sm font-bold text-command-bg hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl bg-status-success px-4 py-2 text-sm font-bold text-on-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {approving ? "Publishing fleet plan..." : "Approve fleet plan"}
                 </button>
@@ -389,7 +389,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
                   type="button"
                   onClick={() => void publish()}
                   disabled={busy}
-                  className="rounded-xl bg-status-success px-4 py-2 text-sm font-bold text-command-bg hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl bg-status-success px-4 py-2 text-sm font-bold text-on-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {busy ? "Publishing..." : "Publish approved plan"}
                 </button>
@@ -424,5 +424,6 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
     </div>
   );
 }
+
 
 
