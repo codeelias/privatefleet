@@ -9,9 +9,8 @@ import { Platform } from "react-native";
 // Web builds are served behind Caddy on the same origin; native builds
 // must provide the LAN API URL at build time.
 const API_URL =
-  Platform.OS === "web"
-    ? ""
-    : (process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:4002");
+  process.env.EXPO_PUBLIC_API_URL ??
+  (Platform.OS === "web" ? "" : "https://api.privatefleet.home.arpa");
 const SESSION_KEY = "privatefleet.expo.session.v1";
 
 export interface DriverDto {
@@ -243,5 +242,7 @@ export const api = {
       body: JSON.stringify({ driverId, reasonCode, note }),
     }),
 };
+
+
 
 

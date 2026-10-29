@@ -17,7 +17,9 @@
     },
     "android": {
       "package": "com.privatefleet.driver"
-    }
+    },
+    "plugins": ["./plugins/withDebugNetworkSecurityConfig"]
   }
 }
+
 
