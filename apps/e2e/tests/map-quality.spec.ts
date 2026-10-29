@@ -87,7 +87,7 @@ test("malformed route geometry is hidden and the last verified route retained", 
     ...base,
     routes: base.routes.map((route) => ({ ...route, points: [] })),
   };
-  await page.route("**/v1/fleet/state", (route) =>
+  await page.route("**/v1/fleet/state*", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(malformed) }),
   );
 
@@ -99,7 +99,8 @@ test("malformed route geometry is hidden and the last verified route retained", 
   // The previously verified routes stay drawn; nothing fabricated appears.
   await expect(page.locator("path.leaflet-interactive")).toHaveCount(3);
 
-  await page.unroute("**/v1/fleet/state");
+  await page.unroute("**/v1/fleet/state*");
 });
+
 
 
