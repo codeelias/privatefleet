@@ -23,8 +23,19 @@ import * as FileSystem from "expo-file-system";
 import { StatusBar } from "expo-status-bar";
 import type { DriverQueue, JobDto, StoredSession } from "./src/api";
 import { api, clearSession, driverLogin, loadSession } from "./src/api";
-import { enqueue, flush, loadQueue, pendingCount } from "./src/queue";
+import { enqueue, flush, loadQueue } from "./src/queue";
 
+function newCommandId(): string {
+  const cryptoApi = globalThis.crypto as { randomUUID?: () => string } | undefined;
+  if (typeof cryptoApi?.randomUUID === "function") {
+    return cryptoApi.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = char === "x" ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
 const FAILURE_REASONS = [
   { code: "RECIPIENT_UNAVAILABLE", label: "Recipient unavailable" },
   { code: "DELIVERY_REFUSED", label: "Delivery refused" },
@@ -118,11 +129,15 @@ export default function App() {
 
   const refreshQueue = useCallback(async () => {
     try {
+      const stored = await loadQueue();
+      setPending(stored.filter((command) => command.status === "pending").length);
+      setConflicts(stored.filter((command) => command.status === "conflict").length);
+    } catch {
+      // Local queue status is still useful when the API is unreachable.
+    }
+    try {
       const next = await api.driverQueue();
       setQueue(next);
-      setPending(await pendingCount());
-      const stored = await loadQueue();
-      setConflicts(stored.filter((command) => command.status === "conflict").length);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load your queue");
     }
@@ -181,25 +196,29 @@ export default function App() {
       return;
     }
     setError(null);
-    const result = await enqueue({
-      commandId: crypto.randomUUID(),
-      kind: command.kind,
-      jobId: command.jobId,
-      stopId: command.stopId,
-      driverId: session.driver.id,
-      recipientName: command.recipientName,
-      notes: command.notes,
-      signaturePath: command.signaturePath,
-      photoUri: command.photoUri,
-      failureCode: command.failureCode,
-      failureNote: command.failureNote,
-      failurePhotoUri: command.failurePhotoUri,
-      capturedAt: new Date().toISOString(),
-    });
-    if (!result.ok) {
-      setError(result.message ?? "Action needs attention");
+    try {
+      const result = await enqueue({
+        commandId: newCommandId(),
+        kind: command.kind,
+        jobId: command.jobId,
+        stopId: command.stopId,
+        driverId: session.driver.id,
+        recipientName: command.recipientName,
+        notes: command.notes,
+        signaturePath: command.signaturePath,
+        photoUri: command.photoUri,
+        failureCode: command.failureCode,
+        failureNote: command.failureNote,
+        failurePhotoUri: command.failurePhotoUri,
+        capturedAt: new Date().toISOString(),
+      });
+      if (!result.ok) {
+        setError(result.message ?? "Action needs attention");
+      }
+      await refreshQueue();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The action could not be queued.");
     }
-    await refreshQueue();
   };
 
   const takePhoto = async (target: "photo" | "failure"): Promise<void> => {
@@ -682,6 +701,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 });
+
+
+
 
 
 

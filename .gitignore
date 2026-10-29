@@ -21,4 +21,6 @@ apps/driver-expo/web-build/
 
 apps/api/.data/
 .tmp/
+apps/driver-expo/android/
+apps/driver-expo/ios/
 

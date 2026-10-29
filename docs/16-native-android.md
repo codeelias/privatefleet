@@ -1,4 +1,4 @@
-# Native Android pilot â€” configuration and gate
+# Native Android pilot Ã¢â‚¬â€ configuration and gate
 
 ## Status
 
@@ -57,4 +57,61 @@ release network security configuration.
 Background location is a separate gate after POD/offline acceptance. Android
 does not relaunch a force-stopped app automatically, so no uninterrupted
 tracking promise is made.
+## Emulator acceptance — Stage B PASS (emulator only)
+
+Built and installed the debug APK on a local Android 16 (API 36) emulator
+(`sdk_gphone64_x86_64`, AVD `PrivateFleet`) on 2026-10-29.
+
+Build fixes required:
+
+- The first prebuild failure was a transient Expo template fetch failure; a
+  retry succeeded with no SDK upgrade.
+- Disk headroom was insufficient for Gradle + emulator userdata; caches and
+  unnecessary SDK components were removed.
+- Expo SDK 53 autolinking generated
+  `import expo.core.ExpoModulesPackage` while the native class is
+  `expo.modules.ExpoModulesPackage`. The config plugin now injects a Gradle
+  task that normalizes this generated import after autolinking. This workaround
+  is debug-build only and does not change the Expo SDK.
+
+Emulator network path:
+
+- API origin was `https://api.privatefleet.home.arpa`; TLS validation remained
+  enabled.
+- The emulator used a host CONNECT proxy to resolve the LAN-only hostname.
+- The debug-only network security config trusted the Caddy CA from
+  `PF_DEBUG_CA_CERT` for this emulator build, plus user CAs. Release builds do
+  not include this bundled CA.
+- Metro HTTP was explicitly permitted only for `10.0.2.2`, `localhost` and
+  `127.0.0.1`; the API remained HTTPS-only.
+
+Observed on the emulator:
+
+- Driver PIN login over HTTPS succeeded.
+- Native signature pad captured a 145-character path.
+- Native camera opened, captured and accepted a photo (24,090 bytes uploaded).
+- Completion uploaded signature + photo before transitioning the stop.
+- API evidence retrieval returned both media with SHA-256 hashes.
+- With the API host forced down, the completion stayed pending; force-closing
+  and reopening the app showed `1 action(s) waiting to sync` and the local
+  signature survived.
+- After restoring connectivity and restarting, the pending operation uploaded
+  the signature and completed exactly once.
+- A completion with a missing required recipient produced a 4xx conflict:
+  queue status `conflict`, signature preserved locally, stop remained
+  `arrived`, and the UI showed `1 action(s) need attention`.
+
+Server-side exactly-once check:
+
+```text
+completed_events=1
+evidence_signature=1
+evidence_photo=1
+j196_first=completed
+j202_first=arrived
+```
+
+Physical-device acceptance is still **NOT VERIFIED**. The emulator proves the
+native JS/native-module/file-queue path, but not a physical camera, Android
+process-kill behaviour on retail hardware, or iOS.
 
