@@ -226,6 +226,10 @@ function BulkImportModal({
               Choose CSV file
             </button>
             {fileName && <p className="mt-2 text-[11px] text-text-secondary">{fileName}</p>}
+            <p className="mt-3 text-[10px] leading-relaxed text-text-secondary">
+              Validation checks coordinates against the operating region. Ensure your CSV
+              includes accurate Latitude and Longitude columns.
+            </p>
           </div>
 
           {error && (
@@ -340,6 +344,7 @@ function BulkImportModal({
     </div>
   );
 }
+
 
 
 

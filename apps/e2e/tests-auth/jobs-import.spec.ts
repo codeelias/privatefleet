@@ -44,6 +44,9 @@ test("CSV import blocks an invalid address, then commits the corrected batch", a
   await login(page);
   await page.getByRole("button", { name: "Jobs & Work Orders" }).click();
   await page.getByRole("button", { name: "Bulk Import" }).click();
+  await expect(
+    page.getByText("Validation checks coordinates against the operating region."),
+  ).toBeVisible();
 
   await upload(
     page,
@@ -73,3 +76,4 @@ test("CSV import blocks an invalid address, then commits the corrected batch", a
   await commit.click();
   await expect(page.getByText(/4 jobs imported/i)).toBeVisible();
 });
+
