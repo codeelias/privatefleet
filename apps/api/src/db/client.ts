@@ -20,6 +20,9 @@ export interface DbHandle {
 export function createDb(url: string, options: { max?: number } = {}): DbHandle {
   const sql = postgres(url, {
     max: options.max ?? 10,
+    connection: {
+      application_name: process.env.PGAPPNAME ?? "privatefleet_api",
+    },
     onnotice: () => undefined,
   });
   return { db: drizzle(sql, { schema }), sql };
