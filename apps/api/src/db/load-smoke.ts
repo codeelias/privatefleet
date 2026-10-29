@@ -52,8 +52,8 @@ const hubs = Array.from({ length: hubCount }, (_, index) => ({
 const started = Date.now();
 const seeded = await seedTenant(migrator, {
   tenantName: "Load Smoke Co",
-  email: `load-${randomUUID().slice(0, 6)}@privatefleet.test`,
-  password: "demo-password-123",
+  email: process.env.SOAK_EMAIL ?? `load-${randomUUID().slice(0, 6)}@privatefleet.test`,
+  password: process.env.SOAK_PASSWORD ?? "demo-password-123",
   slug: `load-${randomUUID().slice(0, 8)}`,
 });
 let proposeMs = 0;
@@ -169,7 +169,9 @@ try {
       2,
     ),
   );
-  await migrator.sql`DELETE FROM tenants WHERE id = ${seeded.tenantId}`;
+  if (process.env.KEEP_TENANT !== "1") {
+    await migrator.sql`DELETE FROM tenants WHERE id = ${seeded.tenantId}`;
+  }
   await closeDb(runtime);
   await closeDb(migrator);
 }
