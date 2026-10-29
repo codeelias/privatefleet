@@ -6,7 +6,7 @@
   "scripts": {
     "start": "expo start",
     "start:web": "expo start --web",
-    "export:web": "expo export --platform web",
+    "export:web": "expo export --platform web --clear",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "echo \"driver-expo: eslint comes with the native pilot hardening\"",
@@ -33,3 +33,4 @@
     "vitest": "^5.0.5"
   }
 }
+
