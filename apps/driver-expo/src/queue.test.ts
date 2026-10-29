@@ -24,7 +24,7 @@ vi.mock("react-native", () => ({ Platform: { OS: "web" } }));
 vi.mock("expo-file-system", () => ({
   documentDirectory: "file:///test/",
   EncodingType: { Base64: "base64" },
-  readAsStringAsync: async () => "",
+  readAsStringAsync: async () => "cGhvdG8=",
   copyAsync: async () => undefined,
   deleteAsync: async () => undefined,
 }));
@@ -83,6 +83,43 @@ describe("expo driver offline queue", () => {
     expect(await loadQueue()).toHaveLength(0);
   });
 
+  it("restores pending signature and photo evidence after restart, then uploads before complete", async () => {
+    const { enqueue } = await queue();
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const result = await enqueue({
+      commandId: "expo-cmd-pod",
+      kind: "complete",
+      jobId: "job-pod",
+      stopId: "stop-pod",
+      driverId: "driver-pod",
+      recipientName: "Evidence Recipient",
+      signaturePath: "M1 2 L3 4",
+      photoUri: "file:///test/photo.jpg",
+      capturedAt: new Date().toISOString(),
+    });
+    expect(result.ok).toBe(false);
+
+    vi.resetModules();
+    const { flush, loadQueue } = await queue();
+    expect(await loadQueue()).toHaveLength(1);
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(200, { id: "sig", kind: "signature" }))
+      .mockResolvedValueOnce(jsonResponse(200, { id: "photo", kind: "photo" }))
+      .mockResolvedValueOnce(jsonResponse(200, { stopId: "stop-pod", status: "completed" }));
+    const retry = await flush();
+    expect(retry.ok).toBe(true);
+    const calls = fetchMock.mock.calls as Array<[string, RequestInit]>;
+    expect(calls[1]?.[0]).toContain("/evidence");
+    expect(String(calls[1]?.[1].body)).toContain('"kind":"signature"');
+    expect(calls[2]?.[0]).toContain("/evidence");
+    expect(String(calls[2]?.[1].body)).toContain('"kind":"photo"');
+    expect(calls[3]?.[0]).toContain("/complete");
+    expect((calls[3]?.[1].headers as Record<string, string>)["idempotency-key"]).toBe(
+      "expo-cmd-pod",
+    );
+    expect(await loadQueue()).toHaveLength(0);
+  });
+
   it("turns a 4xx into an explicit conflict with the server message", async () => {
     const { enqueue, loadQueue } = await queue();
     fetchMock.mockResolvedValueOnce(
@@ -125,6 +162,8 @@ describe("expo driver offline queue", () => {
     expect(callCount).toBe(1);
   });
 });
+
+
 
 
 

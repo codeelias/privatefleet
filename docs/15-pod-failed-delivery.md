@@ -141,8 +141,8 @@ evidence was deleted because acceptance is persisted first.
 
 `backup.ps1` now produces, for the same timestamp:
 
-- `privatefleet-<stamp>.dump.age` â€” PostgreSQL custom dump;
-- `privatefleet-<stamp>.evidence.tar.age` â€” entire private evidence directory.
+- `privatefleet-<stamp>.dump.age` Ã¢â‚¬â€ PostgreSQL custom dump;
+- `privatefleet-<stamp>.evidence.tar.age` Ã¢â‚¬â€ entire private evidence directory.
 
 Both are SHA-256 checksummed and copied to `D:\PrivateFleet_Backups`. The age
 private key is not in either archive or the evidence directory.
@@ -169,7 +169,7 @@ available before a real disaster restore.
   evidence upload/retrieval, idempotent completion/skip, real alert creation,
   RLS on `proof_policies`/`stop_evidence`.
 - Web tests: 21 passed.
-- Expo queue tests: 3 passed.
+- Expo queue tests: 4 passed, including restored signature/photo evidence after a simulated app restart and evidence upload before completion.
 - Workspace typecheck/lint/build: all pass.
 - Expo web export and web dispatcher build pass.
 - Live API exercise: signature + photo uploaded, completion returned 200,
@@ -179,4 +179,5 @@ available before a real disaster restore.
   recovery on a real device and native upload are **NOT VERIFIED** because no
   native build toolchain/device/signing credential was available. Expo web and
   automated queue tests are not a substitute for that evidence.
+
 
