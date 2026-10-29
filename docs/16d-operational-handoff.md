@@ -290,16 +290,15 @@ sign-off.**
 
 ### 8.1 Soak result (2026-10-29)
 
-Read-path fix: /v1/fleet/state?includeRoutes=false dropped from 11.36 MB /
-2.3 s to **568 KB / 97 ms**; route geometry is a versioned separate read at
-10.8 MB / 671 ms, fetched once per published version.
+Final instrumented 100/850 open-loop soak (1,800 s): **35,999/35,999 reads at
+20.0/s**, 0 errors, p50/p95/p99 **65/133/250 ms**; telemetry **8,997 x 200 at
+5.0/s**; 59 optimisations, 56 approved, 3 failures all 502 VROOM_UNAVAILABLE
+inside the outage, p95 5,739 ms; route geometry p95 702 ms. Ordinary non-outage
+5xx: **0/59 = 0.0%**. VROOM outage left routeVersion 200 unchanged.
 
-Full 100/850 open-loop soak (1,800 s): **35,999/35,999 reads at 20.0/s**, 0 errors,
-p50/p95/p99 57/129/237 ms; telemetry 8,996 x 200 at 5.0/s; 59 optimisations,
-56 approved, 3 failures around the outage, p95 5,741 ms; route fetch p95 667 ms.
-VROOM outage left routeVersion 75 unchanged and returned 502 (typed code not
-captured). CPU +727 s (40.4% of one core), memory avg 376 MB (max 516 MB).
+API pool: 897 samples, max 10, total avg 9.59, idle avg 8.37, checked-out avg
+1.23 / max 7, saturation avg 12%, p95 30%, **100% of samples <80%**, DB lock
+waiters 0. Client-side pool wait queue is not exposed by postgres.js.
 
-DB-pool saturation is **NOT VERIFIED** (pool max 10; sampler added one app-role
-connection, observed max 11). Ordinary non-outage 5xx is not separately proven.
-Do not raise routing limits.
+CPU/memory were not re-sampled in this run (previous: 40.4% of one core, memory
+avg 376 MB / max 516 MB). Do not raise routing limits.

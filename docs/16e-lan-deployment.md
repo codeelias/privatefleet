@@ -89,28 +89,37 @@ enables gzip on the API host:
 |---|---|---|
 | Fleet polling (/state?includeRoutes=false) | 11.36 MB, 2.3 s | **567,769 bytes, 97 ms** |
 | Route geometry (/fleet/routes) | included every read | **10,796,917 bytes, 671 ms**, fetched once per published version |
-| API CPU during soak | 85% of one core | **40.4%** |
 
-## Full soak (100 vehicles / 850 jobs)
+## Final instrumented soak (100 vehicles / 850 jobs)
 
-Open-loop run 2026-10-29 03:02-03:32 UTC, **1,800 s**:
+Open-loop run 2026-10-29 09:31:46-10:01:46 UTC, **1,800 s**:
 
 - reads: **35,999 scheduled / 35,999 completed at 20.0/s**, 0 failed, 0 dropped,
-  0 5xx; p50/p95/p99 **57 / 129 / 237 ms**
-- telemetry: **8,999 scheduled, 8,996 x HTTP 200 at 5.0/s**, no errors
-- optimisation: **59 runs, 56 approved, 3 failures** clustered around the
-  deliberate outage/restart; p50/p95/p99 **5,255 / 5,741 / 6,191 ms**
-- route geometry: fetched **56 times**, p95 **667 ms**
-- 60 s VROOM outage: routeVersion **75 -> 75 -> 75**; proposal returned **502**
-  (typed code not captured by this harness revision)
-- resources: API CPU **+727 s (40.4% of one core)**, memory avg **376 MB**
-  (max 516 MB), DB sessions avg 10.9 / max 11; no OOM/restart observed
+  0 5xx; p50/p95/p99 **65 / 133 / 250 ms**
+- telemetry: **8,999 scheduled, 8,997 x HTTP 200 at 5.0/s**
+- optimisation: **59 runs, 56 approved, 3 failures**, all **502 VROOM_UNAVAILABLE**
+  inside the deliberate outage; p50/p95/p99 **5,388 / 5,739 / 5,808 ms**
+- route geometry: 56 fetches, p95 **702 ms**
+- VROOM outage: routeVersion **200 -> 200 -> 200**; proposal **502
+  VROOM_UNAVAILABLE**; VROOM restarted at 09:42:47.704Z
+- **ordinary non-outage 5xx: 0 / 59 = 0.0%**
+- API pool: **897 samples** at 2 s; configured max **10**, total avg **9.59**,
+  idle avg **8.37**, checked-out avg **1.23** / max **7**, saturation avg **12%**,
+  **p95 30%**, **100% of samples < 80%**, DB lock waiters max **0**
+- CPU/memory were not re-sampled in this instrumentation-only run; the previous
+  run measured **40.4% of one core**, memory avg 376 MB / max 516 MB
 
-**Verdict: PASS on read throughput, latency, telemetry, optimisation latency,
-CPU and outage preservation.** DB-pool saturation is **NOT VERIFIED**: the pool
-is max 10 sessions and the sampler itself used one app-role connection. Ordinary
-(non-outage) 5xx is also not separately proven; the 3 optimisation failures are
-clustered around the outage. Do not raise routing limits.
+Failure attribution: the three failures occurred at 09:41:47.716, 09:42:17.551
+and 09:42:47.551, all within the outage window 09:41:46.804-09:42:47.704 and
+all returned 502 VROOM_UNAVAILABLE. The harness's live inOutage flag was false
+because outageEnd was null during the outage; that bug is fixed, and the
+classification above uses the exact outage window and VROOM StartedAt.
+
+**Verdict: PASS on throughput, read latency, telemetry, optimisation latency,
+pool saturation and ordinary 5xx.** CPU for this exact run is **NOT VERIFIED**
+(previous 40.4% remains the latest resource measurement). Client-side pool wait
+queue is not exposed by postgres.js, so only DB lock waiters (0) are reported.
+Do not raise routing limits.
 
 ## Known gaps
 
@@ -121,7 +130,9 @@ clustered around the outage. Do not raise routing limits.
 3. Caddy uses an internal CA; each client must trust `C:\Caddy\root.crt`.
 4. Windows Schannel clients need revocation soft-fail (`curl --ssl-no-revoke`);
    browsers may require the CA to be trusted and may warn about revocation.
-5. DB-pool saturation and ordinary (non-outage) 5xx are NOT VERIFIED; the sampler
+5. CPU for the final instrumentation-only soak was NOT re-sampled (previous
+   40.4% of one core). Client-side pool wait queue is not exposed by postgres.js;
+   only DB lock waiters (0) are reported.
    itself consumed one app-role connection, and the 3 optimisation failures were
    clustered around the deliberate outage.
 6. age private key is still on the host; move it offline and remove it after handoff.

@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.54 - Pool and 5xx measurement closure (2026-10-29)
+- Tagged API pool sessions with application_name; sampler reads only those sessions as the stats role, separate from the monitor.
+- Final 100/850 soak: 35,999/35,999 reads at 20.0/s, p95 133 ms; telemetry 8,997x200 at 5.0/s; 59 optimisations, 56 approved, p95 5.74 s; ordinary 5xx 0/59 = 0.0%.
+- API pool: 897 samples, max 10, checked-out avg 1.23/max 7, saturation p95 30%, 100% <80%, lock waiters 0.
+- Outage version 200 unchanged; three 502 VROOM_UNAVAILABLE failures all inside the exact outage window. Harness outageEnd-null classification bug fixed.
+- CPU not re-sampled this run (previous 40.4%); client pool wait queue not exposed.
+
 ### v1.53 - Fleet read-path split, gzip and passing 100/850 soak (2026-10-29)
 - /v1/fleet/state now supports includeRoutes=false; route geometry moved to versioned GET /v1/fleet/routes. API host gzip enabled.
 - Measured snapshot: 11.36 MB / 2.3 s -> 568 KB / 97 ms; route geometry 10.8 MB / 671 ms fetched once per published version.
