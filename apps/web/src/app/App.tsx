@@ -676,7 +676,7 @@ function VehicleDetails({ state, vehicleId }: { state: FleetState; vehicleId: st
           </p>
           {vehicle.stale && (
             <p className="mt-1 text-[10px] font-medium text-status-warning">
-              GPS stale Â· last known position
+              GPS stale {"\u00b7"} last known position
             </p>
           )}
         </div>
