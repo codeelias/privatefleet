@@ -141,34 +141,46 @@ evidence was deleted because acceptance is persisted first.
 
 `backup.ps1` now produces, for the same timestamp:
 
-- `privatefleet-<stamp>.dump.age` Ã¢â‚¬â€ PostgreSQL custom dump;
-- `privatefleet-<stamp>.evidence.tar.age` Ã¢â‚¬â€ entire private evidence directory.
+- `privatefleet-<stamp>.dump.age` ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â PostgreSQL custom dump;
+- `privatefleet-<stamp>.evidence.tar.age` ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â entire private evidence directory.
 
 Both are SHA-256 checksummed and copied to `D:\PrivateFleet_Backups`. The age
 private key is not in either archive or the evidence directory.
 
-Recovery drill result (isolated database, temporary staging copy of the same
-metadata and media, since the production age private key is offline):
+Recovery drill result using `pg_restore --jobs=4` in an isolated database,
+including route/location geometry and the evidence files:
 
 ```text
-EVIDENCE_ROWS=2 HASH_MATCHED=2 HASH_FAILED=0
+PG_RESTORE_JOBS=4
+PG_RESTORE_EXIT=0
+RESTORE_SECONDS=242.8
+TOTAL_RTO_SECONDS=474.9
+EVIDENCE_HASH_MATCHED=2 HASH_FAILED=0
 RUNTIME_OWN_EVIDENCE=2 RUNTIME_FOREIGN_EVIDENCE=0
 RESTORE_DB_DROPPED=yes
+jobs=878
+routes=21462
+route_stops=228720
+location_points=30539
+job_stops_geom=987
+evidence=2
+RESTORE_ERROR_LINES=0
 ```
 
-The full production dump was also attempted, but restoring the dense route
-geometry (hundreds of stored route geometries) was slow; the recovery proof
-therefore excluded route/location geometry table data while retaining all
-evidence metadata, jobs, stops, events, alerts and media. The production
-evidence archive itself is encrypted and valid; its offline key must be
-available before a real disaster restore.
+The production archive itself is encrypted with the offline age key. The
+operator must mount that key on a controlled restore workstation to decrypt
+the archive; this end-to-end encrypted-archive decryption is still NOT
+VERIFIED until the key is provided. The geometry restore above used a fresh
+full dump of the same live database, so it proves the post-decryption restore
+procedure and the geometry/RTO path, not possession of the offline key.
 
 ## Verification status
 
-- API tests: 66 passed, including policy rejection without state change,
+- API tests: 67 passed, including CSV preview/atomic commit/duplicates plus policy rejection without state change,
   evidence upload/retrieval, idempotent completion/skip, real alert creation,
   RLS on `proof_policies`/`stop_evidence`.
 - Web tests: 21 passed.
+- CSV import E2E: 1 passed (3 valid + 1 invalid preview, commit disabled, corrected 4-job commit).
 - Expo queue tests: 4 passed, including restored signature/photo evidence after a simulated app restart and evidence upload before completion.
 - Workspace typecheck/lint/build: all pass.
 - Expo web export and web dispatcher build pass.
@@ -176,8 +188,11 @@ available before a real disaster restore.
   dispatcher retrieved both media, failure returned 200 and created one open
   alert with a linked job/stop.
 - Physical iOS/Android camera, native signature rendering, process-kill
-  recovery on a real device and native upload are **NOT VERIFIED** because no
-  native build toolchain/device/signing credential was available. Expo web and
-  automated queue tests are not a substitute for that evidence.
+  recovery on a real device and native upload are **NOT VERIFIED**: no physical
+  device is connected and no native build has been run. The Android SDK/JDK are
+  present, but Stage A/B remain gated. Expo web and automated queue tests are not
+  a substitute for that evidence.
+
+
 
 
