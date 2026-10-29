@@ -30,7 +30,6 @@ import {
 } from "../features/live-map/engine/telemetry";
 import { markTelemetry, startBenchSampler } from "../features/live-map/engine/benchmark";
 import { KpiCard } from "../shared/ui/KpiCard";
-import { Panel } from "../shared/ui/Panel";
 import { StatusChip } from "../shared/ui/StatusChip";
 
 type ScreenId = "live" | "board" | "jobs" | "optimise" | "alerts" | "tracking";
@@ -42,12 +41,6 @@ const WORKSPACE_ITEMS: ReadonlyArray<{ label: string; id: ScreenId }> = [
   { label: "Route Optimisation", id: "optimise" },
   { label: "Exceptions & Alerts", id: "alerts" },
   { label: "Customer Tracking", id: "tracking" },
-];
-
-const MANAGE_ITEMS: ReadonlyArray<string> = [
-  "Drivers & Vehicles",
-  "Reports",
-  "Settings",
 ];
 
 const SCENARIOS: ReadonlyArray<{ id: ScenarioName; label: string }> = [
@@ -257,78 +250,86 @@ function Dashboard({
   return (
     <DndContext onDragEnd={handleDragEnd}>
       <div className="flex h-full min-h-screen flex-col bg-command-bg text-text-primary">
-        {/* Topbar */}
-        <header className="flex items-center justify-between border-b border-command-border bg-command-surface px-5 py-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-primary text-sm font-black text-command-bg">
-              N
-            </span>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-text-secondary">
-                Fleet Operations
-              </p>
-              <p data-testid="tenant-name" className="text-sm font-bold">
-                {tenantName ?? "Northstar"}
-              </p>
+        <header className="relative z-40 border-b border-command-border/80 bg-command-surface/95 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-[1800px] items-center gap-5 px-5 py-3.5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-primary text-command-surface shadow-[0_5px_16px_rgba(239,132,47,0.25)]">
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                  <path d="M6 18c0-6 12-6 12-12" strokeLinecap="round" />
+                  <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none" />
+                  <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none" />
+                </svg>
+              </span>
+              <div>
+                <p className="text-[21px] font-semibold leading-none tracking-[-0.03em]">
+                  PrivateFleet
+                </p>
+                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
+                  <span>Fleet Operations</span>
+                  <span className="px-1 text-command-border">·</span>
+                  <span data-testid="tenant-name">{tenantName ?? "Northstar"}</span>
+                </p>
+              </div>
+            </div>
+
+            <nav className="mx-auto hidden items-center gap-1 rounded-full border border-command-border/70 bg-command-bg/90 p-1 xl:flex">
+              {WORKSPACE_ITEMS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setScreen(item.id)}
+                  aria-current={screen === item.id ? "page" : undefined}
+                  className={`rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
+                    screen === item.id
+                      ? "bg-text-primary text-command-surface shadow-sm"
+                      : "text-text-secondary hover:bg-command-raised hover:text-text-primary"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+
+            <div className="ml-auto flex items-center gap-3">
+              <span className="hidden text-[11px] text-text-secondary 2xl:block">
+                {todayLabel()}
+              </span>
+              <StatusChip tone="success" label="Live" pulse />
+              {onSignOut && (
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="flex items-center gap-2 rounded-full border border-command-border bg-command-surface py-1 pl-1 pr-3 text-[11px] font-semibold text-text-secondary transition-colors hover:text-text-primary"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-command-raised text-[11px] font-bold text-text-primary">
+                    {(tenantName ?? "N").slice(0, 1).toUpperCase()}
+                  </span>
+                  Sign out
+                </button>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="hidden text-sm text-text-secondary sm:block">{todayLabel()}</span>
-            <StatusChip tone="success" label="Live" pulse />
-            {onSignOut && (
+
+          <nav className="pf-scroll flex gap-1 overflow-x-auto px-4 pb-3 xl:hidden">
+            {WORKSPACE_ITEMS.map((item) => (
               <button
+                key={item.id}
                 type="button"
-                onClick={onSignOut}
-                className="rounded-lg border border-command-border px-3 py-1.5 text-xs font-semibold text-text-secondary hover:text-text-primary"
+                onClick={() => setScreen(item.id)}
+                aria-current={screen === item.id ? "page" : undefined}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium ${
+                  screen === item.id
+                    ? "bg-text-primary text-command-surface"
+                    : "text-text-secondary hover:bg-command-raised"
+                }`}
               >
-                Sign out
+                {item.label}
               </button>
-            )}
-          </div>
+            ))}
+          </nav>
         </header>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* Left nav */}
-          <nav className="flex w-56 shrink-0 flex-col border-r border-command-border bg-command-surface p-3">
-            <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-              Workspace
-            </p>
-            <ul className="space-y-0.5">
-              {WORKSPACE_ITEMS.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => setScreen(item.id)}
-                    aria-current={screen === item.id ? "page" : undefined}
-                    className={`w-full rounded-lg px-3 py-2 text-left text-sm ${
-                      screen === item.id
-                        ? "bg-brand-primary/15 font-semibold text-brand-primary"
-                        : "text-text-secondary hover:bg-command-raised hover:text-text-primary"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <p className="px-2 pb-2 pt-5 text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-              Manage
-            </p>
-            <ul className="space-y-0.5">
-              {MANAGE_ITEMS.map((item) => (
-                <li key={item}>
-                  <button
-                    type="button"
-                    className="w-full rounded-lg px-3 py-2 text-left text-sm text-text-secondary hover:bg-command-raised hover:text-text-primary"
-                  >
-                    {item}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </nav>
-
-          {/* Main column */}
           <main className="flex flex-1 flex-col overflow-hidden">
             {fleetQuery.isError && (
               <div className="border-b border-status-warning/40 bg-status-warning/10 px-5 py-2 text-xs text-status-warning">
@@ -351,79 +352,105 @@ function Dashboard({
               <TrackingHub state={state} />
             ) : screen === "live" ? (
               <>
-                {/* KPI strip + demo scenarios */}
-                <div className="flex flex-wrap items-center gap-3 border-b border-command-border px-5 py-3">
+                {/* Fleet summary + demo scenarios */}
+                <div className="flex flex-wrap items-stretch gap-3 px-5 pb-3 pt-4">
+                  <div className="mr-1 hidden min-w-[140px] flex-col justify-center 2xl:flex">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
+                      Fleet overview
+                    </p>
+                    <p className="mt-1 text-[13px] font-medium text-text-primary">
+                      Everything moving, at a glance.
+                    </p>
+                  </div>
                   <KpiCard label="Active vehicles" value={String(activeVehicles)} sub={`${onRoute} on route`} />
                   <KpiCard label="Jobs in progress" value={String(inProgress)} sub={`${unassigned.length} unassigned`} />
                   <KpiCard label="Unassigned" value={String(unassigned.length)} sub={`${urgent} urgent`} tone={urgent > 0 ? "warning" : undefined} />
                   <KpiCard label="At-risk stops" value={String(atRisk)} sub="needs attention" tone={atRisk > 0 ? "danger" : undefined} />
                   {state.demoMode && (
-                  <div className="ml-auto flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                      Demo scenario
-                    </span>
-                    {SCENARIOS.map((scenario) => (
-                      <button
-                        key={scenario.id}
-                        type="button"
-                        onClick={() => void resetScenario(scenario.id)}
-                        disabled={scenarioBusy}
-                        className={`rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
-                          state.scenario === scenario.id
-                            ? "border-brand-primary bg-brand-primary/15 text-brand-primary"
-                            : "border-command-border text-text-secondary hover:text-text-primary"
-                        }`}
-                      >
-                        {scenario.label}
-                      </button>
-                    ))}
-                  </div>
+                    <div className="ml-auto flex items-center gap-2 self-center">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-text-secondary">
+                        Demo scenario
+                      </span>
+                      {SCENARIOS.map((scenario) => (
+                        <button
+                          key={scenario.id}
+                          type="button"
+                          onClick={() => void resetScenario(scenario.id)}
+                          disabled={scenarioBusy}
+                          className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                            state.scenario === scenario.id
+                              ? "border-brand-primary bg-brand-primary/15 text-brand-primary"
+                              : "border-command-border text-text-secondary hover:text-text-primary"
+                          }`}
+                        >
+                          {scenario.label}
+                        </button>
+                      ))}
+                    </div>
                   )}
                   {scenarioError && (
-                    <p className="rounded-lg border border-status-warning/50 bg-status-warning/10 px-3 py-1.5 text-xs text-status-warning">
+                    <p className="rounded-xl border border-status-warning/50 bg-status-warning/10 px-3 py-1.5 text-xs text-status-warning">
                       {scenarioError}
                     </p>
                   )}
                 </div>
 
-                <div className="flex flex-1 overflow-hidden">
+                <div className="relative flex flex-1 overflow-hidden px-4">
                   <MapCanvas state={state} />
 
-                  {/* Right drawer */}
-                  <aside className="hidden w-72 shrink-0 flex-col gap-3 overflow-y-auto border-l border-command-border p-3 lg:flex">
-                    <Panel title="Selected vehicle">
-                      {state.vehicles[0] ? (
-                        <VehicleDetails state={state} vehicleId={state.vehicles[0].id} />
-                      ) : (
-                        <p className="text-sm text-text-secondary">No vehicles on shift.</p>
-                      )}
-                    </Panel>
-                    <Panel title="Needs attention">
-                      {openAlerts.length === 0 ? (
-                        <p className="text-sm text-text-secondary">All clear.</p>
-                      ) : (
-                        <ul className="space-y-2 text-xs text-text-secondary">
-                          {openAlerts.map((alert) => (
-                            <li key={alert.id} className="flex items-start gap-2">
-                              <StatusChip
-                                tone={alert.severity === "urgent" ? "danger" : "warning"}
-                                label={alert.severity === "urgent" ? "urgent" : "at risk"}
-                              />
-                              {alert.title}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </Panel>
+                  {/* Floating vehicle card over the map */}
+                  <aside className="pointer-events-none absolute left-8 top-6 z-30 hidden w-[318px] lg:block">
+                    <div className="pointer-events-auto overflow-hidden rounded-[22px] border border-command-border/80 bg-command-surface/95 shadow-[0_18px_50px_rgba(20,19,16,0.18)] backdrop-blur-xl">
+                      <div className="flex items-center justify-between px-4 pb-3 pt-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
+                          Selected vehicle
+                        </p>
+                        <span className="rounded-full bg-command-raised px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-text-secondary">
+                          Live
+                        </span>
+                      </div>
+                      <div className="px-4 pb-4">
+                        {state.vehicles[0] ? (
+                          <VehicleDetails state={state} vehicleId={state.vehicles[0].id} />
+                        ) : (
+                          <p className="text-sm text-text-secondary">No vehicles on shift.</p>
+                        )}
+                      </div>
+                      <div className="border-t border-command-border/70 px-4 py-3">
+                        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
+                          Needs attention
+                        </p>
+                        {openAlerts.length === 0 ? (
+                          <p className="text-xs text-text-secondary">All clear.</p>
+                        ) : (
+                          <ul className="space-y-2 text-xs text-text-secondary">
+                            {openAlerts.map((alert) => (
+                              <li key={alert.id} className="flex items-start gap-2">
+                                <StatusChip
+                                  tone={alert.severity === "urgent" ? "danger" : "warning"}
+                                  label={alert.severity === "urgent" ? "urgent" : "at risk"}
+                                />
+                                {alert.title}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
                   </aside>
                 </div>
 
-                {/* Bottom tray - unassigned jobs (drag onto pins, or click) */}
-                <div className="border-t border-command-border bg-command-surface px-5 py-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
+                {/* Parcel tray - drag onto pins, or click */}
+                <div className="border-t border-command-border/80 bg-command-bg px-5 py-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-text-secondary">
                       Unassigned jobs - drag onto a driver or select
                     </p>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-secondary">
+                      {unassigned.length} parcels
+                    </span>
+                  </div>
+                  <div className="pf-scroll flex gap-3 overflow-x-auto pb-2">
                     {unassigned.map((job) => (
                       <JobCard
                         key={job.id}
@@ -432,7 +459,7 @@ function Dashboard({
                       />
                     ))}
                     {unassigned.length === 0 && (
-                      <p className="text-xs text-text-secondary">
+                      <p className="py-2 text-xs text-text-secondary">
                         Queue clear. Reset a scenario to seed new jobs.
                       </p>
                     )}
@@ -482,29 +509,85 @@ function VehicleDetails({ state, vehicleId }: { state: FleetState; vehicleId: st
   if (!vehicle) {
     return null;
   }
+  const initials = (driver?.fullName ?? "Driver")
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2);
+  const stops = [...(currentJob?.stops ?? [])].sort((a, b) => a.sequenceNo - b.sequenceNo);
+  const stopLabel = (type: string): string =>
+    type === "pickup" ? "Pick up" : type === "dropoff" ? "Drop off" : "Service";
+  const stopTime = (value?: string): string =>
+    value
+      ? new Date(value).toLocaleString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "Time to be confirmed";
   return (
-    <div className="space-y-2 text-sm">
-      <div className="flex items-center justify-between">
-        <span className="font-semibold">{driver?.fullName ?? "Unassigned vehicle"}</span>
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-[13px] font-bold text-brand-primary">
+          {initials}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-semibold leading-tight">
+            {driver?.fullName ?? "Unassigned vehicle"}
+          </p>
+          <p className="mt-0.5 truncate text-[11px] text-text-secondary">
+            {vehicle.registration} {"\u00b7"} {vehicle.vehicleType}
+          </p>
+        </div>
         <StatusChip
           tone={vehicle.stale ? "stale" : vehicle.status === "on_route" ? "success" : "neutral"}
           label={vehicle.stale ? "stale" : vehicle.status}
         />
       </div>
-      <p className="text-text-secondary">
-        {vehicle.registration} - {vehicle.vehicleType}
-      </p>
+
       {currentJob ? (
-        <p className="text-text-secondary">
-          Current: {currentJob.reference} - {currentJob.serviceType}
-        </p>
+        <>
+          <div className="flex items-center justify-between gap-2 rounded-xl bg-command-raised/60 px-3 py-2">
+            <span className="text-[11px] font-bold uppercase tracking-[0.1em]">
+              {currentJob.reference}
+            </span>
+            <span className="text-[10px] uppercase tracking-[0.12em] text-text-secondary">
+              {currentJob.serviceType}
+            </span>
+          </div>
+          <ol className="relative ml-1 space-y-4 border-l border-command-border pl-5">
+            {stops.slice(0, 4).map((stop, index) => (
+              <li key={stop.id} className="relative">
+                <span
+                  className={`absolute -left-[25px] top-0.5 flex h-3 w-3 items-center justify-center rounded-full border-2 ${
+                    index === 0 || stop.status === "completed"
+                      ? "border-brand-primary bg-brand-primary"
+                      : "border-command-border bg-command-surface"
+                  }`}
+                />
+                <p className="text-[11px] font-semibold leading-tight">
+                  {stopLabel(stop.stopType)}
+                </p>
+                <p className="mt-0.5 text-[11px] leading-snug text-text-secondary">
+                  {stop.address}
+                </p>
+                <p className="mt-0.5 text-[10px] text-text-secondary/80">
+                  {stopTime(stop.windowStart)}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </>
       ) : (
-        <p className="text-text-secondary">No current job</p>
+        <p className="rounded-xl bg-command-raised/50 px-3 py-2 text-xs text-text-secondary">
+          No current job. This vehicle is ready for assignment.
+        </p>
       )}
+
       {vehicle.location && (
-        <p className="text-xs text-text-secondary">
-          Position: {vehicle.location.latitude.toFixed(4)},{" "}
-          {vehicle.location.longitude.toFixed(4)}
+        <p className="border-t border-command-border/70 pt-3 text-[10px] text-text-secondary">
+          Position {vehicle.location.latitude.toFixed(4)}, {vehicle.location.longitude.toFixed(4)}
         </p>
       )}
     </div>
@@ -540,6 +623,9 @@ export function App() {
     />
   );
 }
+
+
+
 
 
 

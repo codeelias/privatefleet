@@ -51,100 +51,178 @@ export function LoginScreen({ onLogin }: Props) {
     }
   }
 
+  const inputClass =
+    "mt-1.5 w-full rounded-xl border border-command-border bg-command-surface px-3.5 py-3 text-sm text-text-primary outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/15 disabled:opacity-60";
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-command-bg px-4 text-text-primary">
-      <form
-        onSubmit={(event) => void submit(event)}
-        noValidate
-        className="w-full max-w-sm rounded-2xl border border-command-border bg-command-surface p-8 shadow-xl"
-      >
-        <p className="text-xs font-semibold uppercase tracking-widest text-brand-primary">
-          PrivateFleet
-        </p>
-        <h1 className="mt-2 text-2xl font-bold">Sign in to dispatch</h1>
-        <p className="mt-1 text-sm text-text-secondary">
-          Use the workspace, email and password issued to your team.
-        </p>
-
-        <label className="mt-6 block text-sm font-medium" htmlFor="tenantSlug">
-          Workspace
-        </label>
-        <input
-          id="tenantSlug"
-          name="tenantSlug"
-          type="text"
-          autoComplete="organization"
-          value={tenantSlug}
-          onChange={(event) => setTenantSlug(event.target.value)}
-          aria-invalid={fieldErrors.tenantSlug ? true : undefined}
-          aria-describedby={fieldErrors.tenantSlug ? "tenantSlug-error" : undefined}
-          disabled={busy}
-          className="mt-1 w-full rounded-lg border border-command-border bg-command-bg px-3 py-2 text-sm outline-none focus:border-brand-primary"
+    <main className="grid min-h-screen bg-command-bg text-text-primary lg:grid-cols-[1.08fr_0.92fr]">
+      <section className="relative hidden overflow-hidden bg-[#171816] p-12 text-[#F7F1E5] lg:flex lg:flex-col lg:justify-between">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.16]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 30%, #EF842F 0, transparent 32%), radial-gradient(circle at 78% 65%, #EF842F 0, transparent 26%)",
+          }}
+          aria-hidden="true"
         />
-        {fieldErrors.tenantSlug && (
-          <p id="tenantSlug-error" className="mt-1 text-xs text-status-warning">
-            {fieldErrors.tenantSlug}
-          </p>
-        )}
+        <div className="relative flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-primary text-[#171816]">
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+              <path d="M6 18c0-6 12-6 12-12" strokeLinecap="round" />
+              <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none" />
+              <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none" />
+            </svg>
+          </span>
+          <span className="text-[22px] font-semibold tracking-[-0.03em]">PrivateFleet</span>
+        </div>
 
-        <label className="mt-4 block text-sm font-medium" htmlFor="email">
-          Email
-        </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          aria-invalid={fieldErrors.email ? true : undefined}
-          aria-describedby={fieldErrors.email ? "email-error" : undefined}
-          disabled={busy}
-          className="mt-1 w-full rounded-lg border border-command-border bg-command-bg px-3 py-2 text-sm outline-none focus:border-brand-primary"
-        />
-        {fieldErrors.email && (
-          <p id="email-error" className="mt-1 text-xs text-status-warning">
-            {fieldErrors.email}
+        <div className="relative max-w-xl">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#EF842F]">
+            Fleet operations, composed
           </p>
-        )}
-
-        <label className="mt-4 block text-sm font-medium" htmlFor="password">
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          aria-invalid={fieldErrors.password ? true : undefined}
-          aria-describedby={fieldErrors.password ? "password-error" : undefined}
-          disabled={busy}
-          className="mt-1 w-full rounded-lg border border-command-border bg-command-bg px-3 py-2 text-sm outline-none focus:border-brand-primary"
-        />
-        {fieldErrors.password && (
-          <p id="password-error" className="mt-1 text-xs text-status-warning">
-            {fieldErrors.password}
+          <h1 className="mt-5 text-[56px] font-semibold leading-[0.98] tracking-[-0.05em]">
+            Every parcel.
+            <br />
+            Every route.
+            <br />
+            <span className="text-[#EF842F]">In view.</span>
+          </h1>
+          <p className="mt-6 max-w-md text-[14px] leading-relaxed text-[#BDB6A8]">
+            Dispatch, optimise and track your fleet from one calm command surface —
+            designed for the people moving things in the real world.
           </p>
-        )}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="mt-6 w-full rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-command-bg transition hover:bg-brand-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+          <div className="mt-10 flex items-center gap-8 border-t border-white/10 pt-6">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[#8E877A]">Workload</p>
+              <p className="mt-1 text-2xl font-semibold">100 / 850</p>
+              <p className="text-[10px] text-[#8E877A]">vehicles / jobs</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[#8E877A]">Read latency</p>
+              <p className="mt-1 text-2xl font-semibold">p95 133 ms</p>
+              <p className="text-[10px] text-[#8E877A]">at 20 req/s</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-[#8E877A]">
+          <span>LAN deployment · 192.168.1.128</span>
+          <span>Private by design</span>
+        </div>
+      </section>
+
+      <section className="flex items-center justify-center px-5 py-10 sm:px-10">
+        <form
+          onSubmit={(event) => void submit(event)}
+          noValidate
+          className="w-full max-w-[390px]"
         >
-          {busy ? "Signing in..." : "Sign in"}
-        </button>
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-primary text-command-surface">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                <path d="M6 18c0-6 12-6 12-12" strokeLinecap="round" />
+                <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none" />
+                <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none" />
+              </svg>
+            </span>
+            <span className="text-xl font-semibold tracking-[-0.03em]">PrivateFleet</span>
+          </div>
 
-        <div aria-live="polite" role="status">
-          {error && (
-            <p className="mt-4 rounded-lg border border-status-danger/50 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
-              {error}
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-primary">
+            Dispatch workspace
+          </p>
+          <h1 className="mt-2 text-[30px] font-semibold leading-tight tracking-[-0.035em]">
+            Sign in to dispatch
+          </h1>
+          <p className="mt-2 text-[13px] leading-relaxed text-text-secondary">
+            Use the workspace, email and password issued to your team.
+          </p>
+
+          <label className="mt-7 block text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary" htmlFor="tenantSlug">
+            Workspace
+          </label>
+          <input
+            id="tenantSlug"
+            name="tenantSlug"
+            type="text"
+            autoComplete="organization"
+            value={tenantSlug}
+            onChange={(event) => setTenantSlug(event.target.value)}
+            aria-invalid={fieldErrors.tenantSlug ? true : undefined}
+            aria-describedby={fieldErrors.tenantSlug ? "tenantSlug-error" : undefined}
+            disabled={busy}
+            className={inputClass}
+          />
+          {fieldErrors.tenantSlug && (
+            <p id="tenantSlug-error" className="mt-1.5 text-xs text-status-warning">
+              {fieldErrors.tenantSlug}
             </p>
           )}
-        </div>
-      </form>
+
+          <label className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary" htmlFor="email">
+            Email
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            aria-invalid={fieldErrors.email ? true : undefined}
+            aria-describedby={fieldErrors.email ? "email-error" : undefined}
+            disabled={busy}
+            className={inputClass}
+          />
+          {fieldErrors.email && (
+            <p id="email-error" className="mt-1.5 text-xs text-status-warning">
+              {fieldErrors.email}
+            </p>
+          )}
+
+          <label className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.12em] text-text-secondary" htmlFor="password">
+            Password
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            aria-invalid={fieldErrors.password ? true : undefined}
+            aria-describedby={fieldErrors.password ? "password-error" : undefined}
+            disabled={busy}
+            className={inputClass}
+          />
+          {fieldErrors.password && (
+            <p id="password-error" className="mt-1.5 text-xs text-status-warning">
+              {fieldErrors.password}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="mt-6 w-full rounded-xl bg-brand-primary px-4 py-3 text-sm font-semibold text-[#171816] shadow-[0_8px_20px_rgba(239,132,47,0.22)] transition hover:bg-brand-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {busy ? "Signing in..." : "Sign in"}
+          </button>
+
+          <div aria-live="polite" role="status">
+            {error && (
+              <p className="mt-4 rounded-xl border border-status-danger/40 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
+                {error}
+              </p>
+            )}
+          </div>
+
+          <p className="mt-8 text-[10px] uppercase tracking-[0.14em] text-text-secondary">
+            Protected workspace · PrivateFleet
+          </p>
+        </form>
+      </section>
     </main>
   );
 }

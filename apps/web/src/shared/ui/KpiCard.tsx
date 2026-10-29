@@ -18,12 +18,14 @@ export function KpiCard({
         ? "text-status-warning"
         : "text-text-primary";
   return (
-    <div className="flex min-w-[180px] flex-col gap-0.5 rounded-xl border border-command-border bg-command-surface px-4 py-3">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
+    <div className="flex min-w-[170px] flex-1 flex-col gap-0.5 rounded-2xl border border-command-border/80 bg-command-surface px-4 py-3 shadow-[0_1px_0_rgba(25,24,21,0.03)]">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-secondary">
         {label}
       </span>
-      <span className={`text-2xl font-bold tabular-nums ${valueClass}`}>{value}</span>
-      <span className="text-xs text-text-secondary">{sub}</span>
+      <span className={`text-[26px] font-semibold leading-tight tabular-nums ${valueClass}`}>
+        {value}
+      </span>
+      <span className="text-[11px] text-text-secondary">{sub}</span>
     </div>
   );
 }

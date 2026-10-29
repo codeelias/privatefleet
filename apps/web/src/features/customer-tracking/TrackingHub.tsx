@@ -12,8 +12,8 @@ import { StatusChip } from "../../shared/ui/StatusChip";
 
 const TENANT = {
   displayName: "NORTHSTAR TRANSPORT",
-  primary: "#2563EB",
-  primaryContrast: "#FFFFFF",
+  primary: "#EF842F",
+  primaryContrast: "#171816",
 };
 
 export function TrackingHub({ state }: { state: FleetState }) {
@@ -74,7 +74,7 @@ export function TrackingHub({ state }: { state: FleetState }) {
                   type="checkbox"
                   checked={notifications}
                   onChange={(event) => setNotifications(event.target.checked)}
-                  className="h-4 w-4 accent-[#4F8CFF]"
+                  className="h-4 w-4 accent-[#EF842F]"
                 />
               </label>
               <div className="flex items-center gap-3">
@@ -112,7 +112,7 @@ export function TrackingHub({ state }: { state: FleetState }) {
                   type="checkbox"
                   checked={photoRequired}
                   onChange={(event) => setPhotoRequired(event.target.checked)}
-                  className="h-4 w-4 accent-[#4F8CFF]"
+                  className="h-4 w-4 accent-[#EF842F]"
                 />
               </label>
               <label className="flex items-center justify-between">
@@ -121,7 +121,7 @@ export function TrackingHub({ state }: { state: FleetState }) {
                   type="checkbox"
                   checked={signatureRequired}
                   onChange={(event) => setSignatureRequired(event.target.checked)}
-                  className="h-4 w-4 accent-[#4F8CFF]"
+                  className="h-4 w-4 accent-[#EF842F]"
                 />
               </label>
             </div>
@@ -147,3 +147,4 @@ export function TrackingHub({ state }: { state: FleetState }) {
     </div>
   );
 }
+

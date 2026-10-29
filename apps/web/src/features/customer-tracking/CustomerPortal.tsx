@@ -36,11 +36,11 @@ export function CustomerPortal({ brand, jobRef, eta, standalone = false }: Porta
   return (
     <div
       style={theme}
-      className={`bg-[#F4F7FB] text-[#0F172A] ${
+      className={`bg-[#F2EEE4] text-[#171816] ${
         standalone ? "min-h-screen" : "h-full"
       } flex flex-col`}
     >
-      <header className="flex items-center justify-between border-b border-[#E2E8F0] bg-white px-5 py-3">
+      <header className="flex items-center justify-between border-b border-[#D8CFBD] bg-[#FBF8F1] px-5 py-3">
         <div className="flex items-center gap-2">
           <span
             className="flex h-8 w-8 items-center justify-center rounded-lg text-sm font-black"
@@ -49,18 +49,18 @@ export function CustomerPortal({ brand, jobRef, eta, standalone = false }: Porta
             {brand.displayName.charAt(0)}
           </span>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#475569]">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#756E61]">
               {brand.displayName}
             </p>
             <p className="text-sm font-bold">Customer tracking page</p>
           </div>
         </div>
-        <span className="text-xs text-[#475569]">Tracking / Job {jobRef}</span>
+        <span className="text-xs text-[#756E61]">Tracking / Job {jobRef}</span>
       </header>
 
       <main className={`mx-auto w-full max-w-md flex-1 px-5 py-6 ${standalone ? "" : "pb-2"}`}>
         <h1 className="text-xl font-bold">Your delivery is on the way</h1>
-        <div className="mt-3 flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm">
+        <div className="mt-3 flex items-center gap-3 rounded-xl bg-[#FBF8F1] p-4 shadow-sm">
           <span
             className="flex h-3 w-3 items-center justify-center rounded-full p-2.5 text-[10px] font-black"
             style={{ backgroundColor: "var(--portal-primary)", color: "var(--portal-primary-contrast)" }}
@@ -68,16 +68,16 @@ export function CustomerPortal({ brand, jobRef, eta, standalone = false }: Porta
             {jobRef}
           </span>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#475569]">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#756E61]">
               Driver en route
             </p>
             <p className="text-2xl font-bold tabular-nums">{eta}</p>
-            <p className="text-[10px] text-[#475569]">Estimated arrival</p>
+            <p className="text-[10px] text-[#756E61]">Estimated arrival</p>
           </div>
         </div>
 
-        <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#475569]">
+        <div className="mt-4 rounded-xl bg-[#FBF8F1] p-4 shadow-sm">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#756E61]">
             Delivery progress
           </p>
           <ol className="mt-3 space-y-3">
@@ -86,7 +86,7 @@ export function CustomerPortal({ brand, jobRef, eta, standalone = false }: Porta
                 <span
                   className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
                     step.state === "pending"
-                      ? "border-2 border-[#CBD5E1] text-[#94A3B8]"
+                      ? "border-2 border-[#D8CFBD] text-[#A69C8B]"
                       : step.state === "current"
                         ? "animate-pulse text-white"
                         : "text-white"
@@ -99,7 +99,7 @@ export function CustomerPortal({ brand, jobRef, eta, standalone = false }: Porta
                 >
                   {step.state === "done" ? "OK" : step.state === "current" ? ">" : ""}
                 </span>
-                <span className={step.state === "current" ? "font-bold" : "text-[#334155]"}>
+                <span className={step.state === "current" ? "font-bold" : "text-[#4A4439]"}>
                   {step.label}
                   {step.time ? ` - ${step.time}` : ""}
                 </span>
@@ -108,8 +108,8 @@ export function CustomerPortal({ brand, jobRef, eta, standalone = false }: Porta
           </ol>
         </div>
 
-        <div className="mt-4 rounded-xl bg-white p-4 text-xs text-[#475569] shadow-sm">
-          <p className="font-bold text-[#0F172A]">Your data, your service provider</p>
+        <div className="mt-4 rounded-xl bg-[#FBF8F1] p-4 text-xs text-[#756E61] shadow-sm">
+          <p className="font-bold text-[#191815]">Your data, your service provider</p>
           <p className="mt-1">
             This link shows one job only. It does not expose other vehicles, routes
             or customer records.
@@ -117,24 +117,25 @@ export function CustomerPortal({ brand, jobRef, eta, standalone = false }: Porta
           <p className="mt-1">Link expires automatically - contact the operator if you need a new link.</p>
         </div>
 
-        <div className="mt-4 rounded-xl bg-white p-4 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#475569]">
+        <div className="mt-4 rounded-xl bg-[#FBF8F1] p-4 shadow-sm">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[#756E61]">
             Proof of service
           </p>
-          <p className="mt-1 text-xs text-[#475569]">
+          <p className="mt-1 text-xs text-[#756E61]">
             Completion evidence will appear here after the driver completes the stop.
           </p>
         </div>
 
-        <p className="mt-4 text-center text-[10px] text-[#475569]">
+        <p className="mt-4 text-center text-[10px] text-[#756E61]">
           Last updated 8 sec ago - current location is approximate and updates when
           the driver's device reports.
         </p>
       </main>
 
-      <footer className="border-t border-[#E2E8F0] bg-white px-5 py-3 text-center text-xs text-[#475569]">
+      <footer className="border-t border-[#D8CFBD] bg-[#FBF8F1] px-5 py-3 text-center text-xs text-[#756E61]">
         Need help with this job? Contact {brand.displayName}.
       </footer>
     </div>
   );
 }
+

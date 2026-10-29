@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Reusable panel surface on the command background. */
+/** Reusable paper panel used by dispatcher surfaces. */
 export function Panel({
   title,
   children,
@@ -11,9 +11,9 @@ export function Panel({
   action?: ReactNode;
 }) {
   return (
-    <section className="flex flex-col rounded-xl border border-command-border bg-command-surface">
-      <header className="flex items-center justify-between border-b border-command-border px-4 py-2.5">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-text-secondary">
+    <section className="flex flex-col overflow-hidden rounded-2xl border border-command-border/80 bg-command-surface shadow-[0_10px_30px_rgba(25,24,21,0.06)]">
+      <header className="flex items-center justify-between border-b border-command-border/70 px-4 py-3">
+        <h2 className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
           {title}
         </h2>
         {action}

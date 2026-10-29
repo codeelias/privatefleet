@@ -132,7 +132,7 @@ function colourFor(vehicle: VehicleDto): string {
     return "bg-text-secondary";
   }
   if (vehicle.status === "on_route") {
-    return "bg-status-success";
+    return "bg-brand-primary";
   }
   if (vehicle.status === "maintenance") {
     return "bg-status-warning";
@@ -186,9 +186,9 @@ function VehiclePin({
       }`}
     >
       <span
-        className={`flex h-7 w-7 items-center justify-center rounded-full border-2 text-[10px] font-bold text-command-bg ${colourFor(
+        className={`flex h-8 w-8 items-center justify-center rounded-full border-[3px] text-[10px] font-bold text-command-surface shadow-[0_4px_14px_rgba(0,0,0,0.35)] ${colourFor(
           vehicle,
-        )} ${isOver ? "border-brand-primary" : "border-command-bg"} ${
+        )} ${isOver ? "border-brand-primary" : "border-command-surface"} ${
           vehicle.status === "on_route" && !vehicle.stale ? "animate-pulse" : ""
         }`}
       >
@@ -383,9 +383,9 @@ export function MapCanvas({ state }: { state: FleetState }) {
       return L.polyline(
         toLeafletLatLngs(route.points),
         {
-          color: selected ? "#38BDF8" : "#4F8CFF",
+          color: selected ? "#FFD2A8" : "#EF842F",
           weight: selected ? 5 : 3,
-          opacity: selected ? 0.95 : 0.28,
+          opacity: selected ? 0.95 : 0.72,
         },
       ).addTo(map);
     });
@@ -444,9 +444,9 @@ export function MapCanvas({ state }: { state: FleetState }) {
         type: "line",
         source: "vehicle-routes",
         paint: {
-          "line-color": "#4F8CFF",
+          "line-color": "#EF842F",
           "line-width": 3,
-          "line-opacity": 0.25,
+          "line-opacity": 0.7,
         },
       });
       map.addLayer({
@@ -455,7 +455,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
         source: "vehicle-routes",
         filter: ["==", ["get", "driverId"], ""],
         paint: {
-          "line-color": "#38BDF8",
+          "line-color": "#FFD2A8",
           "line-width": 5,
           "line-opacity": 0.95,
         },
@@ -719,11 +719,11 @@ export function MapCanvas({ state }: { state: FleetState }) {
         : "loading raster tiles";
 
   return (
-    <section data-testid="map-canvas" className="relative flex-1 bg-command-bg">
+    <section data-testid="map-canvas" className="relative flex-1 bg-command-bg" data-map-shell="true">
       <div className="absolute inset-0 flex items-center justify-center">
         <div
           data-testid="map-card"
-          className="relative h-[92%] w-[94%] overflow-hidden rounded-2xl border border-command-border bg-command-surface/60"
+          className="pf-map-card relative h-[94%] w-[97%] overflow-hidden rounded-[26px] border border-command-border/80 bg-[#171816] shadow-[0_18px_50px_rgba(20,19,16,0.14)]"
         >
           <div
             className="absolute inset-0 opacity-20"
@@ -734,7 +734,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
             }}
             aria-hidden="true"
           />
-          <div ref={containerRef} className="absolute inset-0 z-10 bg-[#0B1220]" />
+          <div ref={containerRef} className="absolute inset-0 z-10 bg-[#171816]" />
           {jobs.map((job) => {
             const pickup = job.stops.find((s) => s.stopType === "pickup");
             const pos = project(pickup?.location);
@@ -809,7 +809,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
               />
             );
           })}
-          <p className="absolute bottom-2 right-3 z-30 text-[10px] text-text-secondary">
+          <p className="absolute bottom-2 right-3 z-30 rounded-full bg-command-surface/90 px-2 py-1 text-[10px] text-text-secondary">
             Grey ghost pins show last known position - never imply a fresh GPS fix.
           </p>
           {routeGeometryMissing && (
@@ -831,7 +831,7 @@ export function MapCanvas({ state }: { state: FleetState }) {
               {status}
             </p>
           ) : (
-            <p className="absolute bottom-2 left-3 z-30 text-[10px] text-text-secondary">
+            <p className="absolute bottom-2 left-3 z-30 rounded-full bg-command-surface/90 px-2 py-1 text-[10px] text-text-secondary">
               {status}
             </p>
           )}
@@ -846,6 +846,9 @@ export function MapCanvas({ state }: { state: FleetState }) {
     </section>
   );
 }
+
+
+
 
 
 

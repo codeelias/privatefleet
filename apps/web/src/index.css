@@ -1,25 +1,25 @@
 /**
- * Design tokens from the Figma design system (docs/figma/design-extract.md
- * section 2) mapped to Tailwind v4 theme variables.
- * Command / Background #0F172A, Surface #1E293B, Raised #263449,
- * Border #334155, Primary #4F8CFF, Success #10B981, Warning #F59E0B,
- * Danger #EF4444, Text #F8FAFC / #94A3B8.
+ * PrivateFleet visual system.
+ *
+ * The reference direction is warm field-tool minimalism: an ivory canvas,
+ * charcoal map, orange route accent, generous radii and floating paper cards.
+ * Semantic tokens keep the dispatcher surfaces consistent across screens.
  */
 @import "tailwindcss";
 
 @theme {
-  --color-command-bg: #0f172a;
-  --color-command-surface: #1e293b;
-  --color-command-raised: #263449;
-  --color-command-border: #334155;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-brand-primary: #4f8cff;
-  --color-status-success: #10b981;
-  --color-status-warning: #f59e0b;
-  --color-status-danger: #ef4444;
+  --color-command-bg: #f2eee4;
+  --color-command-surface: #fbf8f1;
+  --color-command-raised: #e9e1d2;
+  --color-command-border: #d8cfbd;
+  --color-text-primary: #191815;
+  --color-text-secondary: #756e61;
+  --color-brand-primary: #ef842f;
+  --color-status-success: #3e7a5b;
+  --color-status-warning: #b98525;
+  --color-status-danger: #b84c38;
   --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --radius-command: 12px;
+  --radius-command: 18px;
 }
 
 html,
@@ -36,6 +36,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+::selection {
+  background: #ef842f;
+  color: #fffaf2;
+}
+
 /* Ghost pins never imply a fresh GPS fix (docs/09.7). */
 .stale-ghost {
   opacity: 0.55;
@@ -49,21 +54,40 @@ body {
   }
 }
 
-/* Leaflet ships a light-grey default container background (#ddd) that
-   overrides our dark tokens and flashes grey before tiles paint. */
-.leaflet-container {
-  background: #0b1220 !important;
+/* The map is a charcoal instrument panel inside the ivory shell. OSM's
+   light raster is tonally inverted so the same offline-capable tile source
+   matches the reference without a new provider or API key. */
+.pf-map-card .leaflet-tile-pane {
+  filter: grayscale(0.85) invert(0.93) brightness(0.62) contrast(1.08);
+}
+.pf-map-card .leaflet-container {
+  background: #171816 !important;
   font-family: inherit !important;
 }
-
-/* Leaflet attribution + controls on the dark command centre */
 .leaflet-control-attribution {
-  background: rgba(15, 23, 42, 0.8) !important;
-  color: #94a3b8 !important;
+  background: rgba(251, 248, 241, 0.9) !important;
+  color: #756e61 !important;
   font-size: 9px !important;
+  border-radius: 8px 0 0 0;
 }
 .leaflet-bar a {
-  background: #1e293b !important;
-  color: #f8fafc !important;
-  border-color: #334155 !important;
+  background: #fbf8f1 !important;
+  color: #191815 !important;
+  border-color: #d8cfbd !important;
+}
+.leaflet-bar a:hover {
+  background: #f2eee4 !important;
+}
+
+.pf-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #c9bfac transparent;
+}
+.pf-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+.pf-scroll::-webkit-scrollbar-thumb {
+  background: #c9bfac;
+  border-radius: 999px;
 }

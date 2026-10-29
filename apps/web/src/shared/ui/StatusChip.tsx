@@ -2,11 +2,11 @@
 export type ChipTone = "success" | "warning" | "danger" | "neutral" | "stale";
 
 const TONE_CLASSES: Record<ChipTone, string> = {
-  success: "bg-status-success/15 text-status-success border-status-success/40",
-  warning: "bg-status-warning/15 text-status-warning border-status-warning/40",
-  danger: "bg-status-danger/15 text-status-danger border-status-danger/40",
-  neutral: "bg-command-raised text-text-secondary border-command-border",
-  stale: "bg-command-raised text-text-secondary border-command-border stale-ghost",
+  success: "bg-status-success/10 text-status-success border-status-success/25",
+  warning: "bg-status-warning/10 text-status-warning border-status-warning/25",
+  danger: "bg-status-danger/10 text-status-danger border-status-danger/25",
+  neutral: "bg-command-raised/70 text-text-secondary border-command-border",
+  stale: "bg-command-raised/70 text-text-secondary border-command-border stale-ghost",
 };
 
 const TONE_DOT: Record<ChipTone, string> = {
@@ -28,7 +28,7 @@ export function StatusChip({
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${TONE_CLASSES[tone]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${TONE_CLASSES[tone]}`}
     >
       <span
         aria-hidden="true"
