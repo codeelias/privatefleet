@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.51 - LAN deployment execution: Caddy/PG/PostGIS, backup/restore, load and API soak (2026-10-29)
+- Native Windows pilot deployment on `192.168.1.128`: Caddy 2.11.7 internal TLS at `https://app.privatefleet.home.arpa`; PostgreSQL 16.10 + PostGIS 3.6; API on loopback behind Caddy; OSRM/VROOM rebound to `127.0.0.1` on an internal Docker network. Firewall verified from a LAN client: only 443/80 reachable; 4000/5432/5000/3000 closed.
+- HTTP proposal/approval: 26 stops, 2 service identities, version 2; identity gate assignments/stop IDs verified. Deployed UI verified in a browser (3 routes, 2 SINGLE JOB labels).
+- Encrypted daily age backup scheduled (SYSTEM, 02:00) to `D:\PrivateFleet_Backups`; restore drill 1.0-1.2 s with 14 jobs/3 routes/26 stops, RLS 16/16, foreign rows 0. `G:\My Drive` is inaccessible to the service account: off-host copy remains **NOT VERIFIED**; USB local backup passed.
+- 100/850 deployed load: 5.29 s (matrix 205 ms, solve 1.96 s, geometry 1.73 s, 90 routes, 0 unassigned). 30-minute API soak: 36,000 reads/0 errors, read p95 198 ms, optimisation p95 207 ms, 11 DB sessions; run on 3-vehicle tenant, no telemetry load -> PARTIAL for specified workload.
+- Paths: CA `C:\Caddy\root.crt`; age private key `C:\privatefleet\age_private_key.txt` (move offline). Public exposure not externally verified; no router forwarding.
+- Docs: `docs/16e-lan-deployment.md`, readiness/handoff updated. No application code changes; all software remains frozen at `a667d9d`.
 ### v1.50 - Auth limiter edge-case regression and operational handoff (2026-10-28)
 - Shared-IP limiter behaviour is now explicitly covered: Account A exhausting its five-failure bucket does not block Account B on the same depot IP; when the IP aggregate reaches 50 failures in the window, all accounts behind that IP receive 429 `AUTH_RATE_LIMITED` with `Retry-After` until expiry. Documented as an intentional anti-spray trade-off.
 - Published `docs/16d-operational-handoff.md`: deployment checklist (TLS/Caddy, DNS, CORS, firewall, secrets/env manifest), encrypted scheduled off-host backup and restore drill, RPO/RTO and PITR decision slots, 100-vehicle load/30-minute soak protocol with provisional thresholds, retention decision table and ordered pre-exposure checklist.
@@ -431,6 +438,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

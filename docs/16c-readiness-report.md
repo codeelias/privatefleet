@@ -194,3 +194,29 @@ measurement, retention sign-off and Expo/Metro build-tool advisory upgrades.
 Operator runbook: `docs/16d-operational-handoff.md`.
 Do not expose the API or routing ports publicly until every pre-exposure box is
 checked.
+
+## 6. LAN deployment execution (2026-10-29)
+
+A native Windows deployment was completed on `192.168.1.128` (see
+`docs/16e-lan-deployment.md` for the full record).
+
+| Gate | Status | Evidence |
+|---|---|---|
+| HTTPS / local CA | **PASS (LAN)** | Caddy 2.11.7 internal CA; `https://app...` and `api...` return 200 from a LAN client; CA at `C:\Caddy\root.crt` |
+| LAN firewall boundary | **PASS (LAN)** | From workspace: 443/80 reachable, 4000/5432/5000/3000 closed; routing containers rebound to `127.0.0.1`; Caddy rules scoped to 192.168.1.0/24 |
+| Public exposure | **NOT VERIFIED** | No router forwarding, but no external-internet test was possible |
+| HTTP proposal/approval | **PASS** | 3 vehicles, 26 stops, 2 service stops, 0 unassigned, approval 200, snapshot version 2 |
+| Identity gate | **PASS** | 26 persisted stops, 2 service stops, per-route 12/10/4, assignments match |
+| Deployed UI | **PASS** | Browser through Caddy: 3 route panels, 2 SINGLE JOB labels, 64.3 km / 174 min |
+| Encrypted backup schedule | **PASS (local USB)** | Daily 02:00 SYSTEM task result 0; age-encrypted 140 KB dump + SHA-256 in `D:\PrivateFleet_Backups` |
+| Off-host backup | **FAIL / NOT VERIFIED** | `G:\My Drive` returns Access denied to the service account; no independent copy exists |
+| Restore drill | **PASS (USB-local)** | Decrypt + restore 1.0-1.2 s; jobs 14, routes 3, stops 26, RLS 16, PostGIS 3.6; app role foreign rows 0; temp DB dropped |
+| 100 vehicles / 850 jobs | **PASS** | Deployed stack: 5,293 ms total; matrix 205 ms, solve 1,956 ms, geometry 1,733 ms; 90 routes, 0 unassigned |
+| 30-minute soak (reduced workload) | **PARTIAL / FAIL for specified scale** | 1,800 s; 36,000 reads, 0 errors, p50/p95/p99 133/198/219 ms; 58 optimisations, 57 approved, 1 expected outage failure, p50/p95/p99 134/207/379 ms; API CPU +363 s (~20% of one core), memory avg 289 MB / max 383 MB, DB sessions constant 11. Run on 3 vehicles/14 jobs, not 100/850; telemetry soak not exercised (separate 3×200 check). |
+
+**Operator actions still required:** install Caddy root CA on every client device,
+move `C:\privatefleet\age_private_key.txt` offline, resolve or replace the Google
+Drive backup target, verify public exposure from outside the LAN, and (before
+claiming the full pilot soak) rerun the 30-minute test on the 100/850 workload
+with telemetry load.
+

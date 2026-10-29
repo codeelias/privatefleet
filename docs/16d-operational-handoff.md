@@ -258,3 +258,44 @@ sign-off.**
   Batch larger fleets or raise the VROOM/OSRM limits only after evidence.
 - No native background GPS/geofencing yet; the driver web app requires the
   device to keep the page active for continuous tracking.
+
+## 8. Executed LAN deployment (2026-10-29)
+
+- Host: `192.168.1.128`; app `https://app.privatefleet.home.arpa`; API
+  `https://api.privatefleet.home.arpa`.
+- PostgreSQL 16.10 native (`C:\PostgreSQL\16`, service `postgresql-x64-16`),
+  PostGIS 3.6, database `privatefleet`, RLS active.
+- Caddy 2.11.7 native, internal CA; CA certificate at `C:\Caddy\root.crt`.
+- API: Node 24 + tsx, `127.0.0.1:4000`, startup task `PrivateFleet API`;
+  web static from `C:\privatefleet\apps\web\dist`.
+- OSRM/VROOM rebound to `127.0.0.1:5000/3000`; VROOM reaches OSRM over the
+  `privatefleet-routing` Docker network.
+- Firewall: only 80/443 reachable from `192.168.1.0/24`; API/DB/routing ports
+  confirmed closed from a LAN client. No router port forwarding.
+- Lab decisions accepted 2026-10-29: RPO 24 h, RTO 4 h, daily backups, no PITR,
+  locations 7 d, optimisation runs 30 d, outbox/backups 30 d, synthetic
+  addresses purged with the dataset.
+- Backup task `PrivateFleet Backup` runs daily 02:00 as SYSTEM; first encrypted
+  backup at `D:\PrivateFleet_Backups\privatefleet-20261029T005900Z.dump.age`.
+- Off-host copy to `G:\My Drive\PrivateFleet_Backups` failed with Access denied
+  for the service account. This is **not** an off-host backup; resolve the
+  Google Drive permissions or provide a second host.
+- Restore drill from the USB backup: 1.0-1.2 s, 14 jobs, 3 routes, 26 stops,
+  16 RLS tables, PostGIS 3.6; runtime role saw 0 foreign rows. Temporary
+  restore database dropped.
+- age private key: `C:\privatefleet\age_private_key.txt`; move offline and
+  remove from the host after handoff.
+
+### 8.1 Soak result (2026-10-29)
+
+30-minute API soak result: reads 36,000 with 0 errors and p50/p95/p99 of
+133/198/219 ms; 58 optimisation runs, 57 approved, one expected VROOM-outage
+failure, p50/p95/p99 134/207/379 ms. API CPU rose 363 s over the run (~20% of
+one core); memory averaged 289 MB (max 383 MB); database sessions remained
+constant at 11.
+
+**Scope limitation:** the soak used the seeded 3-vehicle/14-job tenant, not the
+100/850 workload, and the telemetry loop was not exercised during the soak
+(separate three-sample check returned 200/200/200). The 100/850 load was
+measured once at 5.29 s. Rerun the full 30-minute 100/850 + telemetry soak
+before treating the performance gate as signed off.
