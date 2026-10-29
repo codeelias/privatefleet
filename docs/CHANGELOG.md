@@ -9,6 +9,12 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.52 - Full 100/850 soak, cloud backup verification, malformed-JSON fix (2026-10-29)
+- Malformed JSON now returns 400 `INVALID_JSON` with no internal detail; API tests 64/64.
+- Off-host Google Drive backup now works via interactive user task `PrivateFleet Cloud Backup`; file + checksum verified in `G:\My Drive\PrivateFleet_Backups`, restored successfully (RTO 2.4 s). Task requires Amela logged on; external-device sync/download still unverified.
+- Full 30-minute 100/850 soak: **FAIL on read throughput** (3,300 reads ~1.8/s vs 20/s; p95 7.3 s), telemetry 825x200 (~0.46/s vs 5/s); optimisation 55/55 approved, p95 5.9 s; VROOM outage preserved version 20 and returned typed 502. CPU +1,550 s (~85% core), memory avg 614/max 749 MB, DB 10.8/11.
+- Conclusion: snapshot read payload/latency is the next scalability work; routing limits stay unchanged.
+
 ### v1.51 - LAN deployment execution: Caddy/PG/PostGIS, backup/restore, load and API soak (2026-10-29)
 - Native Windows pilot deployment on `192.168.1.128`: Caddy 2.11.7 internal TLS at `https://app.privatefleet.home.arpa`; PostgreSQL 16.10 + PostGIS 3.6; API on loopback behind Caddy; OSRM/VROOM rebound to `127.0.0.1` on an internal Docker network. Firewall verified from a LAN client: only 443/80 reachable; 4000/5432/5000/3000 closed.
 - HTTP proposal/approval: 26 stops, 2 service identities, version 2; identity gate assignments/stop IDs verified. Deployed UI verified in a browser (3 routes, 2 SINGLE JOB labels).

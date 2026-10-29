@@ -277,9 +277,11 @@ sign-off.**
   addresses purged with the dataset.
 - Backup task `PrivateFleet Backup` runs daily 02:00 as SYSTEM; first encrypted
   backup at `D:\PrivateFleet_Backups\privatefleet-20261029T005900Z.dump.age`.
-- Off-host copy to `G:\My Drive\PrivateFleet_Backups` failed with Access denied
-  for the service account. This is **not** an off-host backup; resolve the
-  Google Drive permissions or provide a second host.
+- Cloud copy now succeeds via task `PrivateFleet Cloud Backup` under interactive
+  user `Alemnesh\Amela`: `G:\My Drive\PrivateFleet_Backups\privatefleet-20261029T005900Z.dump.age`
+  plus checksum, SHA-256 matching the USB copy. A restore of the Google Drive copy
+  passed (RTO 2.4 s, 26 stops, RLS 16, foreign rows 0). The task requires Amela to
+  be logged on; external-device download/sync verification is still pending.
 - Restore drill from the USB backup: 1.0-1.2 s, 14 jobs, 3 routes, 26 stops,
   16 RLS tables, PostGIS 3.6; runtime role saw 0 foreign rows. Temporary
   restore database dropped.
@@ -288,14 +290,13 @@ sign-off.**
 
 ### 8.1 Soak result (2026-10-29)
 
-30-minute API soak result: reads 36,000 with 0 errors and p50/p95/p99 of
-133/198/219 ms; 58 optimisation runs, 57 approved, one expected VROOM-outage
-failure, p50/p95/p99 134/207/379 ms. API CPU rose 363 s over the run (~20% of
-one core); memory averaged 289 MB (max 383 MB); database sessions remained
-constant at 11.
+Full 100/850 soak result (1,809 s): **FAIL on read throughput.** Reads completed
+3,300 (~1.8/s vs 20/s target), 0 errors, p50/p95/p99 4,123/7,287/7,742 ms.
+Optimisation: 55 runs, 55 approved, p95 5,904 ms. Telemetry: 825 x 200
+(~0.46/s vs 5/s). The 60 s VROOM outage left routeVersion 20 unchanged and
+returned typed 502 VROOM_UNAVAILABLE. API CPU +1,550 s (~85% of one core),
+memory avg 614 MB (max 749 MB), DB sessions 10.8/11.
 
-**Scope limitation:** the soak used the seeded 3-vehicle/14-job tenant, not the
-100/850 workload, and the telemetry loop was not exercised during the soak
-(separate three-sample check returned 200/200/200). The 100/850 load was
-measured once at 5.29 s. Rerun the full 30-minute 100/850 + telemetry soak
-before treating the performance gate as signed off.
+The bottleneck is the fleet-snapshot read payload/latency, not the solver.
+Reduce the snapshot read model (pagination/summary endpoint) and rerun this
+exact soak before signing off performance. Do not raise the routing limits.

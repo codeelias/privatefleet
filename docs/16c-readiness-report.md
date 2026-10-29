@@ -209,10 +209,10 @@ A native Windows deployment was completed on `192.168.1.128` (see
 | Identity gate | **PASS** | 26 persisted stops, 2 service stops, per-route 12/10/4, assignments match |
 | Deployed UI | **PASS** | Browser through Caddy: 3 route panels, 2 SINGLE JOB labels, 64.3 km / 174 min |
 | Encrypted backup schedule | **PASS (local USB)** | Daily 02:00 SYSTEM task result 0; age-encrypted 140 KB dump + SHA-256 in `D:\PrivateFleet_Backups` |
-| Off-host backup | **FAIL / NOT VERIFIED** | `G:\My Drive` returns Access denied to the service account; no independent copy exists |
+| Off-host backup | **PASS (cloud copy + restore) / external download NOT VERIFIED** | Interactive-user task `PrivateFleet Cloud Backup` copied `privatefleet-20261029T005900Z.dump.age` + checksum to `G:\My Drive\PrivateFleet_Backups`; SHA-256 matches; restored the G: copy (RTO 2.4 s, 26 stops, RLS 16, foreign rows 0). Google Drive sync/independent-device download not verified; task only runs while Amela is logged on. |
 | Restore drill | **PASS (USB-local)** | Decrypt + restore 1.0-1.2 s; jobs 14, routes 3, stops 26, RLS 16, PostGIS 3.6; app role foreign rows 0; temp DB dropped |
 | 100 vehicles / 850 jobs | **PASS** | Deployed stack: 5,293 ms total; matrix 205 ms, solve 1,956 ms, geometry 1,733 ms; 90 routes, 0 unassigned |
-| 30-minute soak (reduced workload) | **PARTIAL / FAIL for specified scale** | 1,800 s; 36,000 reads, 0 errors, p50/p95/p99 133/198/219 ms; 58 optimisations, 57 approved, 1 expected outage failure, p50/p95/p99 134/207/379 ms; API CPU +363 s (~20% of one core), memory avg 289 MB / max 383 MB, DB sessions constant 11. Run on 3 vehicles/14 jobs, not 100/850; telemetry soak not exercised (separate 3×200 check). |
+| Full 30-minute soak (100/850) | **FAIL (read throughput)** | 1,809 s; reads 3,300 (~1.8/s vs 20/s target), 0 errors, p50/p95/p99 4,123/7,287/7,742 ms; 55 optimisations, all approved, p95 5.9 s; telemetry 825×200 (~0.46/s vs 5/s); VROOM outage: version 20 unchanged, proposal 502 VROOM_UNAVAILABLE; CPU +1,550 s (~85% core), memory avg 614/max 749 MB, DB sessions 10.8/11. Snapshot read payload/latency is the bottleneck; do not raise routing limits. |
 
 **Operator actions still required:** install Caddy root CA on every client device,
 move `C:\privatefleet\age_private_key.txt` offline, resolve or replace the Google

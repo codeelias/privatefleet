@@ -79,26 +79,32 @@ Identity gate (`fleet-live-gate.ts`) on the deployed database:
 - 90 routes, 0 unassigned, 97 shipments, 767 single-stop jobs
 - 5,240,515 m / 579,859 s of route duration
 
-## Soak
+## Full soak (100 vehicles / 850 jobs)
 
-30-minute API soak completed at 2026-10-29 01:31 UTC:
+Run 2026-10-29 01:50-02:20 UTC, 1,809 s, against the 100/850 tenant:
 
-- reads: 36,000 requests, 0 errors, p50/p95/p99 **133 / 198 / 219 ms**
-- optimisation: 58 runs, 57 approved, 1 expected failure during the deliberate
-  60 s VROOM outage; p50/p95/p99 **134 / 207 / 379 ms**
-- resources: API CPU +363 s over the run (~20% of one core), memory avg 289 MB
-  (max 383 MB), DB sessions constant at 11
-- VROOM was stopped for 60 s and recovered; OSRM stayed up
+- reads: **3,300 completed** (about **1.8/s**, not the requested 20/s), 0 errors,
+  p50/p95/p99 **4,123 / 7,287 / 7,742 ms**
+- optimisation: **55 runs**, 55 approved, 0 normal failures,
+  p50/p95/p99 **5,184 / 5,904 / 6,089 ms**
+- telemetry: **825 x HTTP 200** (about 0.46/s, not the requested 5/s), no errors
+- deliberate 60 s VROOM outage: published routeVersion stayed **20 -> 20 -> 20**;
+  fleet proposal returned **502 VROOM_UNAVAILABLE**; snapshot stayed 200
+- resources: API CPU **+1,550 s** (~85% of one core), memory avg **614 MB**
+  (max 749 MB), DB sessions avg 10.8 / max 11; no OOM/restart observed
 
-**Scope limitation:** the soak used the seeded 3-vehicle/14-job tenant, not the
-100/850 workload, and the telemetry loop was not exercised in this run (a
-separate three-sample telemetry check returned 200/200/200). The 100/850
-workload was measured once at 5.29 s. The full 30-minute 100/850 + telemetry
-soak remains required before signing off the performance gate.
+**Verdict: FAIL on read throughput and telemetry rate.** The API could not
+sustain 20 fleet-snapshot reads/s or 5 telemetry batches/s at this fleet size;
+the snapshot payload/latency is the bottleneck. Optimisation latency and outage
+preservation passed. Do not raise the routing limits; first reduce the fleet
+snapshot read model/payload (pagination or summary endpoint) and rerun this
+exact soak.
 
 ## Known gaps
 
-1. Google Drive path is inaccessible to the service account; no off-host backup.
+1. Cloud backup now succeeds via interactive user Amela: the Google Drive folder
+   contains the encrypted backup and checksum. External-device download/sync
+   verification is still pending; the task requires Amela to be logged in.
 2. Public-internet exposure was not verified (LAN-only test).
 3. Caddy uses an internal CA; each client must trust `C:\Caddy\root.crt`.
 4. Windows Schannel clients need revocation soft-fail (`curl --ssl-no-revoke`);
