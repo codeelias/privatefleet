@@ -9,6 +9,13 @@ Records what changed in the documentation package and the automated checks that 
 - Substitutions: em/en dash -> '-', arrow -> '->', bullet -> '*', middot -> ' / ', multiplication -> 'x', check marks -> '[x]', circle -> 'o', '>='/'<=', ellipsis -> '...', section sign -> 'Section ', pound sign -> 'GBP ', box drawing -> '+', '-', '|', 'v', '>'.
 - New standing rule (recorded in [13.2](13-development-methodology.md)): all documentation is ASCII-only from now on.
 
+### v1.53 - Fleet read-path split, gzip and passing 100/850 soak (2026-10-29)
+- /v1/fleet/state now supports includeRoutes=false; route geometry moved to versioned GET /v1/fleet/routes. API host gzip enabled.
+- Measured snapshot: 11.36 MB / 2.3 s -> 568 KB / 97 ms; route geometry 10.8 MB / 671 ms fetched once per published version.
+- Full open-loop 100/850 soak (1,800 s): 35,999/35,999 reads at 20.0/s, p95 129 ms; telemetry 8,996x200 at 5.0/s; 59 optimisations, 56 approved, p95 5.74 s; outage version 75 unchanged, 502; CPU 40.4% core, memory avg 376/max 516 MB.
+- DB-pool saturation and ordinary non-outage 5xx remain NOT VERIFIED. UI verified: 3 routes, 3 markers, no map warnings/demo controls.
+- Verification: API 65/65, web 21/21, typecheck/lint/build green.
+
 ### v1.52 - Full 100/850 soak, cloud backup verification, malformed-JSON fix (2026-10-29)
 - Malformed JSON now returns 400 `INVALID_JSON` with no internal detail; API tests 64/64.
 - Off-host Google Drive backup now works via interactive user task `PrivateFleet Cloud Backup`; file + checksum verified in `G:\My Drive\PrivateFleet_Backups`, restored successfully (RTO 2.4 s). Task requires Amela logged on; external-device sync/download still unverified.

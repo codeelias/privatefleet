@@ -290,13 +290,16 @@ sign-off.**
 
 ### 8.1 Soak result (2026-10-29)
 
-Full 100/850 soak result (1,809 s): **FAIL on read throughput.** Reads completed
-3,300 (~1.8/s vs 20/s target), 0 errors, p50/p95/p99 4,123/7,287/7,742 ms.
-Optimisation: 55 runs, 55 approved, p95 5,904 ms. Telemetry: 825 x 200
-(~0.46/s vs 5/s). The 60 s VROOM outage left routeVersion 20 unchanged and
-returned typed 502 VROOM_UNAVAILABLE. API CPU +1,550 s (~85% of one core),
-memory avg 614 MB (max 749 MB), DB sessions 10.8/11.
+Read-path fix: /v1/fleet/state?includeRoutes=false dropped from 11.36 MB /
+2.3 s to **568 KB / 97 ms**; route geometry is a versioned separate read at
+10.8 MB / 671 ms, fetched once per published version.
 
-The bottleneck is the fleet-snapshot read payload/latency, not the solver.
-Reduce the snapshot read model (pagination/summary endpoint) and rerun this
-exact soak before signing off performance. Do not raise the routing limits.
+Full 100/850 open-loop soak (1,800 s): **35,999/35,999 reads at 20.0/s**, 0 errors,
+p50/p95/p99 57/129/237 ms; telemetry 8,996 x 200 at 5.0/s; 59 optimisations,
+56 approved, 3 failures around the outage, p95 5,741 ms; route fetch p95 667 ms.
+VROOM outage left routeVersion 75 unchanged and returned 502 (typed code not
+captured). CPU +727 s (40.4% of one core), memory avg 376 MB (max 516 MB).
+
+DB-pool saturation is **NOT VERIFIED** (pool max 10; sampler added one app-role
+connection, observed max 11). Ordinary non-outage 5xx is not separately proven.
+Do not raise routing limits.

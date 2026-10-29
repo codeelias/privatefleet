@@ -79,26 +79,38 @@ Identity gate (`fleet-live-gate.ts`) on the deployed database:
 - 90 routes, 0 unassigned, 97 shipments, 767 single-stop jobs
 - 5,240,515 m / 579,859 s of route duration
 
+## Read-path optimisation
+
+The earlier build returned **11,364,655 bytes / 2,295 ms** for one fleet snapshot
+(240,880 route points, 864 jobs, 961 stops). The fix separates route geometry and
+enables gzip on the API host:
+
+| Read | Before | After |
+|---|---|---|
+| Fleet polling (/state?includeRoutes=false) | 11.36 MB, 2.3 s | **567,769 bytes, 97 ms** |
+| Route geometry (/fleet/routes) | included every read | **10,796,917 bytes, 671 ms**, fetched once per published version |
+| API CPU during soak | 85% of one core | **40.4%** |
+
 ## Full soak (100 vehicles / 850 jobs)
 
-Run 2026-10-29 01:50-02:20 UTC, 1,809 s, against the 100/850 tenant:
+Open-loop run 2026-10-29 03:02-03:32 UTC, **1,800 s**:
 
-- reads: **3,300 completed** (about **1.8/s**, not the requested 20/s), 0 errors,
-  p50/p95/p99 **4,123 / 7,287 / 7,742 ms**
-- optimisation: **55 runs**, 55 approved, 0 normal failures,
-  p50/p95/p99 **5,184 / 5,904 / 6,089 ms**
-- telemetry: **825 x HTTP 200** (about 0.46/s, not the requested 5/s), no errors
-- deliberate 60 s VROOM outage: published routeVersion stayed **20 -> 20 -> 20**;
-  fleet proposal returned **502 VROOM_UNAVAILABLE**; snapshot stayed 200
-- resources: API CPU **+1,550 s** (~85% of one core), memory avg **614 MB**
-  (max 749 MB), DB sessions avg 10.8 / max 11; no OOM/restart observed
+- reads: **35,999 scheduled / 35,999 completed at 20.0/s**, 0 failed, 0 dropped,
+  0 5xx; p50/p95/p99 **57 / 129 / 237 ms**
+- telemetry: **8,999 scheduled, 8,996 x HTTP 200 at 5.0/s**, no errors
+- optimisation: **59 runs, 56 approved, 3 failures** clustered around the
+  deliberate outage/restart; p50/p95/p99 **5,255 / 5,741 / 6,191 ms**
+- route geometry: fetched **56 times**, p95 **667 ms**
+- 60 s VROOM outage: routeVersion **75 -> 75 -> 75**; proposal returned **502**
+  (typed code not captured by this harness revision)
+- resources: API CPU **+727 s (40.4% of one core)**, memory avg **376 MB**
+  (max 516 MB), DB sessions avg 10.9 / max 11; no OOM/restart observed
 
-**Verdict: FAIL on read throughput and telemetry rate.** The API could not
-sustain 20 fleet-snapshot reads/s or 5 telemetry batches/s at this fleet size;
-the snapshot payload/latency is the bottleneck. Optimisation latency and outage
-preservation passed. Do not raise the routing limits; first reduce the fleet
-snapshot read model/payload (pagination or summary endpoint) and rerun this
-exact soak.
+**Verdict: PASS on read throughput, latency, telemetry, optimisation latency,
+CPU and outage preservation.** DB-pool saturation is **NOT VERIFIED**: the pool
+is max 10 sessions and the sampler itself used one app-role connection. Ordinary
+(non-outage) 5xx is also not separately proven; the 3 optimisation failures are
+clustered around the outage. Do not raise routing limits.
 
 ## Known gaps
 
@@ -109,6 +121,8 @@ exact soak.
 3. Caddy uses an internal CA; each client must trust `C:\Caddy\root.crt`.
 4. Windows Schannel clients need revocation soft-fail (`curl --ssl-no-revoke`);
    browsers may require the CA to be trusted and may warn about revocation.
-5. Soak workload scale differs from the 100/850 load; resource thresholds are provisional.
+5. DB-pool saturation and ordinary (non-outage) 5xx are NOT VERIFIED; the sampler
+   itself consumed one app-role connection, and the 3 optimisation failures were
+   clustered around the deliberate outage.
 6. age private key is still on the host; move it offline and remove it after handoff.
 
