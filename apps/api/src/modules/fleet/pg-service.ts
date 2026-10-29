@@ -15,6 +15,7 @@ import type {
   FleetState,
   JobDto,
   JobStopDto,
+  RoutePath,
   VehicleDto,
 } from "@privatefleet/contracts";
 import { EVENT_SCHEMA_VERSION } from "@privatefleet/contracts";
@@ -123,7 +124,10 @@ export class PgFleetService {
     private readonly bus: RealtimeBus,
   ) {}
 
-  async snapshot(tenantId: string): Promise<FleetState> {
+  async snapshot(
+    tenantId: string,
+    options: { includeRoutes?: boolean } = {},
+  ): Promise<FleetState> {
     return withTenant(this.handle, tenantId, async (db) => {
       const jobs = (await db.execute(
         sql`SELECT id, reference, service_type, priority, status, assigned_driver_id,
@@ -148,8 +152,10 @@ export class PgFleetService {
             FROM alerts ORDER BY created_at DESC`,
       )) as unknown as AlertRow[];
 
+      const includeRoutes = options.includeRoutes !== false;
       const routeRows = (await db.execute(sql`
-        SELECT vehicle_id, driver_id, version, geometry
+        SELECT vehicle_id, driver_id, version
+               ${includeRoutes ? sql`, geometry` : sql``}
         FROM routes
         WHERE status IN ('published', 'in_progress')
         ORDER BY version DESC
@@ -160,14 +166,16 @@ export class PgFleetService {
           latestByVehicle.set(row.vehicle_id, row);
         }
       }
-      const routePaths = [...latestByVehicle.values()]
-        .filter((row) => Array.isArray(row.geometry) && row.geometry.length >= 2)
-        .map((row) => ({
-          vehicleId: row.vehicle_id,
-          ...(row.driver_id ? { driverId: row.driver_id } : {}),
-          points: row.geometry as Array<{ latitude: number; longitude: number }>,
-          version: Number(row.version),
-        }));
+      const routePaths = includeRoutes
+        ? [...latestByVehicle.values()]
+            .filter((row) => Array.isArray(row.geometry) && row.geometry.length >= 2)
+            .map((row) => ({
+              vehicleId: row.vehicle_id,
+              ...(row.driver_id ? { driverId: row.driver_id } : {}),
+              points: row.geometry as Array<{ latitude: number; longitude: number }>,
+              version: Number(row.version),
+            }))
+        : [];
       const routeVersion =
         routeRows.length > 0
           ? Math.max(...routeRows.map((row) => Number(row.version)))
@@ -248,6 +256,34 @@ export class PgFleetService {
     });
   }
 
+
+  async routes(tenantId: string): Promise<{ routes: RoutePath[]; routeVersion: number }> {
+    return withTenant(this.handle, tenantId, async (db) => {
+      const rows = (await db.execute(sql`
+        SELECT vehicle_id, driver_id, version, geometry
+        FROM routes
+        WHERE status IN ('published', 'in_progress')
+        ORDER BY version DESC
+      `)) as unknown as RouteRow[];
+      const latestByVehicle = new Map<string, RouteRow>();
+      for (const row of rows) {
+        if (!latestByVehicle.has(row.vehicle_id)) {
+          latestByVehicle.set(row.vehicle_id, row);
+        }
+      }
+      const routes = [...latestByVehicle.values()]
+        .filter((row) => Array.isArray(row.geometry) && row.geometry.length >= 2)
+        .map((row) => ({
+          vehicleId: row.vehicle_id,
+          ...(row.driver_id ? { driverId: row.driver_id } : {}),
+          points: row.geometry as Array<{ latitude: number; longitude: number }>,
+          version: Number(row.version),
+        }));
+      const routeVersion =
+        rows.length > 0 ? Math.max(...rows.map((row) => Number(row.version))) : 1;
+      return { routes, routeVersion };
+    });
+  }
   async previewAssignment(
     tenantId: string,
     jobId: string,
@@ -734,6 +770,7 @@ export class PgFleetService {
     }
   }
 }
+
 
 
 

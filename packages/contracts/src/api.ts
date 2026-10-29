@@ -299,6 +299,13 @@ export const FleetStateSchema = z.object({
 });
 export type FleetState = z.infer<typeof FleetStateSchema>;
 
+/** Route geometry is fetched separately from the fleet summary/state. */
+export const FleetRoutesResponseSchema = z.object({
+  routes: z.array(RoutePathSchema),
+  routeVersion: z.number().int().nonnegative(),
+});
+export type FleetRoutesResponse = z.infer<typeof FleetRoutesResponseSchema>;
+
 export const ScenariosListSchema = z.object({
   scenarios: z.array(ScenarioNameSchema),
   current: ScenarioNameSchema,

@@ -144,6 +144,43 @@ describe("fleet snapshot", () => {
     const anonymous = await app.inject({ method: "GET", url: "/v1/fleet/state" });
     expect(anonymous.statusCode).toBe(401);
   });
+
+  it("serves a lightweight state without route geometry and a separate versioned route read", async () => {
+    const light = await app.inject({
+      method: "GET",
+      url: "/v1/fleet/state?includeRoutes=false",
+      headers: authed(a.token),
+    });
+    expect(light.statusCode).toBe(200);
+    const body = light.json() as {
+      routes: unknown[];
+      jobs: unknown[];
+      routeVersion: number;
+      demoMode: boolean;
+    };
+    expect(body.demoMode).toBe(false);
+    expect(body.routes).toEqual([]);
+    expect(body.jobs.length).toBeGreaterThan(0);
+    expect(body.routeVersion).toBeGreaterThanOrEqual(1);
+
+    const routes = await app.inject({
+      method: "GET",
+      url: "/v1/fleet/routes",
+      headers: authed(a.token),
+    });
+    expect(routes.statusCode).toBe(200);
+    expect((routes.json() as { routes: unknown[] }).routes).toEqual([]);
+
+    const foreignRoutes = await app.inject({
+      method: "GET",
+      url: "/v1/fleet/routes",
+      headers: authed(b.token),
+    });
+    expect((foreignRoutes.json() as { routes: unknown[] }).routes).toEqual([]);
+
+    const anonymousRoutes = await app.inject({ method: "GET", url: "/v1/fleet/routes" });
+    expect(anonymousRoutes.statusCode).toBe(401);
+  });
 });
 
 describe("assignment lifecycle", () => {

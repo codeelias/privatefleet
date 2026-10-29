@@ -4,7 +4,7 @@
  * Socket.IO, scenario reset, drag-and-drop assignment (map pins and
  * dispatch lanes) with keyboard/click fallbacks, and screen navigation.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -96,11 +96,26 @@ function Dashboard({
 
   const fleetQuery = useQuery({
     queryKey: ["fleet"],
-    queryFn: api.fleetState,
+    queryFn: () => api.fleetState(false),
     refetchInterval: 15_000,
     retry: 2,
   });
-  const state = fleetQuery.data ?? EMPTY_STATE;
+  // Geometry is versioned separately: it changes only when a plan is
+  // published, so 20 snapshot reads/s never carry 240k route points.
+  const routesQuery = useQuery({
+    queryKey: ["fleet-routes", fleetQuery.data?.routeVersion ?? 0],
+    queryFn: api.fleetRoutes,
+    enabled: fleetQuery.data?.demoMode === false,
+    staleTime: 60_000,
+  });
+  const baseState = fleetQuery.data ?? EMPTY_STATE;
+  const state = useMemo(
+    () =>
+      routesQuery.data?.routes
+        ? { ...baseState, routes: routesQuery.data.routes }
+        : baseState,
+    [baseState, routesQuery.data],
+  );
 
   useEffect(() => {
     const socket = createFleetSocket();
@@ -525,6 +540,7 @@ export function App() {
     />
   );
 }
+
 
 
 

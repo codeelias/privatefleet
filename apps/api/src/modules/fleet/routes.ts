@@ -66,7 +66,14 @@ export function registerFleetRoutes(
   const guard = makeAuthGuard(auth);
 
   app.get("/v1/fleet/state", { preHandler: guard }, async (request) => {
-    return fleet.snapshot(request.auth?.tenantId ?? "");
+    const query = (request.query ?? {}) as { includeRoutes?: string };
+    return fleet.snapshot(request.auth?.tenantId ?? "", {
+      includeRoutes: query.includeRoutes !== "false",
+    });
+  });
+
+  app.get("/v1/fleet/routes", { preHandler: guard }, async (request) => {
+    return fleet.routes(request.auth?.tenantId ?? "");
   });
 
   app.post(
@@ -199,6 +206,7 @@ export function registerFleetRoutes(
     return result;
   });
 }
+
 
 
 

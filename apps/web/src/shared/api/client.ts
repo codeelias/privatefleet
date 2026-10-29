@@ -13,6 +13,7 @@ import type {
   AuthSession,
   AuthTokens,
   FleetState,
+  FleetRoutesResponse,
   FleetOptimizationProposal,
   LiveOptimizationProposal,
   OptimizationProposal,
@@ -152,7 +153,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ refreshToken }),
     }),
-  fleetState: () => request<FleetState>("/v1/fleet/state"),
+  fleetState: (includeRoutes = true) =>
+    request<FleetState>(
+      includeRoutes ? "/v1/fleet/state" : "/v1/fleet/state?includeRoutes=false",
+    ),
+  fleetRoutes: () => request<FleetRoutesResponse>("/v1/fleet/routes"),
   scenarios: () => request<ScenariosList>("/v1/demo/scenarios"),
   resetScenario: (id: ScenarioName) =>
     request<ScenariosList>(`/v1/demo/scenarios/${id}/reset`, { method: "POST" }),
@@ -209,6 +214,7 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 
 
