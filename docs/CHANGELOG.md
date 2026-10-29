@@ -1,3 +1,12 @@
+### v1.57 - Premium map-first refinement (2026-10-29)
+- Header reduced to a single toolbar: text navigation, orange active underline, no nav capsule.
+- Fleet overview is a hairline-divided status rail; expanded cards remain optional.
+- Vehicle panel defaults to compact, with explicit Expand/Minimise/Close text actions and GPS age in expanded detail; launcher reopens compact.
+- Unassigned drawer label/card typography refined; compact exception summary appears in the selected-vehicle card.
+- Dark map filter lifted; light map fallback; selected route orange, inactive routes cool grey-blue when a selection exists.
+- Route casing, SVG grip icons, WCAG tokens/focus retained.
+- Caddy proxies /socket.io so Global Live is the real connection.
+- Verified one route-geometry request across all toggles; drawer does not resize map. Demo 13/13, auth/fleet 11/11, web 21/21, API 65/65.
 ### v1.56 - Map-first dispatcher, optional panels, accessibility pass (2026-10-29)
 - Compact 44px fleet overview with expand/collapse and local preference; map uses all remaining height.
 - Selected vehicle is a floating panel with expanded, compact, closed and launcher states; map never reserves a column.
@@ -467,6 +476,7 @@ Get-ChildItem -Recurse 'C:\privatefleet\docs' -Filter *.md |
 ```
 
 *(Anchor verification re-uses the heading-slug script recorded in the round-2 audit; it is reproduced in the next package revision if the checks migrate into CI.)*
+
 
 
 

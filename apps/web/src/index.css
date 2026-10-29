@@ -67,7 +67,7 @@ body {
    retains the reference identity; the light style removes the tonal
    inversion for operators who need maximum label legibility. */
 .pf-map-card .leaflet-tile-pane {
-  filter: grayscale(0.68) invert(0.88) brightness(0.8) contrast(1.08);
+  filter: grayscale(0.62) invert(0.86) brightness(0.9) contrast(1.05);
   transition: filter 180ms ease;
 }
 .pf-map-card.pf-map-light .leaflet-tile-pane {
@@ -107,4 +107,7 @@ body {
   background: #b8afa0;
   border-radius: 999px;
 }
+
+
+
 

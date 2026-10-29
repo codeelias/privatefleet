@@ -396,6 +396,7 @@ export function MapCanvas({
     };
   }, [useVector]);
 
+
   // Route polylines for the raster engine; the selected driver's route
   // is highlighted while the others stay dimmed.
   useEffect(() => {
@@ -416,9 +417,9 @@ export function MapCanvas({
         className: "pf-route-casing",
       }).addTo(map);
       const line = L.polyline(points, {
-        color: selected ? "#FFD2A8" : "#F28C28",
+        color: selected ? "#F28C28" : selectedDriverId !== null ? "#8FA6B2" : "#F28C28",
         weight: selected ? 5 : 3,
-        opacity: selected ? 0.98 : 0.88,
+        opacity: selected ? 0.98 : selectedDriverId !== null ? 0.62 : 0.88,
         className: "pf-route-line",
       }).addTo(map);
       next.push(casing, line);
@@ -500,7 +501,7 @@ export function MapCanvas({
         source: "vehicle-routes",
         filter: ["==", ["get", "driverId"], ""],
         paint: {
-          "line-color": "#FFD2A8",
+          "line-color": "#F28C28",
           "line-width": 5,
           "line-opacity": 0.95,
         },
@@ -910,6 +911,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 

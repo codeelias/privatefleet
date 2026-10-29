@@ -67,7 +67,7 @@ export function JobCard({
       <div className="relative space-y-3 border-l border-dashed border-command-border pl-4">
         <span className="absolute -left-[5px] top-1 h-2.5 w-2.5 rounded-full border-2 border-brand-primary bg-command-surface" />
         <div>
-          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">
+          <p className="text-[10px] font-medium text-text-secondary">
             Pick up
           </p>
           <p className="mt-0.5 truncate text-[11px] font-medium">
@@ -76,7 +76,7 @@ export function JobCard({
         </div>
         <span className="absolute -left-[5px] bottom-4 h-2.5 w-2.5 rounded-full bg-text-primary" />
         <div>
-          <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">
+          <p className="text-[10px] font-medium text-text-secondary">
             Drop off
           </p>
           <p className="mt-0.5 truncate text-[11px] font-medium">
@@ -85,7 +85,7 @@ export function JobCard({
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t border-command-border/70 pt-2.5 text-[10px] text-text-secondary">
+      <div className="flex items-center justify-between border-t border-command-border/70 pt-2.5 text-[11px] text-text-secondary">
         <span>{job.stops.length} {job.stops.length === 1 ? "stop" : "stops"}</span>
         <span className="font-semibold uppercase tracking-[0.12em] text-brand-ink">
           Assign {"\u2192"}
@@ -94,5 +94,7 @@ export function JobCard({
     </button>
   );
 }
+
+
 
 

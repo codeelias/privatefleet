@@ -92,7 +92,7 @@ function Dashboard({
     }
   });
   const [vehiclePanel, setVehiclePanel] = useState<"expanded" | "compact" | "closed">(
-    "expanded",
+    "compact",
   );
   const [queueOpen, setQueueOpen] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
@@ -276,43 +276,52 @@ function Dashboard({
   const unassigned = state.jobs.filter((j) => j.status === "unassigned");
   const urgent = unassigned.filter((j) => j.priority === "stat" || j.priority === "urgent").length;
   const atRisk = openAlerts.length;
+  const selectedVehicle = state.vehicles[0];
+  const selectedDriver = state.drivers.find((d) => d.id === selectedVehicle?.driverId);
+  const selectedJob = state.jobs.find((j) => j.assignedVehicleId === selectedVehicle?.id);
+  const nextStop = selectedJob?.stops.find((s) => s.status !== "completed");
+  const selectedInitials = (selectedDriver?.fullName ?? "No vehicle")
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2);
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
       <div className="flex h-full min-h-screen flex-col bg-command-bg text-text-primary">
         <header className="relative z-40 border-b border-command-border/80 bg-command-surface/95 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-[1800px] items-center gap-5 px-5 py-3.5">
+          <div className="mx-auto flex max-w-[1800px] items-center gap-6 px-5 py-3">
             <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-primary text-command-surface shadow-[0_5px_16px_rgba(239,132,47,0.25)]">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-primary text-on-brand">
+                <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
                   <path d="M6 18c0-6 12-6 12-12" strokeLinecap="round" />
                   <circle cx="6" cy="18" r="2" fill="currentColor" stroke="none" />
                   <circle cx="18" cy="6" r="2" fill="currentColor" stroke="none" />
                 </svg>
               </span>
               <div>
-                <p className="text-[21px] font-semibold leading-none tracking-[-0.03em]">
+                <p className="text-[20px] font-semibold leading-none tracking-[-0.035em]">
                   PrivateFleet
                 </p>
-                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-secondary">
-                  <span>Fleet Operations</span>
+                <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.1em] text-text-secondary">
+                  <span>Fleet operations</span>
                   <span className="px-1 text-command-border">{"\u00b7"}</span>
                   <span data-testid="tenant-name">{tenantName ?? "Northstar"}</span>
                 </p>
               </div>
             </div>
 
-            <nav className="mx-auto hidden items-center gap-1 rounded-full border border-command-border/70 bg-command-bg/90 p-1 xl:flex">
+            <nav className="mx-auto hidden h-full items-center gap-6 xl:flex">
               {WORKSPACE_ITEMS.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   onClick={() => setScreen(item.id)}
                   aria-current={screen === item.id ? "page" : undefined}
-                  className={`rounded-full px-3.5 py-1.5 text-[12px] font-medium transition-colors ${
+                  className={`relative flex h-10 items-center text-[12px] font-medium transition-colors ${
                     screen === item.id
-                      ? "bg-text-primary text-command-surface shadow-sm"
-                      : "text-text-secondary hover:bg-command-raised hover:text-text-primary"
+                      ? "text-text-primary after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-brand-primary"
+                      : "text-text-secondary hover:text-text-primary"
                   }`}
                 >
                   {item.label}
@@ -344,14 +353,14 @@ function Dashboard({
             </div>
           </div>
 
-          <nav className="pf-scroll flex gap-1 overflow-x-auto px-4 pb-3 xl:hidden">
+          <nav className="pf-scroll flex gap-5 overflow-x-auto border-t border-command-border/50 px-5 pb-2 pt-2 xl:hidden">
             {WORKSPACE_ITEMS.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setScreen(item.id)}
                 aria-current={screen === item.id ? "page" : undefined}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium ${
+                className={`shrink-0 border-b-2 pb-1 text-[11px] font-medium ${
                   screen === item.id
                     ? "bg-text-primary text-command-surface"
                     : "text-text-secondary hover:bg-command-raised"
@@ -388,14 +397,14 @@ function Dashboard({
               <>
                 {/* Compact overview expands in place without moving the map when collapsed */}
                 <div className="px-5 pb-2 pt-3">
-                  <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-2xl border border-command-border bg-command-surface px-2 py-1 shadow-[0_1px_0_rgba(25,24,21,0.03)]">
+                  <div className="flex min-h-11 flex-wrap items-center gap-1 border-y border-command-border/70 bg-command-surface/70 px-1">
                     <button
                       type="button"
                       onClick={() => setOverviewExpanded((value) => !value)}
                       aria-expanded={overviewExpanded}
                       aria-controls="fleet-overview-detail"
                       aria-label={overviewExpanded ? "Collapse fleet overview" : "Expand fleet overview"}
-                      className="flex min-h-9 items-center gap-2 rounded-xl px-2 text-left transition-colors hover:bg-command-raised/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      className="flex min-h-9 items-center gap-2 px-2 text-left text-text-secondary transition-colors hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                     >
                       <svg
                         viewBox="0 0 12 12"
@@ -411,11 +420,11 @@ function Dashboard({
                         Overview
                       </span>
                     </button>
-                    <div className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-text-secondary">
-                      <span><strong className="font-semibold tabular-nums text-text-primary">{activeVehicles}</strong> active</span>
-                      <span><strong className="font-semibold tabular-nums text-text-primary">{inProgress}</strong> in progress</span>
-                      <span><strong className="font-semibold tabular-nums text-text-primary">{unassigned.length}</strong> unassigned</span>
-                      <span><strong className={"font-semibold tabular-nums " + (atRisk > 0 ? "text-status-danger" : "text-text-primary")}>{atRisk}</strong> at risk</span>
+                    <div className="flex flex-1 flex-wrap items-center divide-x divide-command-border/60 text-[11px] text-text-secondary">
+                      <span className="flex items-baseline gap-1.5 px-3"><strong className="text-[15px] font-semibold tabular-nums text-text-primary">{activeVehicles}</strong><span>active</span></span>
+                      <span className="flex items-baseline gap-1.5 px-3"><strong className="text-[15px] font-semibold tabular-nums text-text-primary">{inProgress}</strong><span>in progress</span></span>
+                      <span className="flex items-baseline gap-1.5 px-3"><strong className="text-[15px] font-semibold tabular-nums text-text-primary">{unassigned.length}</strong><span>unassigned</span></span>
+                      <span className="flex items-baseline gap-1.5 px-3"><strong className={"text-[15px] font-semibold tabular-nums " + (atRisk > 0 ? "text-status-danger" : "text-text-primary")}>{atRisk}</strong><span>at risk</span></span>
                     </div>
                     {state.demoMode && (
                       <div className="ml-auto flex items-center gap-1.5">
@@ -459,30 +468,28 @@ function Dashboard({
 
                   {/* Floating selected-vehicle panel: expanded, compact, or closed. */}
                   {vehiclePanel !== "closed" ? (
-                    <aside className="pointer-events-none absolute left-7 top-4 z-30 hidden w-[318px] lg:block">
-                      <div className="pointer-events-auto overflow-hidden rounded-[22px] border border-command-border bg-command-surface/95 shadow-[0_18px_50px_rgba(20,19,16,0.18)] backdrop-blur-xl">
-                        <div className="flex items-center justify-between px-4 pb-2 pt-3">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
+                    <aside className="pointer-events-none absolute left-7 top-4 z-30 hidden w-[300px] lg:block">
+                      <div className="pointer-events-auto overflow-hidden rounded-2xl border border-command-border bg-command-surface shadow-[0_12px_32px_rgba(20,19,16,0.14)]">
+                        <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-secondary">
                             Selected vehicle
                           </p>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-0.5">
                             <button
                               type="button"
                               onClick={() => setVehiclePanel(vehiclePanel === "expanded" ? "compact" : "expanded")}
                               aria-label={vehiclePanel === "expanded" ? "Minimise selected vehicle" : "Expand selected vehicle"}
-                              title={vehiclePanel === "expanded" ? "Minimise panel" : "Expand panel"}
-                              className="flex h-8 w-8 items-center justify-center rounded-full text-[15px] leading-none text-text-secondary transition-colors hover:bg-command-raised hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                              className="min-h-7 rounded-md px-1.5 text-[10px] font-medium text-text-secondary transition-colors hover:bg-command-raised hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                             >
-                              {vehiclePanel === "expanded" ? "\u2212" : "+"}
+                              {vehiclePanel === "expanded" ? "Minimise" : "Expand"}
                             </button>
                             <button
                               type="button"
                               onClick={() => setVehiclePanel("closed")}
                               aria-label="Close selected vehicle"
-                              title="Close panel"
-                              className="flex h-8 w-8 items-center justify-center rounded-full text-[15px] leading-none text-text-secondary transition-colors hover:bg-command-raised hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                              className="min-h-7 rounded-md px-1.5 text-[10px] font-medium text-text-secondary transition-colors hover:bg-command-raised hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                             >
-                              {"\u00d7"}
+                              Close
                             </button>
                           </div>
                         </div>
@@ -490,47 +497,67 @@ function Dashboard({
                           <button
                             type="button"
                             onClick={() => setVehiclePanel("expanded")}
-                            className="flex w-full items-center gap-2 px-4 pb-3 text-left"
+                            className="flex w-full items-start gap-2.5 px-3.5 pb-3 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
                             aria-label="Expand selected vehicle details"
                           >
-                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-primary/15 text-[11px] font-bold text-brand-ink">
-                              {state.drivers.find((d) => d.id === state.vehicles[0]?.driverId)?.fullName.split(" ").map((p) => p[0]).join("").slice(0, 2) ?? "\u2014"}
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-[11px] font-bold text-brand-ink">
+                              {selectedInitials}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[12px] font-semibold">
-                                {state.drivers.find((d) => d.id === state.vehicles[0]?.driverId)?.fullName ?? "No vehicle selected"}
+                              <span className="block truncate text-[13px] font-semibold leading-tight">
+                                {selectedDriver?.fullName ?? "No vehicle selected"}
                               </span>
-                              <span className="block text-[10px] text-text-secondary">Open details</span>
+                              <span className="mt-0.5 block text-[10px] text-text-secondary">
+                                {selectedVehicle
+                                  ? `${selectedVehicle.registration} ${"\u00b7"} ${selectedVehicle.stale ? "GPS stale" : selectedVehicle.status.replace("_", " ")}`
+                                  : "No vehicles on shift"}
+                              </span>
+                              <span className="mt-2 block truncate text-[11px] font-medium text-text-primary">
+                                {selectedJob
+                                  ? `${selectedJob.reference} ${"\u00b7"} ${nextStop?.address ?? "Next stop to confirm"}`
+                                  : "Ready for assignment"}
+                              </span>
+                              {openAlerts[0] && (
+                                <span className="mt-1 block truncate text-[10px] font-medium text-status-warning">
+                                  {openAlerts[0].title}
+                                </span>
+                              )}
                             </span>
-                            <span className="text-text-secondary">{"\u203a"}</span>
+                            <span className="mt-3 text-[10px] font-medium text-brand-ink">Details</span>
                           </button>
                         ) : (
                           <>
-                            <div className="px-4 pb-3">
-                              {state.vehicles[0] ? (
-                                <VehicleDetails state={state} vehicleId={state.vehicles[0].id} />
+                            <div className="px-3.5 pb-3">
+                              {selectedVehicle ? (
+                                <VehicleDetails
+                                state={state}
+                                vehicleId={selectedVehicle.id}
+                                lastGpsAt={gpsSeenRef.current.get(selectedVehicle.id)}
+                              />
                               ) : (
                                 <p className="text-sm text-text-secondary">No vehicles on shift.</p>
                               )}
                             </div>
-                            <div className="border-t border-command-border/70 px-4 py-3">
-                              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.18em] text-text-secondary">
-                                Needs attention
-                              </p>
+                            <div className="border-t border-command-border/70 px-3.5 py-2.5">
                               {openAlerts.length === 0 ? (
-                                <p className="text-xs text-text-secondary">No current exceptions.</p>
+                                <p className="text-[11px] text-text-secondary">No current exceptions.</p>
                               ) : (
-                                <ul className="space-y-2 text-xs text-text-secondary">
-                                  {openAlerts.map((alert) => (
-                                    <li key={alert.id} className="flex items-start gap-2">
-                                      <StatusChip
-                                        tone={alert.severity === "urgent" ? "danger" : "warning"}
-                                        label={alert.severity === "urgent" ? "urgent" : "at risk"}
-                                      />
-                                      {alert.title}
-                                    </li>
-                                  ))}
-                                </ul>
+                                <>
+                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-secondary">
+                                    Needs attention
+                                  </p>
+                                  <ul className="space-y-1.5 text-[11px] text-text-secondary">
+                                    {openAlerts.map((alert) => (
+                                      <li key={alert.id} className="flex items-start gap-2">
+                                        <StatusChip
+                                          tone={alert.severity === "urgent" ? "danger" : "warning"}
+                                          label={alert.severity === "urgent" ? "urgent" : "at risk"}
+                                        />
+                                        {alert.title}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </>
                               )}
                             </div>
                           </>
@@ -540,8 +567,8 @@ function Dashboard({
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setVehiclePanel("expanded")}
-                      className="absolute left-7 top-4 z-30 hidden min-h-9 items-center gap-2 rounded-full border border-command-border bg-command-surface/95 px-3 text-[11px] font-semibold text-text-primary shadow-sm backdrop-blur lg:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      onClick={() => setVehiclePanel("compact")}
+                      className="absolute left-7 top-4 z-30 hidden min-h-8 items-center gap-2 rounded-full border border-command-border bg-command-surface px-3 text-[11px] font-semibold text-text-primary shadow-sm lg:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                       aria-label="Open selected vehicle panel"
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" />
@@ -560,7 +587,7 @@ function Dashboard({
                         className="flex min-h-10 w-full items-center gap-3 px-3 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
                       >
                         <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden="true" />
-                        <span className="min-w-0 flex-1 truncate text-[10px] font-bold uppercase tracking-[0.14em] text-text-secondary">
+                        <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-text-secondary">
                           Unassigned jobs - drag onto a driver or select
                         </span>
                         <span className="rounded-full bg-command-raised px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-primary">
@@ -637,7 +664,15 @@ function Dashboard({
   );
 }
 
-function VehicleDetails({ state, vehicleId }: { state: FleetState; vehicleId: string }) {
+function VehicleDetails({
+  state,
+  vehicleId,
+  lastGpsAt,
+}: {
+  state: FleetState;
+  vehicleId: string;
+  lastGpsAt?: number | undefined;
+}) {
   const vehicle = state.vehicles.find((v) => v.id === vehicleId);
   const driver = state.drivers.find((d) => d.id === vehicle?.driverId);
   const currentJob = state.jobs.find((j) => j.assignedVehicleId === vehicleId);
@@ -675,8 +710,11 @@ function VehicleDetails({ state, vehicleId }: { state: FleetState; vehicleId: st
             {vehicle.registration} {"\u00b7"} {vehicle.vehicleType}
           </p>
           {vehicle.stale && (
-            <p className="mt-1 text-[10px] font-medium text-status-warning">
-              GPS stale {"\u00b7"} last known position
+            <p className="mt-1 text-[11px] font-medium leading-snug text-status-warning">
+              GPS stale {"\u00b7"}{" "}
+              {lastGpsAt
+                ? `last updated ${Math.max(1, Math.round((Date.now() - lastGpsAt) / 60_000))}m ago`
+                : "last known position"}
             </p>
           )}
         </div>
@@ -763,6 +801,10 @@ export function App() {
     />
   );
 }
+
+
+
+
 
 
 
