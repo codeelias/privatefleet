@@ -200,7 +200,8 @@ export function buildApp(config: AppConfig): {
                 ? "This stop is not assigned to you."
                 : "The evidence could not be saved. Try again.",
       });
-    }    if (err instanceof FleetError) {
+    }
+    if (err instanceof FleetError) {
       const mapped = ERROR_MAP[err.code];
       if (mapped) {
         return reply.status(mapped.status).send({
@@ -223,6 +224,25 @@ export function buildApp(config: AppConfig): {
         code,
         detail: mapped.uiMessage,
         uiMessage: mapped.uiMessage,
+      });
+    }
+    const fastifyStatus =
+      typeof (err as { statusCode?: unknown }).statusCode === "number"
+        ? (err as { statusCode: number }).statusCode
+        : undefined;
+    if (fastifyStatus !== undefined && fastifyStatus >= 400 && fastifyStatus < 500) {
+      const fastifyCode =
+        (err as { code?: string }).code ?? (fastifyStatus === 400 ? "BAD_REQUEST" : "REQUEST_REJECTED");
+      return reply.status(fastifyStatus).send({
+        type: `https://privatefleet.example/errors/${fastifyCode.toLowerCase()}`,
+        title: "Request could not be completed",
+        status: fastifyStatus,
+        code: fastifyCode,
+        detail: err instanceof Error ? err.message : "Request rejected",
+        uiMessage:
+          fastifyStatus === 400
+            ? "The request was not understood. Refresh and try again."
+            : "That request was rejected. Refresh and try again.",
       });
     }
     app.log.error(err);

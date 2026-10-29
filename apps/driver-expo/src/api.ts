@@ -148,7 +148,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     fetch(`${API_URL}${path}`, {
       ...init,
       headers: {
-        "content-type": "application/json",
+        ...(init?.body !== undefined && init.body !== null
+          ? { "content-type": "application/json" }
+          : {}),
         ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
         ...(init?.headers ?? {}),
       },
