@@ -15,6 +15,7 @@ import type {
 import { DispatchBoard } from "../features/dispatch-board/Board";
 import { JobCard } from "../features/dispatch/JobCard";
 import { AlertsScreen } from "../features/alerts/AlertsScreen";
+import { JobsScreen } from "../features/jobs/JobsScreen";
 import { TrackingHub } from "../features/customer-tracking/TrackingHub";
 import { AssignmentModal } from "../features/live-map/AssignmentModal";
 import { MapCanvas } from "../features/live-map/MapCanvas";
@@ -383,6 +384,13 @@ function Dashboard({
             )}
             {screen === "board" ? (
               <DispatchBoard state={state} />
+            ) : screen === "jobs" ? (
+              <JobsScreen
+                state={state}
+                onImported={() => {
+                  void queryClient.invalidateQueries({ queryKey: ["fleet"] });
+                }}
+              />
             ) : screen === "optimise" ? (
               <OptimizationScreen state={state} />
             ) : screen === "alerts" ? (
@@ -801,6 +809,7 @@ export function App() {
     />
   );
 }
+
 
 
 

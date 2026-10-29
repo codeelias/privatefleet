@@ -15,6 +15,8 @@ import type {
   FleetState,
   FleetRoutesResponse,
   EvidenceList,
+  JobImportCommitResponse,
+  JobImportPreview,
   FleetOptimizationProposal,
   LiveOptimizationProposal,
   OptimizationProposal,
@@ -161,6 +163,17 @@ export const api = {
   fleetRoutes: () => request<FleetRoutesResponse>("/v1/fleet/routes"),
   stopEvidence: (jobId: string, stopId: string) =>
     request<EvidenceList>(`/v1/jobs/${jobId}/stops/${stopId}/evidence`),
+  importPreview: (csv: string) =>
+    request<JobImportPreview>("/v1/jobs/import", {
+      method: "POST",
+      body: JSON.stringify({ csv }),
+    }),
+  importCommit: (jobs: JobImportPreview["jobs"]) =>
+    request<JobImportCommitResponse>("/v1/jobs/import/commit", {
+      method: "POST",
+      headers: { "idempotency-key": crypto.randomUUID() },
+      body: JSON.stringify({ jobs }),
+    }),
   scenarios: () => request<ScenariosList>("/v1/demo/scenarios"),
   resetScenario: (id: ScenarioName) =>
     request<ScenariosList>(`/v1/demo/scenarios/${id}/reset`, { method: "POST" }),
@@ -217,6 +230,7 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 
 
