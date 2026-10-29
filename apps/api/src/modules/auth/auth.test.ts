@@ -285,6 +285,20 @@ describe("row level security (cross-tenant probes)", () => {
     expect(blocked).toBe(true);
   });
 
+  it("rejects malformed JSON with a client error and no internal detail", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      headers: { "content-type": "application/json" },
+      payload: "{not-json",
+    });
+    expect(response.statusCode).toBe(400);
+    const body = response.json() as { code: string; detail: string; uiMessage: string };
+    expect(body.code).toBe("INVALID_JSON");
+    expect(body.detail).not.toMatch(/at |stack|select |postgres|sql/i);
+    expect(body.uiMessage).toMatch(/not valid JSON/i);
+  });
+
   it("throttles repeated login failures, keeps shared IPs usable, and recovers", async () => {
     const alpha = await register("Throttle Alpha Logistics");
     const beta = await register("Throttle Beta Logistics");

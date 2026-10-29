@@ -99,6 +99,32 @@ export function buildApp(config: AppConfig): {
   }
 
   app.setErrorHandler((err, _request, reply) => {
+    const fastifyCode = (err as { code?: unknown }).code;
+    if (
+      fastifyCode === "FST_ERR_CTP_INVALID_JSON_BODY" ||
+      fastifyCode === "FST_ERR_CTP_INVALID_MEDIA_TYPE" ||
+      fastifyCode === "FST_ERR_CTP_BODY_TOO_LARGE"
+    ) {
+      const tooLarge = fastifyCode === "FST_ERR_CTP_BODY_TOO_LARGE";
+      const unsupported = fastifyCode === "FST_ERR_CTP_INVALID_MEDIA_TYPE";
+      const status = tooLarge ? 413 : unsupported ? 415 : 400;
+      return reply.status(status).send({
+        type: "https://privatefleet.example/errors/invalid-request-body",
+        title: tooLarge ? "Payload too large" : "Invalid request body",
+        status,
+        code: tooLarge
+          ? "PAYLOAD_TOO_LARGE"
+          : unsupported
+            ? "UNSUPPORTED_MEDIA_TYPE"
+            : "INVALID_JSON",
+        detail: "The request body could not be parsed",
+        uiMessage: tooLarge
+          ? "That request is too large. Reduce it and try again."
+          : unsupported
+            ? "Use JSON with content-type application/json."
+            : "The request body is not valid JSON. Check it and try again.",
+      });
+    }
     if (err instanceof z.ZodError) {
       const first = err.issues[0];
       const path = first ? first.path.join(".") : "request";
