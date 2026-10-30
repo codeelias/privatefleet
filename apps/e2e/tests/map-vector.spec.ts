@@ -38,3 +38,31 @@ test("Live map: default vector basemap renders with vehicle markers", async ({
   await expect(page.locator('[title*="VAN-02"]').first()).toBeVisible();
   expect(failures, failures.join("\n")).toEqual([]);
 });
+
+test("map zoom disables marker transition so pins track the basemap", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
+  await page.goto("http://127.0.0.1:5173/?map=vector");
+  await expect(page.getByText("vector map (OpenFreeMap liberty)")).toBeVisible();
+  const card = page.locator('[data-testid="map-card"]');
+  const shell = page.locator('[data-testid="map-canvas"]');
+  const pin = page.locator('[title*="VAN-02"]').first();
+  await expect(pin).toBeVisible();
+
+  const box = await card.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box!.x + box!.width / 2 + 80, box!.y + box!.height / 2 + 40, { steps: 8 });
+  await expect(shell).toHaveAttribute("data-map-moving", "true");
+  // While the map is held in a pan, pins must not run the 1.8s telemetry
+  // transition - they must track the basemap immediately.
+  const duration = await pin.evaluate((el) => getComputedStyle(el).transitionDuration);
+  expect(duration).toContain("0s");
+  await page.mouse.up();
+  await expect(shell).toHaveAttribute("data-map-moving", "false", { timeout: 10_000 });
+  await expect(pin).toBeVisible();
+});
+

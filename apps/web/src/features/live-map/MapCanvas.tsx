@@ -148,6 +148,7 @@ function VehiclePin({
   selected,
   lastGpsAt,
   onSelect,
+  animate = true,
 }: {
   vehicle: VehicleDto;
   driverName: string;
@@ -156,6 +157,7 @@ function VehiclePin({
   selected: boolean;
   lastGpsAt?: number | undefined;
   onSelect: () => void;
+  animate?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `pin-${vehicle.id}`,
@@ -187,7 +189,14 @@ function VehiclePin({
       className={`absolute z-20 -translate-x-1/2 -translate-y-1/2 cursor-pointer ${
         vehicle.stale ? "stale-ghost" : ""
       } ${isOver ? "scale-125" : ""} ${selected ? "ring-2 ring-brand-primary ring-offset-2 ring-offset-command-bg rounded-full" : ""}`}
-      style={{ left: `${x}px`, top: `${y}px`, transition: "left 1.8s linear, top 1.8s linear" }}
+      style={{
+        left: `${x}px`,
+        top: `${y}px`,
+        // Telemetry moves smoothly, but map pan/zoom must track the basemap
+        // instantly. Animating left/top during a zoom made stale/ghost pins
+        // lag behind and appear to vanish off the card.
+        transition: animate ? "left 1.8s linear, top 1.8s linear" : "none",
+      }}
       title={`${driverName} - ${vehicle.registration} - ${gpsLabel}`}
     >
       <span
@@ -218,6 +227,7 @@ export function MapCanvas({
   const leafletRef = useRef<L.Map | null>(null);
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [vectorFailed, setVectorFailed] = useState(false);
+  const [mapMoving, setMapMoving] = useState(false);
   const [mapStyle, setMapStyle] = useState<"dark" | "light">(() => {
     try {
       return window.localStorage.getItem("pf.map.style") === "light" ? "light" : "dark";
@@ -382,6 +392,10 @@ export function MapCanvas({
     const observer = new ResizeObserver(() => map.invalidateSize());
     observer.observe(container);
     map.on("move zoom", () => setRevision((r) => r + 1));
+    const onMoveStart = () => setMapMoving(true);
+    const onMoveEnd = () => setMapMoving(false);
+    map.on("movestart", onMoveStart);
+    map.on("moveend", onMoveEnd);
     map.whenReady(() => setReady(true));
     L.control.zoom({ position: "bottomright" }).addTo(map);
     leafletRef.current = map;
@@ -389,6 +403,8 @@ export function MapCanvas({
       cancelled = true;
       cancelAnimationFrame(raf);
       observer.disconnect();
+      map.off("movestart", onMoveStart);
+      map.off("moveend", onMoveEnd);
       polylinesRef.current = [];
       map.remove();
       leafletRef.current = null;
@@ -509,6 +525,10 @@ export function MapCanvas({
       setReady(true);
     });
     map.on("move zoom", () => setRevision((r) => r + 1));
+    const onMoveStart = () => setMapMoving(true);
+    const onMoveEnd = () => setMapMoving(false);
+    map.on("movestart", onMoveStart);
+    map.on("moveend", onMoveEnd);
     const raf = requestAnimationFrame(() => map.resize());
     const observer = new ResizeObserver(() => map.resize());
     observer.observe(containerRef.current);
@@ -516,6 +536,8 @@ export function MapCanvas({
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
+      map.off("movestart", onMoveStart);
+      map.off("moveend", onMoveEnd);
       map.remove();
       vectorRef.current = null;
       setReady(false);
@@ -765,7 +787,12 @@ export function MapCanvas({
         : "loading raster tiles";
 
   return (
-    <section data-testid="map-canvas" className="relative flex-1 bg-command-bg" data-map-shell="true">
+    <section
+      data-testid="map-canvas"
+      className="relative flex-1 bg-command-bg"
+      data-map-shell="true"
+      data-map-moving={mapMoving ? "true" : "false"}
+    >
       <div className="absolute inset-0 flex items-center justify-center">
         <div
           data-testid="map-card"
@@ -858,6 +885,7 @@ export function MapCanvas({
                 y={pos.y}
                 selected={selectedDriverId !== null && vehicle.driverId === selectedDriverId}
                 lastGpsAt={gpsSeenAt?.get(vehicle.id)}
+                animate={!mapMoving}
                 onSelect={() =>
                   setSelectedDriverId((prev) =>
                     prev === vehicle.driverId ? null : (vehicle.driverId ?? null),
@@ -921,6 +949,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 
