@@ -3,10 +3,10 @@
  *
  * The map UI (markers, routes, geofences, dispatch interactions) never
  * hardcodes a tile host or style URL: swapping providers is a config
- * change here, not a rewrite. Defaults use OpenFreeMap (vector styles and
- * raster tiles), which is free, keyless and permits this LAN product's use.
- * OpenStreetMap's volunteer tile servers are NOT a default: they block
- * applications that do not follow their tile usage policy.
+ * change here, not a rewrite. Defaults use OpenFreeMap vector styles (free,
+ * keyless, policy-compliant) with a CARTO raster fallback for sessions
+ * without WebGL. OpenStreetMap's volunteer tile servers are NOT a default:
+ * they block applications that do not follow their tile usage policy.
  *
  * Environment (all optional):
  *   VITE_MAP_ENGINE=vector|raster        default engine (default: raster)
@@ -44,13 +44,18 @@ function hostOf(url: string): string {
 }
 
 const MAPTILER_KEY = env("VITE_MAPTILER_KEY") ?? "";
-const OPENFREEMAP_ATTRIBUTION =
-  '&copy; <a href="https://openfreemap.org">OpenFreeMap</a> &copy; OpenMapTiles &copy; OpenStreetMap contributors';
+const CARTO_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
-export const OPENFREEMAP_RASTER: RasterSource = {
-  url: "https://tiles.openfreemap.org/planet/{z}/{x}/{y}.png",
-  attribution: OPENFREEMAP_ATTRIBUTION,
-  name: "OpenFreeMap",
+/**
+ * Keyless raster fallback for browsers without WebGL. OpenFreeMap serves
+ * vector tiles only (`/planet/*.png` is an empty wildcard), so raster must
+ * use a real raster provider.
+ */
+export const CARTO_RASTER: RasterSource = {
+  url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+  attribution: CARTO_ATTRIBUTION,
+  name: "CARTO light",
 };
 
 export const MAPTILER_RASTER: RasterSource = {
@@ -66,7 +71,7 @@ function rasterFromEnv(): RasterSource | undefined {
   }
   return {
     url,
-    attribution: env("VITE_MAP_RASTER_ATTRIBUTION") ?? OPENFREEMAP_ATTRIBUTION,
+    attribution: env("VITE_MAP_RASTER_ATTRIBUTION") ?? CARTO_ATTRIBUTION,
     name: env("VITE_MAP_RASTER_NAME") ?? hostOf(url),
   };
 }
@@ -92,12 +97,12 @@ function vectorStylesFromEnv(): VectorStyle[] {
 const configuredRaster = rasterFromEnv();
 const configuredVector = vectorStylesFromEnv();
 
-/** Primary raster source: explicit config > MapTiler (key present) > OpenFreeMap. */
+/** Primary raster source: explicit config > MapTiler (key present) > CARTO. */
 export const PRIMARY_RASTER: RasterSource =
-  configuredRaster ?? (MAPTILER_KEY ? MAPTILER_RASTER : OPENFREEMAP_RASTER);
+  configuredRaster ?? (MAPTILER_KEY ? MAPTILER_RASTER : CARTO_RASTER);
 
-/** Raster fallback for sessions without WebGL; keyless and policy-compliant. */
-export const RASTER_FALLBACK: RasterSource = OPENFREEMAP_RASTER;
+/** Raster fallback for sessions without WebGL; keyless and working. */
+export const RASTER_FALLBACK: RasterSource = CARTO_RASTER;
 
 /**
  * Vector style chain: explicit config first, then the approved B2
@@ -113,12 +118,13 @@ export const VECTOR_STYLES: VectorStyle[] = dedupe([
         },
       ]
     : []),
-  { url: "https://tiles.openfreemap.org/styles/bright", name: "OpenFreeMap bright" },
   { url: "https://tiles.openfreemap.org/styles/liberty", name: "OpenFreeMap liberty" },
+  { url: "https://tiles.openfreemap.org/styles/bright", name: "OpenFreeMap bright" },
 ]);
 
+/** Vector is the default: OpenFreeMap raster tiles do not exist. */
 export const DEFAULT_ENGINE: "vector" | "raster" =
-  env("VITE_MAP_ENGINE") === "vector" ? "vector" : "raster";
+  env("VITE_MAP_ENGINE") === "raster" ? "raster" : "vector";
 
 /** MapTiler answers 403 with a placeholder PNG, so validate before use. */
 export function needsKeyPreflight(source: RasterSource): boolean {

@@ -121,7 +121,7 @@ export function PublicTracking({ token }: { token: string }) {
                 <img
                   key={`${tile.x}-${tile.y}`}
                   alt=""
-                  src={`https://tiles.openfreemap.org/planet/${zoom}/${tile.x}/${tile.y}.png`}
+                  src={`https://a.basemaps.cartocdn.com/light_all/${zoom}/${tile.x}/${tile.y}.png`}
                   className="absolute h-[256px] w-[256px]"
                   style={{
                     left: center.x - tile.x * mapSize,
@@ -179,6 +179,7 @@ export function PublicTracking({ token }: { token: string }) {
         <p className="mt-6 text-[10px] leading-relaxed text-[#756E61]">
           {data.driverName ? `Your driver today is ${data.driverName}. ` : ""}
           This page shows live delivery progress and never shares personal contact details.
+          Map &copy; OpenStreetMap contributors &copy; CARTO.
         </p>
       </main>
     </div>

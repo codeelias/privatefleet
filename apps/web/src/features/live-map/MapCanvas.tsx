@@ -780,7 +780,17 @@ export function MapCanvas({
             }}
             aria-hidden="true"
           />
-          <div ref={containerRef} className="absolute inset-0 z-10 bg-[#202830]" />
+          {/*
+           * MapLibre adds its own `maplibregl-map` class, whose CSS sets
+           * `position: relative` and collapses this container to 0 height.
+           * Inline positioning keeps the map filling the card for the
+           * vector engine (the raster/Leaflet path already worked).
+           */}
+          <div
+            ref={containerRef}
+            className="absolute inset-0 z-10 bg-[#202830]"
+            style={{ position: "absolute", inset: 0 }}
+          />
           {jobs.map((job) => {
             const pickup = job.stops.find((s) => s.stopType === "pickup");
             const pos = project(pickup?.location);

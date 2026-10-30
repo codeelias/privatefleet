@@ -60,10 +60,16 @@ commit (security, bounds, E2E).
 
 ## Map provider
 
-The raster map and the public tracking map use **OpenFreeMap** tiles
-(`https://tiles.openfreemap.org/planet/{z}/{x}/{y}.png`), which are free,
-keyless and policy-compliant for this product. OpenStreetMap's volunteer tile
-servers (`tile.openstreetmap.org`) are **not** used by default: they block
-applications that do not follow their tile usage policy (the 403 "Access
-blocked" tile image). A provider can still be overridden with
-`VITE_MAP_RASTER_TILES` for deployments that have their own tile agreement.
+The Live Operations map defaults to **OpenFreeMap vector** styles
+(`https://tiles.openfreemap.org/styles/liberty`), which are free, keyless and
+policy-compliant for this product. Browsers without WebGL use the **CARTO
+light** raster fallback (`basemaps.cartocdn.com`), which is keyless and
+returns real PNG tiles.
+
+OpenStreetMap's volunteer tile servers (`tile.openstreetmap.org`) are **not**
+used: they block applications that do not follow their tile usage policy (the
+403 "Access blocked" image). OpenFreeMap does **not** serve raster tiles -
+its `/planet/*.png` endpoint returns an empty wildcard response - so raster
+must use CARTO. A provider can still be overridden with
+`VITE_MAP_RASTER_TILES` / `VITE_MAP_VECTOR_STYLE` for deployments with their
+own tile agreement.

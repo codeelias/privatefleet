@@ -3,7 +3,9 @@ import type { Page } from "@playwright/test";
 import { fleetState, resetScenario, WEB } from "./helpers";
 
 async function openDispatcher(page: Page): Promise<void> {
-  await page.goto(WEB);
+  // Force the raster engine here: this regression test asserts Leaflet
+  // polylines, while the product default is the vector engine.
+  await page.goto(`${WEB}?map=raster`);
   await expect(page.getByText("Fleet Operations")).toBeVisible();
 }
 
