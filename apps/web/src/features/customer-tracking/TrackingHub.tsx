@@ -6,6 +6,7 @@
  */
 import { useState } from "react";
 import type { FleetState } from "@privatefleet/contracts";
+import { api } from "../../shared/api/client";
 import { CustomerPortal } from "./CustomerPortal";
 import { Panel } from "../../shared/ui/Panel";
 import { StatusChip } from "../../shared/ui/StatusChip";
@@ -20,7 +21,20 @@ export function TrackingHub({ state }: { state: FleetState }) {
   const [notifications, setNotifications] = useState(true);
   const [photoRequired, setPhotoRequired] = useState(false);
   const [signatureRequired, setSignatureRequired] = useState(false);
+  const [trackingJobId, setTrackingJobId] = useState(state.jobs[0]?.id ?? "");
+  const [trackingLink, setTrackingLink] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const targetJob = state.jobs.find((j) => j.reference === "J-198") ?? state.jobs[0];
+
+  async function createTrackingLink(): Promise<void> {
+    setLinkError(null);
+    try {
+      const created = await api.createTrackingToken(trackingJobId);
+      setTrackingLink(`${window.location.origin}${created.url}`);
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : "Link could not be created");
+    }
+  }
 
   function openPreview() {
     window.open(`/preview?token=demo-j198&job=${targetJob?.reference ?? "J-198"}`, "_blank", "noopener");
@@ -63,6 +77,52 @@ export function TrackingHub({ state }: { state: FleetState }) {
             <p className="mt-3 text-xs text-text-secondary">
               Changes apply to future customer links after saving. Theme tokens are
               constrained - no arbitrary CSS is accepted from tenant config.
+            </p>
+          </Panel>
+
+          <Panel title="Live tracking link">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <select
+                aria-label="Job for tracking link"
+                value={trackingJobId}
+                onChange={(event) => setTrackingJobId(event.target.value)}
+                className="min-h-9 min-w-40 rounded-lg border border-command-border bg-command-surface px-2 text-xs text-text-primary"
+              >
+                {state.jobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.reference} · {job.status.replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => void createTrackingLink()}
+                disabled={!trackingJobId}
+                className="min-h-9 rounded-lg bg-brand-primary px-3 text-xs font-bold text-white disabled:opacity-40"
+              >
+                Generate link
+              </button>
+            </div>
+            {trackingLink && (
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  readOnly
+                  value={trackingLink}
+                  aria-label="Tracking link"
+                  className="min-h-9 flex-1 rounded-lg border border-command-border bg-command-raised px-2 text-xs text-text-primary"
+                />
+                <button
+                  type="button"
+                  onClick={() => void navigator.clipboard.writeText(trackingLink)}
+                  className="min-h-9 rounded-lg border border-command-border px-3 text-xs font-semibold text-text-primary"
+                >
+                  Copy
+                </button>
+              </div>
+            )}
+            {linkError && <p className="mt-2 text-xs text-status-danger">{linkError}</p>}
+            <p className="mt-2 text-[11px] text-text-secondary">
+              Links are job-scoped, expire after 7 days and can be revoked at any time.
             </p>
           </Panel>
 

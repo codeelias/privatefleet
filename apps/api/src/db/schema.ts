@@ -392,6 +392,25 @@ export const geofenceStates = pgTable(
   (t) => [primaryKey({ columns: [t.vehicleId, t.geofenceId] })],
 );
 
+/** Job-scoped public tracking tokens (Stage 4). Only the SHA-256 hash is stored. */
+export const trackingTokens = pgTable(
+  "tracking_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt,
+  },
+  (t) => [uniqueIndex("tracking_tokens_hash_uq").on(t.tokenHash), index("tracking_tokens_job_idx").on(t.jobId)],
+);
+
 /** Evidence metadata. Binary media lives in the private evidence store. */
 export const stopEvidence = pgTable(
   "stop_evidence",
@@ -493,6 +512,7 @@ export const tenantTables = [
   stopEvidence,
   geofences,
   geofenceStates,
+  trackingTokens,
 ] as const;
 
 /** Tables isolated by tenant_id (tenants itself keys on id). */
@@ -512,6 +532,7 @@ export const tenantScopedTables = [
   stopEvidence,
   geofences,
   geofenceStates,
+  trackingTokens,
 ] as const;
 
 

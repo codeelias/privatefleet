@@ -40,7 +40,7 @@ BEGIN
     'users', 'vehicles', 'drivers', 'jobs', 'job_stops', 'job_events',
     'alerts', 'outbox', 'refresh_tokens', 'idempotency_keys', 'demo_scenarios',
     'location_points', 'routes', 'route_stops', 'optimization_runs',
-    'proof_policies', 'stop_evidence', 'geofences', 'geofence_states'
+    'proof_policies', 'stop_evidence', 'geofences', 'geofence_states', 'tracking_tokens'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
@@ -63,6 +63,17 @@ GRANT USAGE ON SCHEMA public TO privatefleet_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO privatefleet_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO privatefleet_app;
 
+CREATE OR REPLACE FUNCTION public_tracking_token_by_hash(p_hash text)
+RETURNS TABLE (tenant_id uuid, job_id uuid, expires_at timestamptz, revoked_at timestamptz)
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT t.tenant_id, t.job_id, t.expires_at, t.revoked_at
+  FROM tracking_tokens t WHERE t.token_hash = p_hash LIMIT 1;
+$$;
+
+GRANT EXECUTE ON FUNCTION public_tracking_token_by_hash(text) TO privatefleet_app;
 -- --- Auth bootstrap functions (SECURITY DEFINER) ---------------------
 -- Login must resolve a tenant/user before a tenant context exists.
 -- These functions expose only the minimum identity surface; every
@@ -122,6 +133,8 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION auth_driver_by_id(uuid) TO privatefleet_app;
+
+
 
 
 

@@ -142,6 +142,41 @@ export const StopReportSchema = z.object({
 });
 export type StopReport = z.infer<typeof StopReportSchema>;
 
+export const TrackingTokenCreateSchema = z.object({
+  id: IdSchema,
+  token: z.string(),
+  expiresAt: z.string().datetime(),
+  url: z.string(),
+});
+export type TrackingTokenCreate = z.infer<typeof TrackingTokenCreateSchema>;
+
+export const PublicTrackingStopSchema = z.object({
+  sequence: z.number().int(),
+  address: z.string(),
+  status: z.string(),
+  arrivedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional(),
+});
+export type PublicTrackingStop = z.infer<typeof PublicTrackingStopSchema>;
+
+export const PublicTrackingResponseSchema = z.object({
+  jobReference: z.string(),
+  status: z.string(),
+  eta: z.string().datetime().optional(),
+  driverName: z.string().optional(),
+  vehicleRegistration: z.string().optional(),
+  position: z
+    .object({
+      latitude: z.number(),
+      longitude: z.number(),
+      capturedAt: z.string().datetime(),
+      stale: z.boolean(),
+    })
+    .optional(),
+  stops: z.array(PublicTrackingStopSchema),
+});
+export type PublicTrackingResponse = z.infer<typeof PublicTrackingResponseSchema>;
+
 export const AlertDtoSchema = z.object({
   id: IdSchema,
   severity: z.enum(["info", "at_risk", "urgent"]),

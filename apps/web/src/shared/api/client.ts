@@ -16,6 +16,7 @@ import type {
   FleetRoutesResponse,
   EvidenceList,
   DeliveryPerformanceReport,
+  TrackingTokenCreate,
   JobImportCommitResponse,
   JobImportPreview,
   FleetOptimizationProposal,
@@ -193,6 +194,15 @@ export const api = {
     request<DeliveryPerformanceReport>(`/v1/reports/delivery-performance${query}`),
   deliveryPerformanceCsv: (query = "") =>
     requestText(`/v1/reports/delivery-performance${query}&format=csv`),
+  createTrackingToken: (jobId: string) =>
+    request<TrackingTokenCreate>("/v1/tracking-tokens", {
+      method: "POST",
+      body: JSON.stringify({ jobId }),
+    }),
+  revokeTrackingToken: (tokenId: string) =>
+    request<{ revoked: boolean }>(`/v1/tracking-tokens/${tokenId}`, {
+      method: "DELETE",
+    }),
   importPreview: (csv: string) =>
     request<JobImportPreview>("/v1/jobs/import", {
       method: "POST",

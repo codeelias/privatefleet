@@ -37,6 +37,7 @@ const TENANT_TABLES = [
   "stop_evidence",
   "geofences",
   "geofence_states",
+  "tracking_tokens",
 ] as const;
 
 let runtime: DbHandle;
@@ -155,4 +156,5 @@ describe("RLS inventory and cross-tenant mutation probe", () => {
     expect(blocked, "foreign-tenant insert must be rejected by WITH CHECK").toBe(true);
   });
 });
+
 

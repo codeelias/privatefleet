@@ -1,0 +1,142 @@
+/**
+ * Job-scoped public tracking (Stage 4, commit 4). Only the SHA-256 of a
+ * high-entropy token is stored. The public endpoint derives tenancy from the
+ * token itself and exposes a strictly scoped read-only view: job progress,
+ * ETA, permitted vehicle position and driver/vehicle names. No phone, email
+ * or other personal data is included.
+ */
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
+import type { PublicTrackingResponse } from "@privatefleet/contracts";
+import { withTenant, type DbHandle } from "../../db/client.js";
+
+const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const STALE_AFTER_MS = 60_000;
+
+export function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export async function createTrackingToken(
+  handle: DbHandle,
+  tenantId: string,
+  jobId: string,
+): Promise<{ id: string; token: string; expiresAt: string }> {
+  return withTenant(handle, tenantId, async (db) => {
+    const jobs = (await db.execute(
+      sql`SELECT 1 FROM jobs WHERE id = ${jobId}`,
+    )) as unknown as Array<unknown>;
+    if (jobs.length === 0) {
+      throw new Error("JOB_NOT_FOUND");
+    }
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+    const id = randomUUID();
+    await db.execute(sql`
+      INSERT INTO tracking_tokens (id, tenant_id, job_id, token_hash, expires_at)
+      VALUES (${id}, ${tenantId}, ${jobId}, ${hashToken(token)}, ${expiresAt.toISOString()})
+    `);
+    return { id, token, expiresAt: expiresAt.toISOString() };
+  });
+}
+
+export async function revokeTrackingToken(
+  handle: DbHandle,
+  tenantId: string,
+  tokenId: string,
+): Promise<boolean> {
+  return withTenant(handle, tenantId, async (db) => {
+    const rows = (await db.execute(sql`
+      UPDATE tracking_tokens SET revoked_at = now()
+      WHERE id = ${tokenId} AND revoked_at IS NULL
+      RETURNING id
+    `)) as unknown as Array<unknown>;
+    return rows.length > 0;
+  });
+}
+
+export async function publicTracking(
+  handle: DbHandle,
+  token: string,
+): Promise<PublicTrackingResponse | null> {
+  const tokenRow = (await handle.sql`
+    SELECT tenant_id, job_id, expires_at, revoked_at
+    FROM public_tracking_token_by_hash(${hashToken(token)})
+  `) as unknown as Array<{
+    tenant_id: string;
+    job_id: string;
+    expires_at: Date | string;
+    revoked_at: Date | string | null;
+  }>;
+  const row = tokenRow[0];
+  if (!row) return null;
+  const expires = new Date(row.expires_at).getTime();
+  if (row.revoked_at !== null || Date.now() > expires) return null;
+
+  return withTenant(handle, row.tenant_id, async (db) => {
+    const jobs = (await db.execute(sql`
+      SELECT j.reference, j.status, v.registration, v.latitude, v.longitude, v.captured_at,
+             d.full_name
+      FROM jobs j
+      LEFT JOIN vehicles v ON v.id = j.assigned_vehicle_id
+      LEFT JOIN drivers d ON d.id = j.assigned_driver_id
+      WHERE j.id = ${row.job_id}
+    `)) as unknown as Array<{
+      reference: string;
+      status: string;
+      registration: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      captured_at: Date | string | null;
+      full_name: string | null;
+    }>;
+    const job = jobs[0];
+    if (!job) return null;
+
+    const stops = (await db.execute(sql`
+      SELECT sequence, address, status, arrived_at, completed_at
+      FROM job_stops WHERE job_id = ${row.job_id}
+      ORDER BY sequence ASC
+    `)) as unknown as Array<{
+      sequence: number;
+      address: string;
+      status: string;
+      arrived_at: Date | string | null;
+      completed_at: Date | string | null;
+    }>;
+
+    const etaRows = (await db.execute(sql`
+      SELECT MIN(rs.planned_arrival_at) AS eta
+      FROM route_stops rs
+      JOIN job_stops s ON s.id = rs.job_stop_id
+      WHERE s.job_id = ${row.job_id} AND s.status IN ('pending', 'arrived')
+    `)) as unknown as Array<{ eta: Date | string | null }>;
+
+    const position =
+      job.latitude !== null && job.longitude !== null && job.captured_at
+        ? {
+            latitude: job.latitude,
+            longitude: job.longitude,
+            capturedAt: new Date(job.captured_at).toISOString(),
+            stale: Date.now() - new Date(job.captured_at).getTime() > STALE_AFTER_MS,
+          }
+        : undefined;
+
+    return {
+      jobReference: job.reference,
+      status: job.status,
+      ...(etaRows[0]?.eta ? { eta: new Date(etaRows[0]!.eta!).toISOString() } : {}),
+      ...(job.full_name ? { driverName: job.full_name } : {}),
+      ...(job.registration ? { vehicleRegistration: job.registration } : {}),
+      ...(position ? { position } : {}),
+      stops: stops.map((stop) => ({
+        sequence: Number(stop.sequence),
+        address: stop.address,
+        status: stop.status,
+        ...(stop.arrived_at ? { arrivedAt: new Date(stop.arrived_at).toISOString() } : {}),
+        ...(stop.completed_at ? { completedAt: new Date(stop.completed_at).toISOString() } : {}),
+      })),
+    };
+  });
+}
+
