@@ -57,3 +57,13 @@ commit (security, bounds, E2E).
 2. Rebuild and restart the API, then rebuild/serve the web dispatcher.
 3. Smoke: `GET /healthz`, staff delivery-performance (422 for >31 days),
    create a tracking link and open `/track/<token>`.
+
+## Map provider
+
+The raster map and the public tracking map use **OpenFreeMap** tiles
+(`https://tiles.openfreemap.org/planet/{z}/{x}/{y}.png`), which are free,
+keyless and policy-compliant for this product. OpenStreetMap's volunteer tile
+servers (`tile.openstreetmap.org`) are **not** used by default: they block
+applications that do not follow their tile usage policy (the 403 "Access
+blocked" tile image). A provider can still be overridden with
+`VITE_MAP_RASTER_TILES` for deployments that have their own tile agreement.

@@ -3,9 +3,10 @@
  *
  * The map UI (markers, routes, geofences, dispatch interactions) never
  * hardcodes a tile host or style URL: swapping providers is a config
- * change here, not a rewrite. Demo/dev default follows decision B2 -
- * OpenFreeMap vector styles with an OSM raster fallback for sessions
- * without WebGL.
+ * change here, not a rewrite. Defaults use OpenFreeMap (vector styles and
+ * raster tiles), which is free, keyless and permits this LAN product's use.
+ * OpenStreetMap's volunteer tile servers are NOT a default: they block
+ * applications that do not follow their tile usage policy.
  *
  * Environment (all optional):
  *   VITE_MAP_ENGINE=vector|raster        default engine (default: raster)
@@ -43,12 +44,13 @@ function hostOf(url: string): string {
 }
 
 const MAPTILER_KEY = env("VITE_MAPTILER_KEY") ?? "";
-const OSM_ATTRIBUTION = "&copy; OpenStreetMap contributors";
+const OPENFREEMAP_ATTRIBUTION =
+  '&copy; <a href="https://openfreemap.org">OpenFreeMap</a> &copy; OpenMapTiles &copy; OpenStreetMap contributors';
 
-export const OSM_RASTER: RasterSource = {
-  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-  attribution: OSM_ATTRIBUTION,
-  name: "OSM",
+export const OPENFREEMAP_RASTER: RasterSource = {
+  url: "https://tiles.openfreemap.org/planet/{z}/{x}/{y}.png",
+  attribution: OPENFREEMAP_ATTRIBUTION,
+  name: "OpenFreeMap",
 };
 
 export const MAPTILER_RASTER: RasterSource = {
@@ -64,7 +66,7 @@ function rasterFromEnv(): RasterSource | undefined {
   }
   return {
     url,
-    attribution: env("VITE_MAP_RASTER_ATTRIBUTION") ?? OSM_ATTRIBUTION,
+    attribution: env("VITE_MAP_RASTER_ATTRIBUTION") ?? OPENFREEMAP_ATTRIBUTION,
     name: env("VITE_MAP_RASTER_NAME") ?? hostOf(url),
   };
 }
@@ -90,12 +92,12 @@ function vectorStylesFromEnv(): VectorStyle[] {
 const configuredRaster = rasterFromEnv();
 const configuredVector = vectorStylesFromEnv();
 
-/** Primary raster source: explicit config > MapTiler (key present) > OSM. */
+/** Primary raster source: explicit config > MapTiler (key present) > OpenFreeMap. */
 export const PRIMARY_RASTER: RasterSource =
-  configuredRaster ?? (MAPTILER_KEY ? MAPTILER_RASTER : OSM_RASTER);
+  configuredRaster ?? (MAPTILER_KEY ? MAPTILER_RASTER : OPENFREEMAP_RASTER);
 
-/** The raster engine always keeps a working fallback. */
-export const RASTER_FALLBACK: RasterSource = OSM_RASTER;
+/** Raster fallback for sessions without WebGL; keyless and policy-compliant. */
+export const RASTER_FALLBACK: RasterSource = OPENFREEMAP_RASTER;
 
 /**
  * Vector style chain: explicit config first, then the approved B2

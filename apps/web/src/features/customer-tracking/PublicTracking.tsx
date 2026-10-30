@@ -121,7 +121,7 @@ export function PublicTracking({ token }: { token: string }) {
                 <img
                   key={`${tile.x}-${tile.y}`}
                   alt=""
-                  src={`https://tile.openfreemap.org/planet/${zoom}/${tile.x}/${tile.y}.png`}
+                  src={`https://tiles.openfreemap.org/planet/${zoom}/${tile.x}/${tile.y}.png`}
                   className="absolute h-[256px] w-[256px]"
                   style={{
                     left: center.x - tile.x * mapSize,
