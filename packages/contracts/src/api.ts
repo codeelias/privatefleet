@@ -102,6 +102,46 @@ export const DeliveryPerformanceReportSchema = z.object({
 });
 export type DeliveryPerformanceReport = z.infer<typeof DeliveryPerformanceReportSchema>;
 
+export const TripSegmentSchema = z.object({
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime(),
+  durationS: z.number().int().nonnegative(),
+  distanceM: z.number().nonnegative(),
+  points: z.number().int().nonnegative(),
+  maxSpeedMps: z.number().nonnegative().optional(),
+  startLocation: GeoPointSchema,
+  endLocation: GeoPointSchema,
+});
+export type TripSegment = z.infer<typeof TripSegmentSchema>;
+
+export const StopSegmentSchema = z.object({
+  startedAt: z.string().datetime(),
+  endedAt: z.string().datetime(),
+  durationS: z.number().int().nonnegative(),
+  maxRadiusM: z.number().nonnegative(),
+  points: z.number().int().nonnegative(),
+  location: GeoPointSchema,
+});
+export type StopSegment = z.infer<typeof StopSegmentSchema>;
+
+export const TripReportSchema = z.object({
+  generatedAt: z.string().datetime(),
+  vehicleId: IdSchema,
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+  segments: z.array(TripSegmentSchema),
+});
+export type TripReport = z.infer<typeof TripReportSchema>;
+
+export const StopReportSchema = z.object({
+  generatedAt: z.string().datetime(),
+  vehicleId: IdSchema,
+  from: z.string().datetime(),
+  to: z.string().datetime(),
+  segments: z.array(StopSegmentSchema),
+});
+export type StopReport = z.infer<typeof StopReportSchema>;
+
 export const AlertDtoSchema = z.object({
   id: IdSchema,
   severity: z.enum(["info", "at_risk", "urgent"]),
