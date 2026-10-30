@@ -2,7 +2,7 @@
  * Report routes: tenant-authenticated, separate from the fleet snapshot and
  * the route-geometry read path (Stage 4 constraint).
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { AuthService } from "../auth/service.js";
 import { makeAuthGuard } from "../auth/guard.js";
@@ -23,6 +23,44 @@ const SegmentQuerySchema = z.object({
   to: z.string().datetime().optional(),
 });
 
+const DAY_MS = 86_400_000;
+const MAX_RANGE_DAYS = 31;
+
+/**
+ * Bound every report to at most 31 days and always resolve explicit
+ * from/to, so query-time segmentation can never scan all history.
+ */
+function resolveRange(
+  from: string | undefined,
+  to: string | undefined,
+  defaultDays: number,
+): { from: string; to: string } | { error: true } {
+  const now = Date.now();
+  const toMs = to ? Date.parse(to) : now;
+  const fromMs = from ? Date.parse(from) : toMs - defaultDays * DAY_MS;
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || fromMs > toMs) {
+    return { error: true };
+  }
+  if (toMs - fromMs > MAX_RANGE_DAYS * DAY_MS) {
+    return { error: true };
+  }
+  return {
+    from: new Date(fromMs).toISOString(),
+    to: new Date(toMs).toISOString(),
+  };
+}
+
+function sendRangeError(reply: FastifyReply) {
+  return reply.status(422).send({
+    type: "https://privatefleet.example/errors/invalid-date-range",
+    title: "Request could not be completed",
+    status: 422,
+    code: "INVALID_DATE_RANGE",
+    detail: `Reports are limited to ${MAX_RANGE_DAYS} days per request`,
+    uiMessage: "Choose a date range of at most 31 days.",
+  });
+}
+
 export function registerReportRoutes(app: FastifyInstance, auth: AuthService, handle: DbHandle): void {
   const guard = makeAuthGuard(auth);
 
@@ -38,7 +76,15 @@ export function registerReportRoutes(app: FastifyInstance, auth: AuthService, ha
       });
     }
     const query = QuerySchema.parse(request.query ?? {});
-    const report = await deliveryPerformance(handle, request.auth?.tenantId ?? "", query);
+    const range = resolveRange(query.from, query.to, 31);
+    if ("error" in range) {
+      return sendRangeError(reply);
+    }
+    const report = await deliveryPerformance(handle, request.auth?.tenantId ?? "", {
+      jobId: query.jobId,
+      from: range.from,
+      to: range.to,
+    });
     if (query.format === "csv") {
       return reply
         .header("content-type", "text/csv; charset=utf-8")
@@ -63,13 +109,14 @@ export function registerReportRoutes(app: FastifyInstance, auth: AuthService, ha
       });
     }
     const query = SegmentQuerySchema.parse(request.query ?? {});
-    const now = Date.now();
-    const from = query.from ?? new Date(now - 24 * 60 * 60 * 1000).toISOString();
-    const to = query.to ?? new Date(now).toISOString();
+    const range = resolveRange(query.from, query.to, 1);
+    if ("error" in range) {
+      return sendRangeError(reply);
+    }
     return tripsReport(handle, request.auth?.tenantId ?? "", {
       vehicleId: query.vehicleId,
-      from,
-      to,
+      from: range.from,
+      to: range.to,
     });
   });
 
@@ -85,13 +132,14 @@ export function registerReportRoutes(app: FastifyInstance, auth: AuthService, ha
       });
     }
     const query = SegmentQuerySchema.parse(request.query ?? {});
-    const now = Date.now();
-    const from = query.from ?? new Date(now - 24 * 60 * 60 * 1000).toISOString();
-    const to = query.to ?? new Date(now).toISOString();
+    const range = resolveRange(query.from, query.to, 1);
+    if ("error" in range) {
+      return sendRangeError(reply);
+    }
     return stopsReport(handle, request.auth?.tenantId ?? "", {
       vehicleId: query.vehicleId,
-      from,
-      to,
+      from: range.from,
+      to: range.to,
     });
   });
 }

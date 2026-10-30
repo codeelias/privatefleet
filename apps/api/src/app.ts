@@ -102,7 +102,18 @@ export function buildApp(config: AppConfig): {
   postgres: PostgresContext | undefined;
 } {
   const app = Fastify({
-    logger: { level: config.logLevel },
+    logger: {
+      level: config.logLevel,
+      redact: {
+        paths: ["req.url"],
+        // Public tracking tokens are bearer credentials embedded in the path;
+        // they must never reach logs, while the rest of the URL stays visible.
+        censor: (value) =>
+          typeof value === "string"
+            ? value.replace(/\/track\/[A-Za-z0-9_-]{20,}/, "/track/[REDACTED]")
+            : "[Redacted]",
+      },
+    },
     // Explicit request ceiling; telemetry batches are <= 50 samples and the
     // largest normal payload is well under 256 KiB.
     bodyLimit: 262_144,

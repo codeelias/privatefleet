@@ -116,6 +116,7 @@ describe("public customer tracking", () => {
       url: `/v1/public/tracking/${publicToken}`,
     });
     expect(res.statusCode).toBe(200);
+    expect(res.headers["cache-control"]).toContain("no-store");
     const body = res.json() as {
       jobReference: string;
       status: string;

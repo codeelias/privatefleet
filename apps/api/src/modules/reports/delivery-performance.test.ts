@@ -154,6 +154,16 @@ describe("delivery performance report", () => {
     expect(text).toContain("DELIVERY_REFUSED");
   });
 
+  it("rejects date ranges longer than 31 days", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/reports/delivery-performance?from=2026-01-01&to=2026-06-01",
+      headers: authed(),
+    });
+    expect(res.statusCode).toBe(422);
+    expect((res.json() as { code: string }).code).toBe("INVALID_DATE_RANGE");
+  });
+
   it("filters by job", async () => {
     const otherJob = randomUUID();
     await migrator.sql`

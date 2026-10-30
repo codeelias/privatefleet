@@ -124,4 +124,14 @@ describe("trip and stop segmentation", () => {
     expect(stopBody.segments[0]?.maxRadiusM).toBeLessThanOrEqual(50);
     expect(stopBody.segments[0]?.points).toBe(12);
   });
+
+  it("rejects date ranges longer than 31 days", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/reports/trips?vehicleId=${vehicleId}&from=2026-01-01T00:00:00Z&to=2026-06-01T00:00:00Z`,
+      headers: authed(),
+    });
+    expect(res.statusCode).toBe(422);
+    expect((res.json() as { code: string }).code).toBe("INVALID_DATE_RANGE");
+  });
 });

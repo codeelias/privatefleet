@@ -193,7 +193,7 @@ export const api = {
   deliveryPerformance: (query = "") =>
     request<DeliveryPerformanceReport>(`/v1/reports/delivery-performance${query}`),
   deliveryPerformanceCsv: (query = "") =>
-    requestText(`/v1/reports/delivery-performance${query}&format=csv`),
+    requestText(`/v1/reports/delivery-performance${query ? `${query}&format=csv` : "?format=csv"}`),
   createTrackingToken: (jobId: string) =>
     request<TrackingTokenCreate>("/v1/tracking-tokens", {
       method: "POST",

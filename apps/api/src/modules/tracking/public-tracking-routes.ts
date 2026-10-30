@@ -93,6 +93,8 @@ export function registerPublicTrackingRoutes(
   });
 
   app.get("/v1/public/tracking/:token", async (request, reply) => {
+    // Bearer-style URL credential: never cached, never leaked via referrer.
+    reply.header("cache-control", "no-store");
     const params = TokenParamSchema.parse(request.params);
     if (!limiter.allow(params.token)) {
       reply.header("retry-after", "1");
