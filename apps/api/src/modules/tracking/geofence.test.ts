@@ -1,0 +1,164 @@
+/**
+ * Geofence evaluation gate (Stage 4, commit 3): PostGIS enter/exit during
+ * telemetry ingestion, idempotent transitions, outbox events and alerts.
+ */
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
+import { hash as argonHash } from "@node-rs/argon2";
+import { buildApp } from "../../app.js";
+import { loadConfig, migrationDatabaseUrl } from "../../config.js";
+import { closeDb, createDb, type DbHandle } from "../../db/client.js";
+
+const APP_DATABASE_URL =
+  process.env.TEST_DATABASE_URL ??
+  "postgres://privatefleet_app:privatefleet_app_pw@127.0.0.1:5432/privatefleet_dev";
+
+const config = loadConfig({
+  ...process.env,
+  REPOSITORY_MODE: "postgres",
+  DATABASE_URL: APP_DATABASE_URL,
+  AUTH_JWT_SECRET: "geofence-test-secret-at-least-16-characters",
+  LOG_LEVEL: "error",
+});
+const { app } = buildApp(config);
+const migrator: DbHandle = createDb(migrationDatabaseUrl(), { max: 2 });
+const createdTenants: string[] = [];
+
+let tenantId = "";
+let slug = "";
+let ownerToken = "";
+let driverToken = "";
+let driverId = "";
+let vehicleId = "";
+
+function authed(token: string): { authorization: string } {
+  return { authorization: `Bearer ${token}` };
+}
+
+beforeAll(async () => {
+  await app.ready();
+  const registered = await app.inject({
+    method: "POST",
+    url: "/v1/auth/register",
+    payload: {
+      tenantName: `Geofence ${randomUUID().slice(0, 6)}`,
+      email: `geofence-${randomUUID().slice(0, 6)}@example.test`,
+      password: "correct horse battery staple",
+    },
+  });
+  expect(registered.statusCode).toBe(200);
+  const session = registered.json() as {
+    tenant: { id: string; slug: string };
+    tokens: { accessToken: string };
+  };
+  tenantId = session.tenant.id;
+  slug = session.tenant.slug;
+  ownerToken = session.tokens.accessToken;
+  createdTenants.push(tenantId);
+
+  driverId = randomUUID();
+  vehicleId = randomUUID();
+  await migrator.sql`
+    INSERT INTO vehicles (id, tenant_id, registration, vehicle_type, status, driver_id)
+    VALUES (${vehicleId}, ${tenantId}, 'GEO-1', 'Van', 'available', ${driverId})
+  `;
+  const pinHash = await argonHash("1234");
+  await migrator.sql`
+    INSERT INTO drivers (id, tenant_id, full_name, status, pin_hash, vehicle_id, last_ping_at)
+    VALUES (${driverId}, ${tenantId}, 'Geofence Driver', 'available', ${pinHash}, ${vehicleId}, now())
+  `;
+  const login = await app.inject({
+    method: "POST",
+    url: "/v1/auth/driver-login",
+    payload: { tenantSlug: slug, driverId, pin: "1234" },
+  });
+  expect(login.statusCode).toBe(200);
+  driverToken = (login.json() as { tokens: { accessToken: string } }).tokens.accessToken;
+
+  const created = await app.inject({
+    method: "POST",
+    url: "/v1/geofences",
+    headers: authed(ownerToken),
+    payload: {
+      name: "Depot",
+      geojson: JSON.stringify({
+        type: "Polygon",
+        coordinates: [
+          [
+            [-0.14, 51.49],
+            [-0.1, 51.49],
+            [-0.1, 51.52],
+            [-0.14, 51.52],
+            [-0.14, 51.49],
+          ],
+        ],
+      }),
+    },
+  });
+  expect(created.statusCode).toBe(200);
+});
+
+afterAll(async () => {
+  await app.close();
+  for (const id of createdTenants) {
+    await migrator.sql`DELETE FROM outbox WHERE tenant_id = ${id}`;
+    await migrator.sql`DELETE FROM tenants WHERE id = ${id}`;
+  }
+  await closeDb(migrator);
+});
+
+async function postTelemetry(latitude: number, longitude: number, capturedAt: string) {
+  return app.inject({
+    method: "POST",
+    url: "/v1/telemetry",
+    headers: authed(driverToken),
+    payload: {
+      samples: [{ latitude, longitude, capturedAt, speedMps: 0 }],
+    },
+  });
+}
+
+async function eventCount(type: string): Promise<number> {
+  const rows = (await migrator.sql`
+    SELECT count(*)::int AS count FROM outbox
+    WHERE tenant_id = ${tenantId} AND event_type = ${type}
+  `) as unknown as Array<{ count: number }>;
+  return rows[0]?.count ?? 0;
+}
+
+describe("geofence evaluation on telemetry ingest", () => {
+  it("emits idempotent enter/exit events and dispatcher alerts", async () => {
+    // Initialise outside; no previous state, so no event yet.
+    const outside1 = await postTelemetry(51.6, -0.15, new Date(Date.now() - 50_000).toISOString());
+    expect(outside1.statusCode).toBe(200);
+    expect(await eventCount("geofence.entered")).toBe(0);
+
+    // Enter the polygon -> one entered event and an alert.
+    const enter = await postTelemetry(51.5, -0.12, new Date().toISOString());
+    expect(enter.statusCode).toBe(200);
+    expect(await eventCount("geofence.entered")).toBe(1);
+
+    // Replay while still inside -> no duplicate.
+    await postTelemetry(51.505, -0.12, new Date(Date.now() + 2_000).toISOString());
+    expect(await eventCount("geofence.entered")).toBe(1);
+
+    // Exit -> one exited event and an at-risk alert.
+    await postTelemetry(51.6, -0.15, new Date(Date.now() + 4_000).toISOString());
+    expect(await eventCount("geofence.exited")).toBe(1);
+
+    const alerts = (await migrator.sql`
+      SELECT severity, title, status FROM alerts
+      WHERE tenant_id = ${tenantId} ORDER BY created_at
+    `) as unknown as Array<{ severity: string; title: string; status: string }>;
+    expect(alerts).toHaveLength(2);
+    expect(alerts[0]?.title).toContain("Entered geofence Depot");
+    expect(alerts[0]?.severity).toBe("info");
+    expect(alerts[1]?.title).toContain("Exited geofence Depot");
+    expect(alerts[1]?.severity).toBe("at_risk");
+
+    const states = (await migrator.sql`
+      SELECT inside FROM geofence_states WHERE vehicle_id = ${vehicleId}
+    `) as unknown as Array<{ inside: boolean }>;
+    expect(states[0]?.inside).toBe(false);
+  });
+});

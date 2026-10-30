@@ -28,6 +28,7 @@ import { EvidenceError, EvidenceService } from "./modules/evidence/service.js";
 import { EvidenceStore } from "./modules/evidence/storage.js";
 import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
 import { registerReportRoutes } from "./modules/reports/routes.js";
+import { registerGeofenceRoutes } from "./modules/geofences/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
 export interface DemoContext {
@@ -328,6 +329,7 @@ export function buildApp(config: AppConfig): {
     registerFleetRoutes(app, auth, fleet, config.importServiceArea);
     registerEvidenceRoutes(app, auth, fleet, evidence);
     registerReportRoutes(app, auth, db);
+    registerGeofenceRoutes(app, auth, db);
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter);
     registerTrackingRoutes(app, auth, bus, db);
     const routingClients =
@@ -356,6 +358,7 @@ export function buildApp(config: AppConfig): {
 
   return { app, demo, postgres };
 }
+
 
 
 

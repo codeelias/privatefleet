@@ -355,6 +355,43 @@ export const proofPolicies = pgTable(
   (t) => [primaryKey({ columns: [t.tenantId, t.serviceType] })],
 );
 
+/** Tenant geofences evaluated on telemetry ingest (Stage 4). */
+export const geofences = pgTable(
+  "geofences",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** GeoJSON polygon; a PostGIS geometry column is generated in post-migration. */
+    geojson: text("geojson").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdAt,
+  },
+  (t) => [index("geofences_tenant_enabled_idx").on(t.tenantId, t.enabled)],
+);
+
+/** Idempotent enter/exit state per vehicle and geofence. */
+export const geofenceStates = pgTable(
+  "geofence_states",
+  {
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    vehicleId: uuid("vehicle_id")
+      .notNull()
+      .references(() => vehicles.id, { onDelete: "cascade" }),
+    geofenceId: uuid("geofence_id")
+      .notNull()
+      .references(() => geofences.id, { onDelete: "cascade" }),
+    inside: boolean("inside").notNull(),
+    lastCapturedAt: timestamp("last_captured_at", { withTimezone: true }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.vehicleId, t.geofenceId] })],
+);
+
 /** Evidence metadata. Binary media lives in the private evidence store. */
 export const stopEvidence = pgTable(
   "stop_evidence",
@@ -454,6 +491,8 @@ export const tenantTables = [
   demoScenarios,
   proofPolicies,
   stopEvidence,
+  geofences,
+  geofenceStates,
 ] as const;
 
 /** Tables isolated by tenant_id (tenants itself keys on id). */
@@ -471,6 +510,8 @@ export const tenantScopedTables = [
   demoScenarios,
   proofPolicies,
   stopEvidence,
+  geofences,
+  geofenceStates,
 ] as const;
 
 

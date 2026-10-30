@@ -4,13 +4,16 @@
  * position in one tenant-scoped transaction. Out-of-order samples are
  * rejected, never replayed backwards.
  */
+import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type {
   TelemetryBatch,
   TelemetryIngestResult,
+  TelemetrySample,
   VehiclePosition,
 } from "@privatefleet/contracts";
-import { withTenant, type DbHandle } from "../../db/client.js";
+import { EVENT_SCHEMA_VERSION } from "@privatefleet/contracts";
+import { withTenant, type Database, type DbHandle } from "../../db/client.js";
 
 export class TrackingError extends Error {
   constructor(readonly code: "DRIVER_HAS_NO_VEHICLE") {
@@ -20,8 +23,14 @@ export class TrackingError extends Error {
 
 interface VehicleRow {
   id: string;
+  registration: string;
   captured_at: Date | string | null;
   max_seq: number | string | null;
+}
+
+interface GeofenceRow {
+  id: string;
+  name: string;
 }
 
 export interface IngestOutcome {
@@ -41,7 +50,7 @@ export async function ingestTelemetry(
 ): Promise<IngestOutcome> {
   return withTenant(handle, tenantId, async (db) => {
     const rows = (await db.execute(sql`
-      SELECT v.id, v.captured_at,
+      SELECT v.id, v.registration, v.captured_at,
              (SELECT coalesce(max(lp.sequence_no), 0)
                 FROM location_points lp WHERE lp.vehicle_id = v.id) AS max_seq
       FROM vehicles v
@@ -60,6 +69,18 @@ export async function ingestTelemetry(
     const results: TelemetryIngestResult["results"] = [];
     const positions: VehiclePosition[] = [];
     let newest: TelemetryIngestResult["lastPosition"];
+
+    const geofences = (await db.execute(sql`
+      SELECT id, name FROM geofences
+      WHERE tenant_id = ${tenantId} AND enabled = true
+      ORDER BY created_at
+    `)) as unknown as GeofenceRow[];
+    const stateRows = geofences.length
+      ? ((await db.execute(sql`
+          SELECT geofence_id, inside FROM geofence_states WHERE vehicle_id = ${vehicle.id}
+        `)) as unknown as Array<{ geofence_id: string; inside: boolean }>)
+      : [];
+    const states = new Map(stateRows.map((row) => [row.geofence_id, row.inside]));
 
     for (const sample of batch.samples) {
       const capturedMs = Date.parse(sample.capturedAt);
@@ -101,6 +122,15 @@ export async function ingestTelemetry(
       `);
       await db.execute(sql`UPDATE drivers SET last_ping_at = now() WHERE id = ${driverId}`);
 
+      await evaluateGeofences(
+        db,
+        tenantId,
+        vehicle,
+        sample,
+        geofences,
+        states,
+      );
+
       lastCaptured = capturedMs;
       const position: VehiclePosition = {
         vehicleId: vehicle.id,
@@ -135,4 +165,86 @@ export async function ingestTelemetry(
       positions,
     };
   });
+}
+
+/**
+ * PostGIS geofence evaluation for one accepted position. Enter/exit
+ * transitions write one outbox event and one alert, made idempotent by the
+ * persistent per-vehicle/per-geofence state map.
+ */
+async function evaluateGeofences(
+  db: Database,
+  tenantId: string,
+  vehicle: VehicleRow,
+  sample: TelemetrySample,
+  geofences: GeofenceRow[],
+  states: Map<string, boolean>,
+): Promise<void> {
+  if (geofences.length === 0) {
+    return;
+  }
+  const insideRows = (await db.execute(sql`
+    SELECT g.id,
+           ST_Contains(g.geom, ST_SetSRID(ST_MakePoint(${sample.longitude}, ${sample.latitude}), 4326)) AS inside
+    FROM geofences g
+    WHERE g.tenant_id = ${tenantId} AND g.enabled = true
+  `)) as unknown as Array<{ id: string; inside: boolean }>;
+  const nowInside = new Map(insideRows.map((row) => [row.id, row.inside]));
+
+  for (const geofence of geofences) {
+    const inside = nowInside.get(geofence.id) ?? false;
+    const previous = states.get(geofence.id);
+    if (previous !== undefined && previous !== inside) {
+      const eventType = inside ? "geofence.entered" : "geofence.exited";
+      const envelope = {
+        eventId: randomUUID(),
+        schemaVersion: EVENT_SCHEMA_VERSION,
+        tenantId,
+        aggregateType: "vehicle",
+        aggregateId: vehicle.id,
+        type: eventType,
+        occurredAt: new Date().toISOString(),
+        payload: {
+          vehicleId: vehicle.id,
+          geofenceId: geofence.id,
+          geofenceName: geofence.name,
+          inside,
+          latitude: sample.latitude,
+          longitude: sample.longitude,
+        },
+      };
+      await db.execute(sql`
+        INSERT INTO outbox
+          (id, tenant_id, aggregate_type, aggregate_id, event_type, payload)
+        VALUES
+          (${envelope.eventId}, ${tenantId}, 'vehicle', ${vehicle.id},
+           ${eventType}, ${JSON.stringify(envelope)}::jsonb)
+      `);
+      await db.execute(sql`
+        INSERT INTO alerts
+          (id, tenant_id, severity, status, title, entity, location, freshness,
+           recommended_action, reference, job_id, stop_id)
+        VALUES
+          (${randomUUID()}, ${tenantId}, ${inside ? "info" : "at_risk"}, 'open',
+           ${`${inside ? "Entered" : "Exited"} geofence ${geofence.name}`},
+           ${`Vehicle ${vehicle.registration}`},
+           ${`${sample.latitude.toFixed(5)}, ${sample.longitude.toFixed(5)}`},
+           ${`Reported ${new Date().toISOString()}`},
+           'Review vehicle location and current route.',
+           ${vehicle.id}, NULL, NULL)
+      `);
+    }
+    states.set(geofence.id, inside);
+    await db.execute(sql`
+      INSERT INTO geofence_states
+        (tenant_id, vehicle_id, geofence_id, inside, last_captured_at, updated_at)
+      VALUES
+        (${tenantId}, ${vehicle.id}, ${geofence.id}, ${inside}, ${sample.capturedAt}, now())
+      ON CONFLICT (vehicle_id, geofence_id) DO UPDATE SET
+        tenant_id = EXCLUDED.tenant_id,
+        inside = EXCLUDED.inside,
+        last_captured_at = EXCLUDED.last_captured_at,
+        updated_at = now()
+    `);
+  }
 }

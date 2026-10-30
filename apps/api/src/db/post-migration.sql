@@ -17,6 +17,10 @@ ALTER TABLE job_stops ADD COLUMN IF NOT EXISTS location geometry(Point, 4326)
 CREATE INDEX IF NOT EXISTS vehicles_location_gix ON vehicles USING GIST (location);
 CREATE INDEX IF NOT EXISTS job_stops_location_gix ON job_stops USING GIST (location);
 CREATE INDEX IF NOT EXISTS vehicles_tenant_status_idx ON vehicles (tenant_id, status);
+ALTER TABLE geofences ADD COLUMN IF NOT EXISTS geom geometry(Polygon, 4326)
+  GENERATED ALWAYS AS (ST_SetSRID(ST_GeomFromGeoJSON(geojson), 4326)) STORED;
+CREATE INDEX IF NOT EXISTS geofences_geom_gix ON geofences USING GIST (geom);
+
 CREATE INDEX IF NOT EXISTS outbox_unpublished_scan_idx ON outbox (created_at) WHERE published_at IS NULL;
 
 -- --- Row Level Security ----------------------------------------------
@@ -36,7 +40,7 @@ BEGIN
     'users', 'vehicles', 'drivers', 'jobs', 'job_stops', 'job_events',
     'alerts', 'outbox', 'refresh_tokens', 'idempotency_keys', 'demo_scenarios',
     'location_points', 'routes', 'route_stops', 'optimization_runs',
-    'proof_policies', 'stop_evidence'
+    'proof_policies', 'stop_evidence', 'geofences', 'geofence_states'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
@@ -118,5 +122,6 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION auth_driver_by_id(uuid) TO privatefleet_app;
+
 
 
