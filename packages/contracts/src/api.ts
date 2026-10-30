@@ -361,12 +361,42 @@ export const FleetOptimizationProposalSchema = z.object({
 });
 export type FleetOptimizationProposal = z.infer<typeof FleetOptimizationProposalSchema>;
 
+export const RouteWaypointSchema = z.object({
+  /** Stable within a route version: routeId:waypoint:<sequence>. */
+  id: z.string().min(1),
+  sequence: z.number().int().nonnegative(),
+  kind: z.enum(["origin", "job_stop", "destination"]),
+  jobStopId: IdSchema.optional(),
+  jobId: IdSchema.optional(),
+  stopType: z.enum(["pickup", "dropoff"]).optional(),
+  location: GeoPointSchema,
+  /** Absolute planner arrival; null when the plan has no absolute basis. */
+  plannedArrivalAt: z.string().datetime().nullable().optional(),
+});
+export type RouteWaypoint = z.infer<typeof RouteWaypointSchema>;
+
+export const RouteLegSchema = z.object({
+  /** Stable within a route version: routeId:leg:<sequence>. */
+  id: z.string().min(1),
+  sequence: z.number().int().nonnegative(),
+  fromWaypointId: z.string().min(1),
+  toWaypointId: z.string().min(1),
+  /** Geometry assembled from the matching OSRM leg ordered steps. */
+  points: z.array(GeoPointSchema).min(2),
+  distanceM: z.number().nonnegative(),
+  estimatedDurationS: z.number().nonnegative(),
+});
+export type RouteLeg = z.infer<typeof RouteLegSchema>;
+
 export const RoutePathSchema = z.object({
   vehicleId: IdSchema,
   driverId: IdSchema.optional(),
   points: z.array(GeoPointSchema).min(2),
   /** Server-assigned immutable route version (bumped on every publish). */
   version: z.number().int().nonnegative(),
+  /** Optional for demo/legacy fixtures; PostgreSQL published routes provide them. */
+  waypoints: z.array(RouteWaypointSchema).optional(),
+  legs: z.array(RouteLegSchema).optional(),
 });
 export type RoutePath = z.infer<typeof RoutePathSchema>;
 
