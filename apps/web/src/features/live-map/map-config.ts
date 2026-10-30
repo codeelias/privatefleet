@@ -118,6 +118,7 @@ export const VECTOR_STYLES: VectorStyle[] = dedupe([
         },
       ]
     : []),
+  { url: "/map-style-night.json", name: "PrivateFleet Night" },
   { url: "https://tiles.openfreemap.org/styles/liberty", name: "OpenFreeMap liberty" },
   { url: "https://tiles.openfreemap.org/styles/bright", name: "OpenFreeMap bright" },
 ]);

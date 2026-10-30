@@ -73,3 +73,13 @@ its `/planet/*.png` endpoint returns an empty wildcard response - so raster
 must use CARTO. A provider can still be overridden with
 `VITE_MAP_RASTER_TILES` / `VITE_MAP_VECTOR_STYLE` for deployments with their
 own tile agreement.
+
+## Map aesthetic
+
+The primary vector style is `apps/web/public/map-style-night.json` - a
+customised OpenFreeMap Liberty style: `#09090B` background, `#27272A` /
+`#3F3F46` roads, `#172554` water, hidden POIs/buildings/landuse, light labels,
+and a blue (`#276EF1`) route with a white casing. The public tracking page uses
+the same style through MapLibre. Dispatch panels and the work-queue drawer use
+the dark `#18181B` / `#27272A` chrome. The raster fallback remains CARTO for
+browsers without WebGL.

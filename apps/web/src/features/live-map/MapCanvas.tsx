@@ -140,6 +140,22 @@ function colourFor(vehicle: VehicleDto): string {
   return "bg-brand-primary";
 }
 
+function bearingDeg(
+  from: { latitude: number; longitude: number },
+  to: { latitude: number; longitude: number },
+): number {
+  const toRad = Math.PI / 180;
+  const y =
+    Math.sin((to.longitude - from.longitude) * toRad) *
+    Math.cos(to.latitude * toRad);
+  const x =
+    Math.cos(from.latitude * toRad) * Math.sin(to.latitude * toRad) -
+    Math.sin(from.latitude * toRad) *
+      Math.cos(to.latitude * toRad) *
+      Math.cos((to.longitude - from.longitude) * toRad);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
 function VehiclePin({
   vehicle,
   driverName,
@@ -149,6 +165,7 @@ function VehiclePin({
   lastGpsAt,
   onSelect,
   animate = true,
+  heading,
 }: {
   vehicle: VehicleDto;
   driverName: string;
@@ -158,6 +175,7 @@ function VehiclePin({
   lastGpsAt?: number | undefined;
   onSelect: () => void;
   animate?: boolean;
+  heading?: number | undefined;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `pin-${vehicle.id}`,
@@ -199,10 +217,21 @@ function VehiclePin({
       }}
       title={`${driverName} - ${vehicle.registration} - ${gpsLabel}`}
     >
+      {!vehicle.stale && heading !== undefined && (
+        <span
+          aria-hidden="true"
+          className="absolute -top-2 left-1/2 z-10 h-3 w-3 -translate-x-1/2"
+          style={{ transform: `translateX(-50%) rotate(${heading}deg)` }}
+        >
+          <svg viewBox="0 0 12 12" className="h-3 w-3 drop-shadow">
+            <path d="M6 0 10.5 10 6 7.8 1.5 10Z" fill="#FFFFFF" />
+          </svg>
+        </span>
+      )}
       <span
-        className={`flex h-8 w-8 items-center justify-center rounded-full border-[3px] text-[10px] font-bold text-on-brand shadow-[0_4px_14px_rgba(0,0,0,0.35)] ${colourFor(
+        className={`flex h-9 w-9 items-center justify-center rounded-[12px] border-[3px] text-[11px] font-bold text-on-brand shadow-[0_4px_14px_rgba(0,0,0,0.45)] ${colourFor(
           vehicle,
-        )} ${isOver ? "border-brand-primary" : "border-command-surface"} ${
+        )} ${isOver ? "border-brand-primary" : "border-[#09090B]"} ${
           vehicle.status === "on_route" && !vehicle.stale ? "animate-pulse" : ""
         }`}
       >
@@ -301,6 +330,31 @@ export function MapCanvas({
     [state.routes],
   );
   const lastRouteSignatureRef = useRef("");
+  const headingsRef = useRef<Map<string, { latitude: number; longitude: number; heading: number }>>(
+    new Map(),
+  );
+  useEffect(() => {
+    const next = new Map(headingsRef.current);
+    for (const vehicle of state.vehicles) {
+      const location = vehicle.location;
+      if (!location) continue;
+      const previous = next.get(vehicle.id);
+      if (
+        previous &&
+        (Math.abs(previous.latitude - location.latitude) > 1e-5 ||
+          Math.abs(previous.longitude - location.longitude) > 1e-5)
+      ) {
+        next.set(vehicle.id, {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          heading: bearingDeg(previous, location),
+        });
+      } else if (!previous) {
+        next.set(vehicle.id, { ...location, heading: 0 });
+      }
+    }
+    headingsRef.current = next;
+  }, [state.vehicles]);
   useEffect(() => {
     if (routeSet.routes.length > 0 && !routeSet.usedFallback) {
       lastValidRoutesRef.current = routeSet.routes;
@@ -426,16 +480,16 @@ export function MapCanvas({
       const selected = selectedDriverId !== null && route.driverId === selectedDriverId;
       const points = toLeafletLatLngs(route.points);
       const casing = L.polyline(points, {
-        color: mapStyle === "dark" ? "#FFF8EE" : "#FFFFFF",
-        weight: selected ? 9 : 6.5,
-        opacity: selected ? 0.9 : 0.72,
+        color: "#FFFFFF",
+        weight: selected ? 10 : 7.5,
+        opacity: 0.9,
         interactive: false,
         className: "pf-route-casing",
       }).addTo(map);
       const line = L.polyline(points, {
-        color: selected ? "#F28C28" : selectedDriverId !== null ? "#8FA6B2" : "#F28C28",
-        weight: selected ? 5 : 3,
-        opacity: selected ? 0.98 : selectedDriverId !== null ? 0.62 : 0.88,
+        color: selected ? "#60A5FA" : selectedDriverId !== null ? "#64748B" : "#276EF1",
+        weight: selected ? 6 : 4,
+        opacity: selected ? 1 : selectedDriverId !== null ? 0.72 : 0.95,
         className: "pf-route-line",
       }).addTo(map);
       next.push(casing, line);
@@ -496,9 +550,9 @@ export function MapCanvas({
         type: "line",
         source: "vehicle-routes",
         paint: {
-          "line-color": "#FFF8EE",
-          "line-width": 7,
-          "line-opacity": 0.55,
+          "line-color": "#FFFFFF",
+          "line-width": 8,
+          "line-opacity": 0.9,
         },
       });
       map.addLayer({
@@ -506,9 +560,9 @@ export function MapCanvas({
         type: "line",
         source: "vehicle-routes",
         paint: {
-          "line-color": "#EF842F",
-          "line-width": 3,
-          "line-opacity": 0.7,
+          "line-color": "#276EF1",
+          "line-width": 4,
+          "line-opacity": 0.95,
         },
       });
       map.addLayer({
@@ -517,9 +571,9 @@ export function MapCanvas({
         source: "vehicle-routes",
         filter: ["==", ["get", "driverId"], ""],
         paint: {
-          "line-color": "#F28C28",
-          "line-width": 5,
-          "line-opacity": 0.95,
+          "line-color": "#60A5FA",
+          "line-width": 6,
+          "line-opacity": 1,
         },
       });
       setReady(true);
@@ -796,7 +850,7 @@ export function MapCanvas({
       <div className="absolute inset-0 flex items-center justify-center">
         <div
           data-testid="map-card"
-          className={"pf-map-card relative h-[94%] w-[97%] overflow-hidden rounded-[26px] border border-command-border bg-[#202830] shadow-[0_18px_50px_rgba(20,19,16,0.14)] " + (mapStyle === "light" ? "pf-map-light" : "")}
+          className={"pf-map-card relative h-[94%] w-[97%] overflow-hidden rounded-[26px] border border-[#27272A] bg-[#09090B] shadow-[0_18px_50px_rgba(0,0,0,0.45)] " + (mapStyle === "light" ? "pf-map-light" : "")}
         >
           <div
             className="absolute inset-0 opacity-20"
@@ -815,7 +869,7 @@ export function MapCanvas({
            */}
           <div
             ref={containerRef}
-            className="absolute inset-0 z-10 bg-[#202830]"
+            className="absolute inset-0 z-10 bg-[#09090B]"
             style={{ position: "absolute", inset: 0 }}
           />
           {jobs.map((job) => {
@@ -886,6 +940,7 @@ export function MapCanvas({
                 selected={selectedDriverId !== null && vehicle.driverId === selectedDriverId}
                 lastGpsAt={gpsSeenAt?.get(vehicle.id)}
                 animate={!mapMoving}
+                heading={headingsRef.current.get(vehicle.id)?.heading}
                 onSelect={() =>
                   setSelectedDriverId((prev) =>
                     prev === vehicle.driverId ? null : (vehicle.driverId ?? null),
@@ -949,6 +1004,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 

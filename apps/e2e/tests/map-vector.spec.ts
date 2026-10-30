@@ -25,7 +25,7 @@ test("Live map: default vector basemap renders with vehicle markers", async ({
 
   await page.goto("http://127.0.0.1:5173/");
   await expect(page.getByText("Fleet Operations")).toBeVisible();
-  await expect(page.getByText("vector map (OpenFreeMap liberty)")).toBeVisible();
+  await expect(page.getByText("vector map (PrivateFleet Night)")).toBeVisible();
   const canvas = page.locator("canvas.maplibregl-canvas");
   await expect(canvas).toBeVisible({ timeout: 30_000 });
 
@@ -45,7 +45,7 @@ test("map zoom disables marker transition so pins track the basemap", async ({
 }) => {
   test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
   await page.goto("http://127.0.0.1:5173/?map=vector");
-  await expect(page.getByText("vector map (OpenFreeMap liberty)")).toBeVisible();
+  await expect(page.getByText("vector map (PrivateFleet Night)")).toBeVisible();
   const card = page.locator('[data-testid="map-card"]');
   const shell = page.locator('[data-testid="map-canvas"]');
   const pin = page.locator('[title*="VAN-02"]').first();

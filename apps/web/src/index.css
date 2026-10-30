@@ -52,8 +52,40 @@ body {
 
 /* Ghost pins never imply a fresh GPS fix (docs/09.7). */
 .stale-ghost {
-  opacity: 0.6;
+  opacity: 0.5;
   filter: grayscale(1);
+}
+.stale-ghost > span:last-child {
+  border-style: dashed;
+}
+
+/* Night map chrome: dark floating panels with a crisp 1px edge. */
+.pf-dark-panel {
+  color: #e4e4e7;
+}
+.pf-dark-panel .text-text-primary {
+  color: #f4f4f5;
+}
+.pf-dark-panel .text-text-secondary {
+  color: #a1a1aa;
+}
+.pf-dark-panel .border-command-border,
+.pf-dark-panel .border-command-border\/70 {
+  border-color: #27272a;
+}
+.pf-dark-panel .bg-command-raised {
+  background-color: #27272a;
+}
+.pf-map-card .maplibregl-canvas {
+  background: #09090b;
+}
+.maplibregl-ctrl-attrib {
+  background: rgba(9, 9, 11, 0.82) !important;
+  color: #a1a1aa !important;
+  font-size: 9px !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: #d4d4d8 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {

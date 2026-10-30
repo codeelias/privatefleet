@@ -1,24 +1,58 @@
 /**
  * Public customer tracking page (/track/:token). Polls the scoped public
- * endpoint and renders the branded portal with a live vehicle position on a
- * raster map. No tenant Socket.IO, no dispatcher chrome, no personal data.
+ * endpoint and renders the branded portal with a live vehicle position on
+ * the same PrivateFleet Night vector style as the dispatcher. No tenant
+ * Socket.IO, no dispatcher chrome, no personal data.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { PublicTrackingResponse } from "@privatefleet/contracts";
 
 const POLL_MS = 5_000;
 
-function tilePosition(lat: number, lng: number, zoom: number): { x: number; y: number } {
-  const scale = 256 * 2 ** zoom;
-  const x = ((lng + 180) / 360) * scale;
-  const latRad = (lat * Math.PI) / 180;
-  const y = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * scale;
-  return { x, y };
-}
-
 export function PublicTracking({ token }: { token: string }) {
   const [data, setData] = useState<PublicTrackingResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
+
+  useEffect(() => {
+    const position = data?.position;
+    if (!position || !mapContainerRef.current) {
+      return;
+    }
+    if (!mapRef.current) {
+      const map = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: "/map-style-night.json",
+        center: [position.longitude, position.latitude],
+        zoom: 14,
+        interactive: false,
+        attributionControl: false,
+      });
+      const element = document.createElement("div");
+      element.className =
+        "h-4 w-4 rounded-full border-2 border-white bg-[#276EF1] shadow-[0_0_0_6px_rgba(39,110,241,0.25)]";
+      markerRef.current = new maplibregl.Marker({ element, anchor: "center" })
+        .setLngLat([position.longitude, position.latitude])
+        .addTo(map);
+      mapRef.current = map;
+      return;
+    }
+    markerRef.current?.setLngLat([position.longitude, position.latitude]);
+    mapRef.current.panTo([position.longitude, position.latitude], { duration: 600 });
+  }, [data?.position]);
+
+  useEffect(
+    () => () => {
+      mapRef.current?.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -60,17 +94,6 @@ export function PublicTracking({ token }: { token: string }) {
       </div>
     );
   }
-
-  const zoom = 14;
-  const mapSize = 256;
-  const center = data.position
-    ? tilePosition(data.position.latitude, data.position.longitude, zoom)
-    : null;
-  const tiles = center
-    ? [
-        { x: Math.floor(center.x / mapSize), y: Math.floor(center.y / mapSize) },
-      ]
-    : [];
 
   const done = data.stops.filter((stop) => stop.status === "completed").length;
   const progress = Math.round((done / Math.max(data.stops.length, 1)) * 100);
@@ -114,31 +137,17 @@ export function PublicTracking({ token }: { token: string }) {
           </div>
         </div>
 
-        {center && (
-          <div className="relative mt-4 h-56 overflow-hidden rounded-xl border border-[#D8CFBD] bg-[#E4DCCB]">
-            <div className="absolute inset-0">
-              {tiles.map((tile) => (
-                <img
-                  key={`${tile.x}-${tile.y}`}
-                  alt=""
-                  src={`https://a.basemaps.cartocdn.com/light_all/${zoom}/${tile.x}/${tile.y}.png`}
-                  className="absolute h-[256px] w-[256px]"
-                  style={{
-                    left: center.x - tile.x * mapSize,
-                    top: center.y - tile.y * mapSize,
-                    transform: "translate(-128px, -128px)",
-                  }}
-                />
-              ))}
-            </div>
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-              <span className="block h-4 w-4 rounded-full border-2 border-white bg-[#2563EB] shadow" />
-            </div>
-            {data.position?.stale && (
-              <p className="absolute left-2 top-2 rounded bg-[#171816]/80 px-2 py-0.5 text-[10px] text-white">
+        {data.position && (
+          <div className="relative mt-4 h-56 overflow-hidden rounded-xl border border-[#27272A] bg-[#09090B]">
+            <div ref={mapContainerRef} className="absolute inset-0" />
+            {data.position.stale && (
+              <p className="absolute left-2 top-2 z-10 rounded bg-[#09090B]/90 px-2 py-0.5 text-[10px] text-white">
                 Position unavailable right now
               </p>
             )}
+            <p className="absolute bottom-1 right-2 z-10 rounded bg-[#09090B]/80 px-1.5 py-0.5 text-[9px] text-[#A1A1AA]">
+              &copy; OpenStreetMap &copy; OpenFreeMap
+            </p>
           </div>
         )}
 
@@ -179,7 +188,7 @@ export function PublicTracking({ token }: { token: string }) {
         <p className="mt-6 text-[10px] leading-relaxed text-[#756E61]">
           {data.driverName ? `Your driver today is ${data.driverName}. ` : ""}
           This page shows live delivery progress and never shares personal contact details.
-          Map &copy; OpenStreetMap contributors &copy; CARTO.
+          Map &copy; OpenStreetMap contributors &copy; OpenFreeMap.
         </p>
       </main>
     </div>
