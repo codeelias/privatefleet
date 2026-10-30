@@ -27,10 +27,18 @@ export interface OsrmMatrix {
   distances: number[][];
 }
 
+export interface OsrmLeg {
+  points: GeoPoint[];
+  distanceMetres: number;
+  durationSeconds: number;
+}
+
 export interface OsrmRoute {
   points: GeoPoint[];
   distanceMetres: number;
   durationSeconds: number;
+  /** One leg per adjacent input coordinate; assembled from OSRM steps. */
+  legs?: OsrmLeg[];
 }
 
 export interface VroomVehicleInput {
@@ -127,3 +135,4 @@ export function validateGeometry(points: GeoPoint[], depot: GeoPoint): void {
     throw new RoutingError("ROUTING_INVALID_RESPONSE", "geometry does not start at the depot");
   }
 }
+

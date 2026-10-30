@@ -24,6 +24,11 @@ interface RouteResponse {
     distance?: number;
     duration?: number;
     geometry?: { coordinates?: Array<[number, number]> };
+    legs?: Array<{
+      distance?: number;
+      duration?: number;
+      steps?: Array<{ geometry?: { coordinates?: Array<[number, number]> } }>;
+    }>;
   }>;
 }
 
@@ -102,7 +107,7 @@ export class OsrmClient {
     }
     const url =
       `${this.baseUrl.replace(/\/$/, "")}/route/v1/driving/${this.coordinates(points)}` +
-      "?overview=full&geometries=geojson&steps=false";
+      "?overview=full&geometries=geojson&steps=true";
     const body = (await this.getJson(url)) as RouteResponse;
     if (body.code !== "Ok") {
       throw new RoutingError("OSRM_UNAVAILABLE", "OSRM could not route the plan");
@@ -113,11 +118,29 @@ export class OsrmClient {
       throw new RoutingError("ROUTING_INVALID_RESPONSE", "OSRM route geometry missing");
     }
     const geometry = coordinates.map(([longitude, latitude]) => ({ latitude, longitude }));
+    const legs = (route.legs ?? []).map((leg) => {
+      const points: Array<{ latitude: number; longitude: number }> = [];
+      for (const step of leg.steps ?? []) {
+        for (const [longitude, latitude] of step.geometry?.coordinates ?? []) {
+          const last = points[points.length - 1];
+          if (!last || last.longitude !== longitude || last.latitude !== latitude) {
+            points.push({ latitude, longitude });
+          }
+        }
+      }
+      return {
+        points,
+        distanceMetres: Number(leg.distance ?? 0),
+        durationSeconds: Number(leg.duration ?? 0),
+      };
+    });
     return {
       points: geometry,
       distanceMetres: Number(route.distance ?? 0),
       durationSeconds: Number(route.duration ?? 0),
+      ...(legs.length > 0 ? { legs } : {}),
     };
   }
 }
+
 
