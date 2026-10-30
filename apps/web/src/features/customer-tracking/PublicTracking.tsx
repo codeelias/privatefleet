@@ -39,6 +39,7 @@ export function PublicTracking({ token }: { token: string }) {
         .setLngLat([position.longitude, position.latitude])
         .addTo(map);
       mapRef.current = map;
+      map.setPadding({ top: 0, bottom: 300, left: 0, right: 0 });
       return;
     }
     markerRef.current?.setLngLat([position.longitude, position.latitude]);
@@ -97,100 +98,100 @@ export function PublicTracking({ token }: { token: string }) {
 
   const done = data.stops.filter((stop) => stop.status === "completed").length;
   const progress = Math.round((done / Math.max(data.stops.length, 1)) * 100);
+  const etaMinutes = data.eta
+    ? Math.max(0, Math.round((Date.parse(data.eta) - Date.now()) / 60_000))
+    : null;
+  const initials =
+    data.driverName
+      ?.split(" ")
+      .map((part) => part[0])
+      .join("")
+      .slice(0, 2) ?? "PF";
+  const nextStop = data.stops.find((stop) => stop.status !== "completed");
 
   return (
-    <div className="min-h-screen bg-[#F2EEE4] text-[#171816]">
-      <header className="flex items-center justify-between border-b border-[#D8CFBD] bg-[#FBF8F1] px-5 py-3">
+    <div className="relative min-h-screen overflow-hidden bg-[#09090B] text-[#E4E4E7]">
+      <div className="absolute inset-0">
+        <div ref={mapContainerRef} className="h-full w-full" />
+      </div>
+
+      <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between border-b border-[#27272A]/70 bg-[#09090B]/75 px-5 py-3 backdrop-blur-md">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2563EB] text-sm font-black text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#276EF1] text-sm font-black text-white">
             P
           </span>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-[#756E61]">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-[#A1A1AA]">
               PRIVATE FLEET
             </p>
-            <p className="text-sm font-bold">Customer tracking page</p>
+            <p className="text-sm font-bold">Live delivery</p>
           </div>
         </div>
-        <span className="text-xs text-[#756E61]">Tracking / Job {data.jobReference}</span>
+        <span className="text-xs text-[#A1A1AA]">Job {data.jobReference}</span>
       </header>
 
-      <main className="mx-auto w-full max-w-md flex-1 px-5 py-6">
-        <h1 className="text-xl font-bold">Your delivery is on the way</h1>
-        <div className="mt-3 flex items-center gap-3 rounded-xl bg-[#FBF8F1] p-4 shadow-sm">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#2563EB] text-[10px] font-black text-white">
-            {data.jobReference}
+      <section className="absolute inset-x-0 bottom-0 z-10 max-h-[62%] overflow-y-auto rounded-t-[28px] border-t border-[#27272A] bg-[#18181B] px-5 pb-6 pt-3 shadow-[0_-18px_50px_rgba(0,0,0,0.55)]">
+        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-[#3F3F46]" aria-hidden="true" />
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#276EF1] text-sm font-bold text-white">
+            {initials}
           </span>
-          <div className="flex-1">
-            <p className="text-sm font-semibold">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">
+              {data.driverName ?? "Your driver"}
+            </p>
+            <p className="text-xs text-[#A1A1AA]">
+              {data.vehicleRegistration ?? "Vehicle assigned"}
+              {" · "}
               {data.status.replace("_", " ")}
             </p>
-            <p className="text-xs text-[#756E61]">
-              {data.eta
-                ? `Estimated arrival ${new Date(data.eta).toLocaleTimeString("en-GB", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}`
-                : "Estimated arrival unavailable"}
-              {data.vehicleRegistration ? ` · ${data.vehicleRegistration}` : ""}
-            </p>
           </div>
+          <span className="rounded-full border border-[#27272A] px-2.5 py-1 text-[10px] font-semibold text-[#A1A1AA]">
+            {data.position?.stale ? "Signal lost" : "Live"}
+          </span>
         </div>
 
-        {data.position && (
-          <div className="relative mt-4 h-56 overflow-hidden rounded-xl border border-[#27272A] bg-[#09090B]">
-            <div ref={mapContainerRef} className="absolute inset-0" />
-            {data.position.stale && (
-              <p className="absolute left-2 top-2 z-10 rounded bg-[#09090B]/90 px-2 py-0.5 text-[10px] text-white">
-                Position unavailable right now
-              </p>
-            )}
-            <p className="absolute bottom-1 right-2 z-10 rounded bg-[#09090B]/80 px-1.5 py-0.5 text-[9px] text-[#A1A1AA]">
-              &copy; OpenStreetMap &copy; OpenFreeMap
+        <p className="mt-4 text-[64px] font-bold leading-[0.95] tracking-[-0.04em] text-white">
+          {etaMinutes !== null ? `${etaMinutes} min` : data.status.replace("_", " ")}
+        </p>
+        <p className="mt-1 text-sm text-[#A1A1AA]">
+          {data.eta
+            ? `Estimated arrival ${new Date(data.eta).toLocaleTimeString("en-GB", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}`
+            : "Estimated arrival unavailable"}
+        </p>
+
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#27272A]">
+          <div
+            className="h-full rounded-full bg-[#276EF1] transition-[width] duration-700"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <div className="mt-2 flex items-center justify-between text-xs text-[#A1A1AA]">
+          <span>
+            {done} of {data.stops.length} stops completed
+          </span>
+          <span>{progress}%</span>
+        </div>
+
+        {nextStop && (
+          <div className="mt-4 rounded-2xl border border-[#27272A] bg-[#111113] px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#71717A]">
+              Next stop
+            </p>
+            <p className="mt-1 truncate text-sm font-medium text-[#E4E4E7]">
+              {nextStop.address}
             </p>
           </div>
         )}
 
-        <div className="mt-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#756E61]">
-            Delivery progress
-          </p>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#E4DCCB]">
-            <div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-
-        <ol className="mt-4 space-y-2">
-          {data.stops.map((stop) => {
-            const state = stop.status === "completed" ? "done" : stop.status === "arrived" ? "current" : "pending";
-            return (
-              <li key={stop.sequence} className="flex items-center gap-3 text-sm">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    state === "done"
-                      ? "bg-[#16A34A]"
-                      : state === "current"
-                        ? "bg-[#2563EB]"
-                        : "bg-[#C9BFA8]"
-                  }`}
-                />
-                <span className={state === "pending" ? "text-[#756E61]" : "font-semibold"}>
-                  {stop.address}
-                </span>
-                <span className="ml-auto text-xs text-[#756E61]">
-                  {state === "done" ? "Delivered" : state === "current" ? "In progress" : "Pending"}
-                </span>
-              </li>
-            );
-          })}
-        </ol>
-
-        <p className="mt-6 text-[10px] leading-relaxed text-[#756E61]">
-          {data.driverName ? `Your driver today is ${data.driverName}. ` : ""}
-          This page shows live delivery progress and never shares personal contact details.
-          Map &copy; OpenStreetMap contributors &copy; OpenFreeMap.
+        <p className="mt-4 text-[10px] leading-relaxed text-[#71717A]">
+          This page shows live delivery progress and never shares personal contact
+          details. Map &copy; OpenStreetMap contributors &copy; OpenFreeMap.
         </p>
-      </main>
+      </section>
     </div>
   );
 }

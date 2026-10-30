@@ -127,19 +127,6 @@ function routeGeoJson(routes: RoutePathLike[]): GeoJSON.FeatureCollection {
   };
 }
 
-function colourFor(vehicle: VehicleDto): string {
-  if (vehicle.stale) {
-    return "bg-text-secondary";
-  }
-  if (vehicle.status === "on_route") {
-    return "bg-brand-primary";
-  }
-  if (vehicle.status === "maintenance") {
-    return "bg-status-warning";
-  }
-  return "bg-brand-primary";
-}
-
 function bearingDeg(
   from: { latitude: number; longitude: number },
   to: { latitude: number; longitude: number },
@@ -217,28 +204,34 @@ function VehiclePin({
       }}
       title={`${driverName} - ${vehicle.registration} - ${gpsLabel}`}
     >
-      {!vehicle.stale && heading !== undefined && (
-        <span
+      <span className="relative flex h-10 w-10 items-center justify-center">
+        {vehicle.status === "on_route" && !vehicle.stale && (
+          <span
+            aria-hidden="true"
+            className="absolute h-9 w-9 animate-pulse rounded-full bg-[#276EF1]/25"
+          />
+        )}
+        <svg
+          viewBox="0 0 32 32"
           aria-hidden="true"
-          className="absolute -top-2 left-1/2 z-10 h-3 w-3 -translate-x-1/2"
-          style={{ transform: `translateX(-50%) rotate(${heading}deg)` }}
+          className="relative h-8 w-8 drop-shadow-[0_3px_8px_rgba(0,0,0,0.6)]"
+          style={{ transform: `rotate(${heading ?? 0}deg)` }}
         >
-          <svg viewBox="0 0 12 12" className="h-3 w-3 drop-shadow">
-            <path d="M6 0 10.5 10 6 7.8 1.5 10Z" fill="#FFFFFF" />
-          </svg>
+          <path
+            d="M16 3 L28 28 L16 22.8 L4 28 Z"
+            fill={vehicle.stale ? "#6B7280" : "#276EF1"}
+            stroke={vehicle.stale ? "#9CA3AF" : "#FFFFFF"}
+            strokeWidth="2.5"
+            strokeLinejoin="round"
+            strokeDasharray={vehicle.stale ? "3 3" : undefined}
+          />
+        </svg>
+        <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-[#18181B] px-1.5 py-0.5 text-[8px] font-bold text-white">
+          {driverName
+            .split(" ")
+            .map((part) => part[0])
+            .join("") ?? "?"}
         </span>
-      )}
-      <span
-        className={`flex h-9 w-9 items-center justify-center rounded-[12px] border-[3px] text-[11px] font-bold text-on-brand shadow-[0_4px_14px_rgba(0,0,0,0.45)] ${colourFor(
-          vehicle,
-        )} ${isOver ? "border-brand-primary" : "border-[#09090B]"} ${
-          vehicle.status === "on_route" && !vehicle.stale ? "animate-pulse" : ""
-        }`}
-      >
-        {driverName
-          .split(" ")
-          .map((part) => part[0])
-          .join("") ?? "?"}
       </span>
     </div>
   );
@@ -511,7 +504,7 @@ export function MapCanvas({
     try {
       map = new maplibregl.Map({
         container: containerRef.current,
-        style: firstStyle.url,
+        style: mapStyle === "dark" ? "/map-style-night.json" : "/map-style-light.json",
         center: [LONDON.lng, LONDON.lat],
         zoom: 12,
         maxBounds: LONDON_BOUNDS,
@@ -538,8 +531,7 @@ export function MapCanvas({
       }
     });
     map.on("load", () => {
-      const current = VECTOR_STYLES[styleIndexRef.current] ?? firstStyle;
-      setVectorProvider(current.name);
+      setVectorProvider(mapStyle === "dark" ? "PrivateFleet Night" : "PrivateFleet Day");
       lastRouteSignatureRef.current = routeSet.signature;
       map.addSource("vehicle-routes", {
         type: "geojson",
@@ -596,7 +588,7 @@ export function MapCanvas({
       vectorRef.current = null;
       setReady(false);
     };
-  }, [useVector]);
+  }, [useVector, mapStyle]);
 
   // Update vector route data only when the geometry actually changed, and
   // keep the selection filter current (docs/17: static geometry must not be
@@ -619,7 +611,17 @@ export function MapCanvas({
         selectedDriverId ?? "",
       ]);
     }
-  }, [routeSet, ready, selectedDriverId]);
+    if (map.getLayer("vehicle-routes-line")) {
+      const dimmed = selectedDriverId !== null;
+      map.setPaintProperty(
+        "vehicle-routes-line",
+        "line-color",
+        dimmed ? (mapStyle === "dark" ? "#333333" : "#C7C7CC") : "#276EF1",
+      );
+      map.setPaintProperty("vehicle-routes-line", "line-width", dimmed ? 3 : 4);
+      map.setPaintProperty("vehicle-routes-line", "line-opacity", dimmed ? 0.6 : 0.95);
+    }
+  }, [routeSet, ready, selectedDriverId, mapStyle]);
 
   // Project geo points to container pixels for the overlay layer.
   function project(point: GeoPoint | undefined): { x: number; y: number } | null {
@@ -1004,6 +1006,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 

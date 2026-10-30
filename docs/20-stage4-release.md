@@ -76,10 +76,14 @@ own tile agreement.
 
 ## Map aesthetic
 
-The primary vector style is `apps/web/public/map-style-night.json` - a
-customised OpenFreeMap Liberty style: `#09090B` background, `#27272A` /
-`#3F3F46` roads, `#172554` water, hidden POIs/buildings/landuse, light labels,
-and a blue (`#276EF1`) route with a white casing. The public tracking page uses
-the same style through MapLibre. Dispatch panels and the work-queue drawer use
-the dark `#18181B` / `#27272A` chrome. The raster fallback remains CARTO for
-browsers without WebGL.
+Two custom vector styles are served from `apps/web/public/`:
+`map-style-night.json` (default) and `map-style-light.json` (the "Light map"
+toggle). Both strip POIs, buildings, landuse, street labels and residential
+roads below zoom 14; night uses `#111111` / `#222222` roads / `#0A192F` water,
+light uses `#F3F3F3` / white roads / faint green parks. Routes are blue
+`#276EF1` with a white casing and unselected routes dim to grey; vehicles are
+directional arrows rotated by derived heading, with a separate pulse halo.
+The public tracking page uses the night style with a large dark bottom sheet
+showing the ETA, driver/vehicle and stop progress.
+
+The raster fallback remains CARTO for browsers without WebGL.

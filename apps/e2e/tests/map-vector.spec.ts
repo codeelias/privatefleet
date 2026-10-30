@@ -66,3 +66,12 @@ test("map zoom disables marker transition so pins track the basemap", async ({
   await expect(pin).toBeVisible();
 });
 
+test("light mode uses the PrivateFleet Day vector style", async ({ page, isMobile }) => {
+  test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
+  await page.goto("http://127.0.0.1:5173/?map=vector");
+  await expect(page.getByText("vector map (PrivateFleet Night)")).toBeVisible();
+  await page.getByRole("button", { name: "Switch to light map" }).click();
+  await expect(page.getByText("vector map (PrivateFleet Day)")).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("canvas.maplibregl-canvas")).toBeVisible();
+});
+

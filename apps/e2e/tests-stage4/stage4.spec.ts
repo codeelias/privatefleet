@@ -101,9 +101,9 @@ test("public tracking page shows the job and revocation ends it", async ({ page,
   const token = createdBody.token;
 
   await page.goto(`/track/${token}`);
-  await expect(page.getByText("Customer tracking page")).toBeVisible();
-  await expect(page.getByText(`Tracking / Job ${job!.reference}`)).toBeVisible();
-  await expect(page.getByText("Delivery progress", { exact: true })).toBeVisible();
+  await expect(page.getByText("Live delivery", { exact: true })).toBeVisible();
+  await expect(page.getByText(`Job ${job!.reference}`)).toBeVisible();
+  await expect(page.getByText(/stops completed/)).toBeVisible();
   await expect(page.getByText("Estimated arrival", { exact: false })).toBeVisible();
 
   const revoked = await request.delete(`${API}/v1/tracking-tokens/${createdBody.id}`, {
@@ -137,3 +137,4 @@ test("delivery performance report renders and downloads CSV", async ({ page, req
   expect(csv).toContain("job_reference");
   expect(csv).toContain(reference);
 });
+
