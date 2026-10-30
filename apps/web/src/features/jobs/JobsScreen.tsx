@@ -4,7 +4,11 @@
  * counts come from the API; commit sends only the validated preview payload.
  */
 import { useMemo, useRef, useState } from "react";
-import type { FleetState, JobImportPreview } from "@privatefleet/contracts";
+import type {
+  DeliveryPerformanceReport,
+  FleetState,
+  JobImportPreview,
+} from "@privatefleet/contracts";
 import { api } from "../../shared/api/client";
 import { StatusChip } from "../../shared/ui/StatusChip";
 
@@ -24,10 +28,49 @@ export function JobsScreen({
   onImported: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [report, setReport] = useState<DeliveryPerformanceReport | null>(null);
+  const [reportFilter, setReportFilter] = useState<string | null>(null);
   const jobs = useMemo(
     () => [...state.jobs].sort((a, b) => a.reference.localeCompare(b.reference)),
     [state.jobs],
   );
+
+  async function loadReport(jobId?: string): Promise<void> {
+    setReportBusy(true);
+    setReportError(null);
+    setReportFilter(jobId ?? null);
+    try {
+      const query = jobId ? `?jobId=${jobId}` : "";
+      setReport(await api.deliveryPerformance(query));
+    } catch (err) {
+      setReport(null);
+      setReportError(err instanceof Error ? err.message : "Report unavailable");
+    } finally {
+      setReportBusy(false);
+    }
+  }
+
+  async function downloadReport(): Promise<void> {
+    setReportBusy(true);
+    try {
+      const query = reportFilter ? `?jobId=${reportFilter}` : "";
+      const csv = await api.deliveryPerformanceCsv(query);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "delivery-performance.csv";
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setReportError(err instanceof Error ? err.message : "CSV download failed");
+    } finally {
+      setReportBusy(false);
+    }
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -41,13 +84,25 @@ export function JobsScreen({
             {jobs.length} jobs - {jobs.reduce((sum, job) => sum + job.stops.length, 0)} stops
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="min-h-9 rounded-lg bg-brand-primary px-4 text-xs font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-        >
-          Bulk Import
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setReportOpen(true);
+              void loadReport();
+            }}
+            className="min-h-9 rounded-lg border border-command-border bg-command-surface px-4 text-xs font-bold text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            Delivery Performance
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="min-h-9 rounded-lg bg-brand-primary px-4 text-xs font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            Bulk Import
+          </button>
+        </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -65,6 +120,7 @@ export function JobsScreen({
                   <th className="px-3 py-2.5 font-semibold">Stops</th>
                   <th className="px-3 py-2.5 font-semibold">Status</th>
                   <th className="px-3 py-2.5 font-semibold">Driver</th>
+                  <th className="px-3 py-2.5 font-semibold">Report</th>
                 </tr>
               </thead>
               <tbody>
@@ -87,6 +143,22 @@ export function JobsScreen({
                       {state.drivers.find((driver) => driver.id === job.assignedDriverId)?.fullName ??
                         "Unassigned"}
                     </td>
+                    <td className="px-3 py-2.5">
+                      {job.status === "completed" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReportOpen(true);
+                            void loadReport(job.id);
+                          }}
+                          className="rounded-md border border-command-border px-2 py-1 text-[10px] font-semibold text-text-primary hover:bg-command-raised"
+                        >
+                          Trip Report
+                        </button>
+                      ) : (
+                        <span className="text-text-secondary">-</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -94,6 +166,17 @@ export function JobsScreen({
           </div>
         )}
       </div>
+
+      {reportOpen && (
+        <PerformanceModal
+          busy={reportBusy}
+          error={reportError}
+          report={report}
+          filtered={reportFilter !== null}
+          onClose={() => setReportOpen(false)}
+          onDownload={() => void downloadReport()}
+        />
+      )}
 
       {open && (
         <BulkImportModal
@@ -103,6 +186,143 @@ export function JobsScreen({
           }}
         />
       )}
+    </div>
+  );
+}
+
+function PerformanceModal({
+  busy,
+  error,
+  report,
+  filtered,
+  onClose,
+  onDownload,
+}: {
+  busy: boolean;
+  error: string | null;
+  report: DeliveryPerformanceReport | null;
+  filtered: boolean;
+  onClose: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="performance-title"
+        className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-command-border bg-command-surface shadow-2xl"
+      >
+        <header className="flex items-start justify-between gap-3 border-b border-command-border/70 px-5 py-4">
+          <div>
+            <h2 id="performance-title" className="text-base font-bold text-text-primary">
+              Delivery performance report
+            </h2>
+            <p className="mt-1 text-xs text-text-secondary">
+              Planned versus recorded arrival. Missing timestamps or windows are shown as
+              Unavailable and are never counted as on-time.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close delivery performance"
+            className="min-h-8 rounded-md border border-command-border px-2 text-xs text-text-secondary"
+          >
+            Close
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {busy && <p className="text-xs text-text-secondary">Loading report...</p>}
+          {error && (
+            <p role="alert" className="rounded-lg bg-status-danger/10 px-3 py-2 text-xs text-status-danger">
+              {error}
+            </p>
+          )}
+          {report && (
+            <div className="overflow-x-auto rounded-xl border border-command-border">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead className="border-b border-command-border/70 text-[10px] uppercase tracking-[0.12em] text-text-secondary">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">Job</th>
+                    <th className="px-3 py-2 font-semibold">Address</th>
+                    <th className="px-3 py-2 font-semibold">Stop status</th>
+                    <th className="px-3 py-2 font-semibold">Planned arrival</th>
+                    <th className="px-3 py-2 font-semibold">Arrived</th>
+                    <th className="px-3 py-2 font-semibold">Delta</th>
+                    <th className="px-3 py-2 font-semibold">On time</th>
+                    <th className="px-3 py-2 font-semibold">Failure</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.rows.map((row) => (
+                    <tr key={row.stopId} className="border-b border-command-border/50 last:border-0">
+                      <td className="px-3 py-2 font-semibold text-text-primary">{row.jobReference}</td>
+                      <td className="px-3 py-2 text-text-secondary">{row.address}</td>
+                      <td className="px-3 py-2 text-text-secondary">{row.stopStatus}</td>
+                      <td className="px-3 py-2 text-text-secondary">
+                        {row.plannedArrivalAt
+                          ? new Date(row.plannedArrivalAt).toLocaleTimeString("en-GB")
+                          : "Unavailable"}
+                      </td>
+                      <td className="px-3 py-2 text-text-secondary">
+                        {row.arrivedAt
+                          ? new Date(row.arrivedAt).toLocaleTimeString("en-GB")
+                          : "Unavailable"}
+                      </td>
+                      <td className="px-3 py-2 tabular-nums text-text-secondary">
+                        {row.arrivalDeltaS !== undefined ? `${row.arrivalDeltaS} s` : "Unavailable"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusChip
+                          tone={
+                            row.onTime === "on_time"
+                              ? "success"
+                              : row.onTime === "unavailable"
+                                ? "neutral"
+                                : "danger"
+                          }
+                          label={row.onTime === "unavailable" ? "Unavailable" : row.onTime.replace("_", " ")}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-status-danger">{row.failureCode ?? "-"}</td>
+                    </tr>
+                  ))}
+                  {report.rows.length === 0 && (
+                    <tr>
+                      <td colSpan={8} className="px-3 py-4 text-center text-text-secondary">
+                        No published route stops match this filter.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-command-border/70 px-5 py-3">
+          <p className="text-[11px] text-text-secondary">
+            {filtered ? "Filtered to one job." : "All published route stops."} Whole-route planned
+            distance is context only and is not compared with stop-level GPS distance.
+          </p>
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={!report || busy}
+            className="min-h-9 rounded-lg bg-brand-primary px-4 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Download CSV
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

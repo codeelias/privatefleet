@@ -71,6 +71,37 @@ export const JobImportCommitResponseSchema = z.object({
   references: z.array(z.string()),
 });
 export type JobImportCommitResponse = z.infer<typeof JobImportCommitResponseSchema>;
+export const DeliveryPerformanceRowSchema = z.object({
+  routeId: IdSchema,
+  routeDate: z.string(),
+  routeVersion: z.number().int(),
+  jobId: IdSchema,
+  jobReference: z.string(),
+  stopId: IdSchema,
+  stopSequence: z.number().int(),
+  address: z.string(),
+  stopStatus: z.string(),
+  failureCode: z.string().optional(),
+  plannedArrivalAt: z.string().datetime().optional(),
+  arrivedAt: z.string().datetime().optional(),
+  completedAt: z.string().datetime().optional(),
+  windowStart: z.string().datetime().optional(),
+  windowEnd: z.string().datetime().optional(),
+  windowKnown: z.boolean(),
+  arrivalKnown: z.boolean(),
+  onTime: z.enum(["on_time", "early", "late", "unavailable"]),
+  arrivalDeltaS: z.number().optional(),
+  plannedDistanceM: z.number().optional(),
+  plannedDurationS: z.number().optional(),
+});
+export type DeliveryPerformanceRow = z.infer<typeof DeliveryPerformanceRowSchema>;
+
+export const DeliveryPerformanceReportSchema = z.object({
+  generatedAt: z.string().datetime(),
+  rows: z.array(DeliveryPerformanceRowSchema),
+});
+export type DeliveryPerformanceReport = z.infer<typeof DeliveryPerformanceReportSchema>;
+
 export const AlertDtoSchema = z.object({
   id: IdSchema,
   severity: z.enum(["info", "at_risk", "urgent"]),

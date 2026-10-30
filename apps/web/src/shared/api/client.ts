@@ -15,6 +15,7 @@ import type {
   FleetState,
   FleetRoutesResponse,
   EvidenceList,
+  DeliveryPerformanceReport,
   JobImportCommitResponse,
   JobImportPreview,
   FleetOptimizationProposal,
@@ -115,6 +116,31 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+async function requestText(path: string): Promise<string> {
+  const send = async (token: string | null): Promise<Response> =>
+    fetch(path, {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+  const token = authHooks ? await authHooks.getAccessToken() : null;
+  let res = await send(token);
+  if (res.status === 401 && authHooks) {
+    try {
+      const refreshed = await authHooks.getAccessToken();
+      if (!refreshed) {
+        throw new AuthExpiredError();
+      }
+      res = await send(refreshed);
+    } catch {
+      authHooks.onRefreshFailed();
+      throw new AuthExpiredError();
+    }
+  }
+  if (!res.ok) {
+    throw await parseError(res);
+  }
+  return res.text();
+}
+
 function toSession(
   response: AuthSession,
   tokens: AuthTokens,
@@ -163,6 +189,10 @@ export const api = {
   fleetRoutes: () => request<FleetRoutesResponse>("/v1/fleet/routes"),
   stopEvidence: (jobId: string, stopId: string) =>
     request<EvidenceList>(`/v1/jobs/${jobId}/stops/${stopId}/evidence`),
+  deliveryPerformance: (query = "") =>
+    request<DeliveryPerformanceReport>(`/v1/reports/delivery-performance${query}`),
+  deliveryPerformanceCsv: (query = "") =>
+    requestText(`/v1/reports/delivery-performance${query}&format=csv`),
   importPreview: (csv: string) =>
     request<JobImportPreview>("/v1/jobs/import", {
       method: "POST",
