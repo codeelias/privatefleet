@@ -134,11 +134,26 @@ export class OsrmClient {
         durationSeconds: Number(leg.duration ?? 0),
       };
     });
+    if (legs.length !== points.length - 1) {
+      throw new RoutingError(
+        "ROUTING_INVALID_RESPONSE",
+        `OSRM returned ${legs.length} legs for ${points.length} coordinates`,
+      );
+    }
+    for (const leg of legs) {
+      if (leg.points.length === 0) {
+        throw new RoutingError("ROUTING_INVALID_RESPONSE", "OSRM leg geometry missing");
+      }
+      if (leg.points.length === 1) {
+        const only = leg.points[0]!;
+        leg.points.push({ ...only });
+      }
+    }
     return {
       points: geometry,
       distanceMetres: Number(route.distance ?? 0),
       durationSeconds: Number(route.duration ?? 0),
-      ...(legs.length > 0 ? { legs } : {}),
+      legs,
     };
   }
 }

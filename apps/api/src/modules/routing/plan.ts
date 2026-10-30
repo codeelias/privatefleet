@@ -63,6 +63,8 @@ export interface PlannedVehicle {
   geometry: GeoPoint[];
   distanceMetres: number;
   durationSeconds: number;
+  /** Waypoint-bounded legs from the routing engine (one per adjacent stop). */
+  legs?: Array<{ points: GeoPoint[]; distanceMetres: number; durationSeconds: number }>;
 }
 
 export interface PlanResult {
@@ -299,6 +301,7 @@ export async function planFleet(
       geometry: geometry.points,
       distanceMetres: geometry.distanceMetres,
       durationSeconds: geometry.durationSeconds,
+      ...(geometry.legs ? { legs: geometry.legs } : {}),
     });
   }
 

@@ -81,6 +81,11 @@ function startFake(mode: Mode = "ok"): Promise<Fake> {
     if (url.pathname.startsWith("/route")) {
       const coordinates =
         mode === "bad-geometry" ? coords.slice(0, 1) : coords;
+      const legs = coordinates.slice(0, -1).map((from, index) => ({
+        distance: 100,
+        duration: 20,
+        steps: [{ geometry: { coordinates: [from, coordinates[index + 1]] } }],
+      }));
       res.writeHead(200, { "content-type": "application/json" });
       res.end(
         JSON.stringify({
@@ -90,6 +95,7 @@ function startFake(mode: Mode = "ok"): Promise<Fake> {
               distance: coords.length * 100,
               duration: coords.length * 20,
               geometry: { coordinates },
+              legs,
             },
           ],
         }),
