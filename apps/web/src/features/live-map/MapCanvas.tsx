@@ -241,9 +241,13 @@ function VehiclePin({
 export function MapCanvas({
   state,
   gpsSeenAt,
+  selectedDriverId,
+  onSelectDriver,
 }: {
   state: FleetState;
   gpsSeenAt?: ReadonlyMap<string, number>;
+  selectedDriverId: string | null;
+  onSelectDriver: (driverId: string | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const vectorRef = useRef<maplibregl.Map | null>(null);
@@ -280,7 +284,6 @@ export function MapCanvas({
   const [tilesFailed, setTilesFailed] = useState(false);
   const [ready, setReady] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const styleIndexRef = useRef(0);
   const useVector = useVectorEngine() && !vectorFailed;
   // Large fleets render on one canvas layer; small demo fleets keep the
@@ -324,9 +327,12 @@ export function MapCanvas({
       ),
     [state.routes],
   );
-  const toggleSelect = useCallback((driverId: string | null) => {
-    setSelectedDriverId((previous) => (previous === driverId ? null : driverId));
-  }, []);
+  const toggleSelect = useCallback(
+    (driverId: string | null) => {
+      onSelectDriver(selectedDriverId === driverId ? null : driverId);
+    },
+    [onSelectDriver, selectedDriverId],
+  );
 
   // Validated, retained route set: invalid updates never erase the last
   // verified geometry (docs/17). Static geometry is only pushed to the map
@@ -340,13 +346,20 @@ export function MapCanvas({
     if (selectedDriverId !== null) return;
     const preferred = state.vehicles[0]?.driverId;
     if (preferred && routeSet.routes.some((route) => route.driverId === preferred)) {
-      setSelectedDriverId(preferred);
+      onSelectDriver(preferred);
     }
-  }, [routeSet, selectedDriverId, state.vehicles]);
+  }, [routeSet, selectedDriverId, state.vehicles, onSelectDriver]);
 
   const selectedRoute = selectedDriverId
     ? routeSet.routes.find((route) => route.driverId === selectedDriverId)
     : undefined;
+  const selectedRouteStops = (selectedRoute?.waypoints ?? []).filter(
+    (waypoint) => waypoint.kind === "job_stop",
+  );
+  const nextStopIndex = selectedRouteStops.findIndex((waypoint) => {
+    const status = waypoint.jobStopId ? stopStatusById.get(waypoint.jobStopId) : undefined;
+    return status !== "completed" && status !== "skipped" && status !== "failed";
+  });
   const lastRouteSignatureRef = useRef("");
   const headingsRef = useRef<Map<string, { latitude: number; longitude: number; heading: number }>>(
     new Map(),
@@ -959,9 +972,7 @@ export function MapCanvas({
               </div>
             );
           })}
-          {selectedRoute?.waypoints
-            ?.filter((waypoint) => waypoint.kind === "job_stop")
-            .map((waypoint, index) => {
+          {selectedRouteStops.map((waypoint, index) => {
               const position = project(waypoint.location);
               if (!position) return null;
               const status = waypoint.jobStopId
@@ -972,7 +983,7 @@ export function MapCanvas({
                   ? "bg-[#16A34A] text-white"
                   : status === "skipped" || status === "failed"
                     ? "bg-[#B45309] text-white"
-                    : index === 0
+                    : status === "arrived" || index === nextStopIndex
                       ? "bg-[#276EF1] text-white ring-2 ring-white"
                       : "bg-white text-[#18181B] border border-[#71717A]";
               return (
@@ -1043,11 +1054,7 @@ export function MapCanvas({
                 lastGpsAt={gpsSeenAt?.get(vehicle.id)}
                 animate={!mapMoving}
                 heading={headingsRef.current.get(vehicle.id)?.heading}
-                onSelect={() =>
-                  setSelectedDriverId((prev) =>
-                    prev === vehicle.driverId ? null : (vehicle.driverId ?? null),
-                  )
-                }
+                onSelect={() => toggleSelect(vehicle.driverId ?? null)}
               />
             );
           })}
@@ -1106,6 +1113,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 

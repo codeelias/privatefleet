@@ -92,6 +92,7 @@ function Dashboard({
       return false;
     }
   });
+  const [focusedDriverId, setFocusedDriverId] = useState<string | null>(null);
   const [vehiclePanel, setVehiclePanel] = useState<"expanded" | "compact" | "closed">(
     "compact",
   );
@@ -277,7 +278,8 @@ function Dashboard({
   const unassigned = state.jobs.filter((j) => j.status === "unassigned");
   const urgent = unassigned.filter((j) => j.priority === "stat" || j.priority === "urgent").length;
   const atRisk = openAlerts.length;
-  const selectedVehicle = state.vehicles[0];
+  const selectedVehicle =
+    state.vehicles.find((vehicle) => vehicle.driverId === focusedDriverId) ?? state.vehicles[0];
   const selectedDriver = state.drivers.find((d) => d.id === selectedVehicle?.driverId);
   const selectedJob = state.jobs.find((j) => j.assignedVehicleId === selectedVehicle?.id);
   const nextStop = selectedJob?.stops.find((s) => s.status !== "completed");
@@ -472,7 +474,12 @@ function Dashboard({
                 </div>
 
                 <div className="relative flex min-h-0 flex-1 overflow-hidden px-4 pb-2">
-                  <MapCanvas state={state} gpsSeenAt={gpsSeenRef.current} />
+                  <MapCanvas
+                    state={state}
+                    gpsSeenAt={gpsSeenRef.current}
+                    selectedDriverId={focusedDriverId}
+                    onSelectDriver={setFocusedDriverId}
+                  />
 
                   {/* Floating selected-vehicle panel: expanded, compact, or closed. */}
                   {vehiclePanel !== "closed" ? (
@@ -821,6 +828,7 @@ export function App() {
     />
   );
 }
+
 
 
 
