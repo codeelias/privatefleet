@@ -525,6 +525,18 @@ function Dashboard({
                                   ? `${selectedJob.reference} ${"\u00b7"} ${nextStop?.address ?? "Next stop to confirm"}`
                                   : "Ready for assignment"}
                               </span>
+                              {(() => {
+                                const route = state.routes.find(
+                                  (candidate) => candidate.vehicleId === selectedVehicle?.id,
+                                );
+                                if (!route?.legs?.length) return null;
+                                return (
+                                  <span className="mt-1 block text-[10px] text-text-secondary">
+                                    Route v{route.version} {"\u00b7"} {route.waypoints?.length ?? 0} waypoints {"\u00b7"}{" "}
+                                    {route.legs.length} legs
+                                  </span>
+                                );
+                              })()}
                               {openAlerts[0] && (
                                 <span className="mt-1 block truncate text-[10px] font-medium text-status-warning">
                                   {openAlerts[0].title}
@@ -809,6 +821,7 @@ export function App() {
     />
   );
 }
+
 
 
 
