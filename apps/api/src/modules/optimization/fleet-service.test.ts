@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Fleet-wide optimisation gate (docs/10): joint solve over multiple
  * vehicles/shipments, explicit unassigned work, atomic publication,
  * stale and concurrent approvals, rollback, cache invalidation and
