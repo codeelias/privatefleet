@@ -40,7 +40,7 @@ export function buildRoutePlan(input: {
   legs: RouterLegInput[] | undefined;
   stops: PlanStopRef[];
   /** VROOM arrivals are absolute epoch seconds in this planner. */
-  stopArrivals?: Array<number | undefined>;
+  stopArrivals?: Array<number | undefined> | undefined;
 }): { routeId: string; waypoints: RouteWaypoint[]; legs: RouteLeg[] } {
   const routeId = input.routeId ?? randomUUID();
   const geometry = input.geometry;
@@ -118,3 +118,4 @@ export function buildRoutePlan(input: {
 
   return { routeId, waypoints, legs: builtLegs };
 }
+

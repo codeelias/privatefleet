@@ -11,6 +11,7 @@ import { EVENT_SCHEMA_VERSION } from "@privatefleet/contracts";
 import { withTenant, type DbHandle } from "../../db/client.js";
 import { planShipments, type ShipmentInput } from "../routing/plan.js";
 import { RoutingError, type RoutingClients } from "../routing/types.js";
+import { buildRoutePlan } from "./route-plan.js";
 
 export type OptimizationErrorCode =
   | "DRIVER_NOT_FOUND"
@@ -62,6 +63,8 @@ interface StoredResult {
   distanceMetres: number;
   durationSeconds: number;
   matrixSize: number;
+  legs?: Array<{ points: GeoPoint[]; distanceMetres: number; durationSeconds: number }>;
+  stopArrivals?: Array<number | undefined>;
 }
 
 const ENGINE = "osrm+vroom";
@@ -205,6 +208,8 @@ export async function createProposal(
       distanceMetres: planned.distanceMetres,
       durationSeconds: planned.durationSeconds,
       matrixSize: plan.matrixSize,
+      ...(planned.legs ? { legs: planned.legs } : {}),
+      stopArrivals: planned.stopArrivals,
     };
 
     const inserted = (await db.execute(sql`
@@ -317,14 +322,26 @@ export async function approveProposal(
       throw new OptimizationError("DRIVER_NOT_FOUND");
     }
 
+    const plan = buildRoutePlan({
+      geometry: result.geometry,
+      legs: result.legs,
+      stops: result.stops.map((stop) => ({
+        stopId: stop.stopId,
+        jobId: stop.jobId,
+        stopType: stop.stopType,
+      })),
+      stopArrivals: result.stopArrivals,
+    });
     const inserted = (await db.execute(sql`
       INSERT INTO routes
-        (tenant_id, route_date, driver_id, vehicle_id, status, version,
-         planned_distance_m, planned_duration_s, geometry, published_at)
+        (id, tenant_id, route_date, driver_id, vehicle_id, status, version,
+         planned_distance_m, planned_duration_s, geometry, waypoints, legs, published_at)
       VALUES
-        (${tenantId}, current_date, ${result.driverId}, ${vehicleId}, 'published', ${nextVersion},
+        (${plan.routeId}, ${tenantId}, current_date, ${result.driverId}, ${vehicleId}, 'published', ${nextVersion},
          ${Math.round(result.distanceMetres)}, ${Math.round(result.durationSeconds)},
-         ${JSON.stringify(result.geometry)}::jsonb, now())
+         ${JSON.stringify(result.geometry)}::jsonb,
+         ${JSON.stringify(plan.waypoints)}::jsonb,
+         ${JSON.stringify(plan.legs)}::jsonb, now())
       RETURNING id, published_at
     `)) as unknown as Array<{ id: string; published_at: Date | string }>;
     const route = inserted[0];
@@ -340,11 +357,16 @@ export async function approveProposal(
     const stopValues = result.stops.map((stop, index) => ({
       jobStopId: stop.stopId,
       sequenceNo: index + 1,
+      plannedArrivalAt: result.stopArrivals?.[index]
+        ? new Date(result.stopArrivals[index]! * 1000).toISOString()
+        : null,
     }));
     for (const stop of stopValues) {
       await db.execute(sql`
-        INSERT INTO route_stops (tenant_id, route_id, job_stop_id, sequence_no)
-        VALUES (${tenantId}, ${route.id}, ${stop.jobStopId}, ${stop.sequenceNo})
+        INSERT INTO route_stops
+          (tenant_id, route_id, job_stop_id, sequence_no, planned_arrival_at)
+        VALUES
+          (${tenantId}, ${route.id}, ${stop.jobStopId}, ${stop.sequenceNo}, ${stop.plannedArrivalAt})
       `);
     }
 
@@ -379,6 +401,8 @@ export async function approveProposal(
 }
 
 export { RoutingError };
+
+
 
 
 

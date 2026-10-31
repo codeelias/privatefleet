@@ -38,7 +38,12 @@ const fakeClients: RoutingClients = {
     distances: points.map((_, row) => points.map((_, column) => Math.abs(row - column) * 600)),
   }),
   route: async (points) => ({
-    points: [points[0]!, points[1] ?? points[0]!],
+    points,
+    legs: points.slice(0, -1).map((from, index) => ({
+      points: [from, points[index + 1]!],
+      distanceMetres: 100,
+      durationSeconds: 20,
+    })),
     distanceMetres: 5_000,
     durationSeconds: 600,
   }),
@@ -170,4 +175,5 @@ describe("live route proposals", () => {
     expect((response.json() as { code: string }).code).toBe("ROUTING_NOT_CONFIGURED");
   });
 });
+
 
