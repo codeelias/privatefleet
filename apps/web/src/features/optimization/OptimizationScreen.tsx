@@ -84,6 +84,9 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const live = state.demoMode === false;
+  const hasPendingWork = state.jobs.some(
+    (job) => job.status !== "completed" && job.status !== "cancelled",
+  );
 
   async function optimise() {
     setBusy(true);
@@ -99,7 +102,17 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
         setRun(result);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Optimisation failed");
+      if (
+        err instanceof HttpError &&
+        err.status === 409 &&
+        /eligible|pickup\/dropoff/i.test(err.message)
+      ) {
+        setError(
+          "Nothing to optimise: every job is completed. Import new jobs with pickup/dropoff pairs first.",
+        );
+      } else {
+        setError(err instanceof Error ? err.message : "Optimisation failed");
+      }
     } finally {
       setBusy(false);
     }
@@ -176,13 +189,15 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
           <button
             type="button"
             onClick={() => void optimise()}
-            disabled={busy || (!live && !driverId)}
+            disabled={busy || (!live && !driverId) || (live && !hasPendingWork)}
             className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy && !run && !liveRun
               ? "Optimising..."
               : live
-                ? "Optimise fleet"
+                ? hasPendingWork
+                  ? "Optimise fleet"
+                  : "No jobs to optimise"
                 : "Optimise routes"}
           </button>
         </div>
@@ -424,6 +439,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
     </div>
   );
 }
+
 
 
 
