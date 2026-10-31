@@ -57,6 +57,14 @@ interface FleetStoredResult {
   unassigned: Array<{ jobId: string; reason?: string }>;
   assignments: Array<{ jobId: string; driverId: string | null; status: string }>;
   published?: { version: number; routeIds: string[]; publishedAt: string };
+  baseline?: {
+    routeCount: number;
+    assignedStops: number;
+    distanceMetres: number;
+    durationSeconds: number;
+    unassignedJobs: number;
+  };
+  gate?: { allowed: boolean; reasons: string[] };
 }
 
 interface DriverVehicleRow {
@@ -431,6 +439,62 @@ export async function createFleetProposal(
       })),
     };
 
+    const baselineRows = (await db.execute(sql`
+      SELECT
+        (SELECT count(*)::int FROM routes
+          WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress')) AS route_count,
+        (SELECT count(*)::int FROM route_stops rs
+          JOIN routes r ON r.id = rs.route_id
+          WHERE r.tenant_id = ${tenantId} AND r.status IN ('published', 'in_progress')) AS assigned_stops,
+        (SELECT coalesce(sum(planned_distance_m), 0)::float FROM routes
+          WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress')) AS distance,
+        (SELECT coalesce(sum(planned_duration_s), 0)::float FROM routes
+          WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress')) AS duration,
+        (SELECT count(*)::int FROM jobs
+          WHERE tenant_id = ${tenantId} AND status = 'unassigned') AS unassigned_jobs
+    `)) as unknown as Array<{
+      route_count: number;
+      assigned_stops: number;
+      distance: number;
+      duration: number;
+      unassigned_jobs: number;
+    }>;
+    const base = baselineRows[0] ?? {
+      route_count: 0,
+      assigned_stops: 0,
+      distance: 0,
+      duration: 0,
+      unassigned_jobs: 0,
+    };
+    const proposalStops = routes.reduce((sum, route) => sum + route.stops.length, 0);
+    const reasons: string[] = [];
+    if (proposalStops < Number(base.assigned_stops)) {
+      reasons.push(
+        `Proposal assigns ${proposalStops} stops, fewer than the current ${base.assigned_stops}.`,
+      );
+    }
+    if (stored.unassigned.length > Number(base.unassigned_jobs)) {
+      reasons.push(
+        `Proposal leaves ${stored.unassigned.length} jobs unassigned; baseline has ${base.unassigned_jobs}.`,
+      );
+    }
+    if (
+      stored.shipmentCount <= Number(base.assigned_stops) &&
+      stored.totalDistanceMetres > Number(base.distance) * 1.02
+    ) {
+      reasons.push(
+        `Proposal distance ${Math.round(stored.totalDistanceMetres)} m is worse than baseline ${Math.round(Number(base.distance))} m.`,
+      );
+    }
+    stored.baseline = {
+      routeCount: Number(base.route_count),
+      assignedStops: Number(base.assigned_stops),
+      distanceMetres: Number(base.distance),
+      durationSeconds: Number(base.duration),
+      unassignedJobs: Number(base.unassigned_jobs),
+    };
+    stored.gate = { allowed: reasons.length === 0, reasons };
+
     const inserted = (await db.execute(sql`
       INSERT INTO optimization_runs
         (tenant_id, input_hash, engine, engine_version, request, result, metrics,
@@ -570,6 +634,8 @@ function fleetProposal(runId: string, result: FleetStoredResult): FleetOptimizat
     })),
     unassigned: result.unassigned,
     datasetVersion: result.datasetVersion,
+    ...(result.baseline ? { baseline: result.baseline } : {}),
+    ...(result.gate ? { gate: result.gate } : {}),
   };
 }
 

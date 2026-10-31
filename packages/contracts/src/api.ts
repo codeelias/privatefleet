@@ -358,6 +358,23 @@ export const FleetOptimizationProposalSchema = z.object({
     z.object({ jobId: IdSchema, reason: z.string().optional() }),
   ),
   datasetVersion: z.string(),
+  /** Current published plan at proposal time (Stage 2 baseline comparison). */
+  baseline: z
+    .object({
+      routeCount: z.number().int().nonnegative(),
+      assignedStops: z.number().int().nonnegative(),
+      distanceMetres: z.number().nonnegative(),
+      durationSeconds: z.number().nonnegative(),
+      unassignedJobs: z.number().int().nonnegative(),
+    })
+    .optional(),
+  /** Deterministic publish gate derived from baseline vs proposal. */
+  gate: z
+    .object({
+      allowed: z.boolean(),
+      reasons: z.array(z.string()),
+    })
+    .optional(),
 });
 export type FleetOptimizationProposal = z.infer<typeof FleetOptimizationProposalSchema>;
 

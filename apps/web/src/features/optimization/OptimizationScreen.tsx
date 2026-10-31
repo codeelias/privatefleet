@@ -240,6 +240,43 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
             </p>
           </div>
 
+          {liveRun.baseline && (
+            <div className="rounded-xl border border-command-border bg-command-surface px-4 py-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <StatusChip tone="neutral" label="BASELINE - CURRENT PUBLISHED PLAN" />
+                <span className="text-sm text-text-secondary">
+                  {liveRun.baseline.routeCount} routes -{" "}
+                  {(liveRun.baseline.distanceMetres / 1000).toFixed(1)} km -{" "}
+                  {Math.round(liveRun.baseline.durationSeconds / 60)} min -{" "}
+                  {liveRun.baseline.assignedStops} stops -{" "}
+                  {liveRun.baseline.unassignedJobs} unassigned
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-text-secondary">
+                Proposal delta:{" "}
+                {(
+                  (liveRun.totalDistanceMetres - liveRun.baseline.distanceMetres) /
+                  1000
+                ).toFixed(1)}{" "}
+                km,{" "}
+                {Math.round(
+                  (liveRun.totalDurationSeconds - liveRun.baseline.durationSeconds) / 60,
+                )}{" "}
+                min,{" "}
+                {liveRun.vehicles.reduce((sum, route) => sum + route.stops.length, 0) -
+                  liveRun.baseline.assignedStops}{" "}
+                assigned stops.
+              </p>
+              {liveRun.gate && !liveRun.gate.allowed && (
+                <ul className="mt-2 space-y-1 text-xs text-status-danger">
+                  {liveRun.gate.reasons.map((reason) => (
+                    <li key={reason}>Publish blocked: {reason}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {liveRun.vehicles.map((route) => (
               <Panel
@@ -337,10 +374,14 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
                 <button
                   type="button"
                   onClick={() => void publish()}
-                  disabled={busy || approving}
+                  disabled={busy || approving || (liveRun.gate ? !liveRun.gate.allowed : false)}
                   className="rounded-xl bg-status-success px-4 py-2 text-sm font-bold text-on-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {approving ? "Publishing fleet plan..." : "Approve fleet plan"}
+                  {approving
+                    ? "Publishing fleet plan..."
+                    : liveRun.gate && !liveRun.gate.allowed
+                      ? "Plan blocked by baseline gate"
+                      : "Approve fleet plan"}
                 </button>
                 <span className="text-xs text-text-secondary">
                   One atomic transaction publishes every affected route; a stale
