@@ -380,9 +380,13 @@ export function MapCanvas({
   );
   useEffect(() => {
     if (selectedDriverId !== null) return;
-    const first = routeSet.routes.find((route) => route.driverId)?.driverId;
+    const routed = new Set(routeSet.routes.map((route) => route.driverId).filter(Boolean));
+    const preferred = state.vehicles.find(
+      (vehicle) => vehicle.driverId && routed.has(vehicle.driverId),
+    )?.driverId;
+    const first = preferred ?? routeSet.routes.find((route) => route.driverId)?.driverId;
     if (first) setSelectedDriverId(first);
-  }, [routeSet, selectedDriverId]);
+  }, [routeSet, selectedDriverId, state.vehicles]);
 
   const lastRouteSignatureRef = useRef("");
   const headingsRef = useRef<Map<string, { latitude: number; longitude: number; heading: number }>>(
@@ -705,8 +709,19 @@ export function MapCanvas({
         "vehicle-routes-line",
         "line-opacity",
         selectedDriverId
-          ? ["case", ["==", ["get", "driverId"], selectedDriverId], 1, 0.22]
+          ? ["case", ["==", ["get", "driverId"], selectedDriverId], 1, 0.18]
           : 0.95,
+      );
+    }
+    if (map.getLayer("vehicle-routes-casing")) {
+      // A full-opacity white casing on every route makes all routes look
+      // equally prominent. Show the halo only for the selected route.
+      map.setPaintProperty(
+        "vehicle-routes-casing",
+        "line-opacity",
+        selectedDriverId
+          ? ["case", ["==", ["get", "driverId"], selectedDriverId], 0.95, 0]
+          : 0.85,
       );
     }
   }, [routeSet, ready, selectedDriverId, mapStyle, stopStatusById]);
@@ -1094,6 +1109,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 
