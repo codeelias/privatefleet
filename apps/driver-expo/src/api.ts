@@ -90,9 +90,13 @@ async function rawRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
+  }).catch((err) => {
+    console.error("[pf-api] raw fetch failed:", String(err));
+    throw new HttpError(0, `Network request failed: ${String(err)}`);
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { uiMessage?: string } | null;
+    console.error("[pf-api] raw status", res.status, JSON.stringify(body));
     throw new HttpError(
       res.status,
       body?.uiMessage ?? "That request could not be completed. Try again.",
@@ -154,7 +158,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         ...(init?.headers ?? {}),
       },
     });
-  let res = await send(token);
+  let res = await send(token).catch((err) => {
+    console.error("[pf-api] fetch failed:", String(err));
+    throw new HttpError(0, `Network request failed: ${String(err)}`);
+  });
   if (res.status === 401) {
     const retried = await accessToken(true);
     if (retried) {

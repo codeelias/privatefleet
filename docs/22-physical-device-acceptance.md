@@ -7,29 +7,50 @@ build.
 
 ## Device prerequisites
 
-1. Android 10 or newer.
+1. Android 10 or newer (verified: two Galaxy S22 SM-S901B, Android 16).
 2. Developer options enabled (tap Build number 7x).
 3. USB debugging on; accept the RSA fingerprint prompt on the phone.
-4. Phone on the same Wi-Fi as `192.168.1.128`.
-5. Phone must resolve `api.privatefleet.home.arpa` (same DNS as the Windows
-   dispatcher already uses). If it does not, add a router DNS entry.
+4. Phone USB-tethered to the Windows machine running adb.
+
+## Network topology (phones do not resolve .home.arpa)
+
+The phones cannot resolve `api.privatefleet.home.arpa`. The working tethered
+path is:
+
+```text
+app  http://127.0.0.1:4000
+  -> adb reverse tcp:4000 tcp:4010  (device -> PC)
+  -> ssh -L 4010:127.0.0.1:4000 deploy@192.168.1.128  (PC -> host)
+  -> API 127.0.0.1:4000 on the host
+```
+
+Setup (run on the Windows PC):
+
+```powershell
+adb -s <serial> reverse tcp:4000 tcp:4010
+adb -s <serial> reverse tcp:8081 tcp:8081
+ssh -p 22 -N -L 4010:127.0.0.1:4000 -i "$HOME\.ssh\deploy_auto_ed25519" deploy@192.168.1.128
+```
+
+Metro (bundle with tethered API base, offline doctor):
+
+```powershell
+$env:EXPO_PUBLIC_API_URL='http://127.0.0.1:4000'
+$env:EXPO_OFFLINE='1'
+pnpm --filter @privatefleet/driver-expo start --port 8081 --localhost
+```
+
+Local port 4000 on the PC is occupied by an unkillable demo API process owned
+by another user; the relay therefore uses local port 4010.
 
 ## Install
 
 ```powershell
-# From this Windows machine, one phone at a time
-adb devices
-adb install -r C:\Temp\privatefleet-phone.apk
+& powershell -NoProfile -ExecutionPolicy Bypass -File scripts/phone-install.ps1
 ```
 
-The debug build bundles the Caddy internal CA in its debug trust store, so no
-manual CA installation is required. If the APK on the phone predates the
-bundled CA, install the CA manually:
-
-1. Copy `C:\Caddy\root.crt` to the phone's Download folder.
-2. Settings > Security > Encryption & credentials > Install a certificate >
-   CA certificate.
-3. Select the file.
+The debug build bundles the Caddy internal CA in its debug trust store and
+allows cleartext to 127.0.0.1, so no manual CA install is required.
 
 ## Acceptance checklist (record each as PASS / FAIL / NOT VERIFIED)
 
@@ -38,26 +59,28 @@ bundled CA, install the CA manually:
 3. Shift start shows the shift state.
 4. Location permission granted; **GPS accuracy and fix time recorded**.
 5. Vehicle pin on the dispatcher leaves stale state (fresh telemetry visible).
-6. Screen off for 5 minutes with app foregrounded: positions keep arriving
-   (expected: YES while app is foreground; screen-off may throttle).
-7. App to background for 5 minutes: record whether telemetry continues
-   (expected: unreliable without the native service - this is the gap).
-8. Wi-Fi off for 2 minutes, then on: pending actions replay (commands/evidence).
-9. Force-stop the app, relaunch: session restores, no duplicate commands.
+6. Screen off for 5 minutes with app foregrounded: positions keep arriving.
+7. App to background for 5 minutes: record whether telemetry continues.
+8. Wi-Fi off for 2 minutes, then on: pending actions replay.
+9. Force-stop, relaunch: session restores, no duplicate commands.
 10. POD photo + signature upload against a real job.
-11. Record device model, Android version, battery impact over the session.
+
+## Known gap
+
+The Expo app has **no location module**; it reports actions and evidence but
+not GPS. Items 4-7 require the native Kotlin tracking module. Everything else
+is testable with the current build.
 
 ## Evidence to save
 
 - `adb shell getprop ro.build.version.release`
-- `adb shell dumpsys location | head` (or GPS provider status)
 - dispatcher screenshot with live pin for each device
 - timestamps of the first and last telemetry row per device
 - any 4xx/5xx from `/v1/telemetry`
 
 ## Stage 3 consequence
 
-- Stage 3A (display-only smoothing) may start once two devices produce
-  a real GPS sample set with accuracy/speed/heading.
+- Stage 3A (display-only smoothing) may start once two devices produce a real
+  GPS sample set with accuracy/speed/heading.
 - HMM map matching and camera-follow remain deferred until the sample set
-  shows measurable mis-snapping; they are not part of the phone test.
+  shows measurable mis-snapping.
