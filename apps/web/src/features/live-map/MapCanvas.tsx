@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Live map canvas (docs/05.6, ADR-0010).
  *
  * Geographic rendering: vehicles and job markers are placed by their real
@@ -113,18 +113,65 @@ function drawDebugGrid(
   ctx.fillText(`${metres} m grid - debug alignment`, 10, 18);
 }
 
-function routeGeoJson(routes: RoutePathLike[]): GeoJSON.FeatureCollection {
-  return {
-    type: "FeatureCollection",
-    features: routes.map((route) => ({
+type StopStatusMap = ReadonlyMap<string, string>;
+
+function routeGeoJson(
+  routes: RoutePathLike[],
+  stopStatus: StopStatusMap,
+): GeoJSON.FeatureCollection {
+  const features: Array<GeoJSON.Feature> = [];
+  for (const route of routes) {
+    const waypoints = route.waypoints ?? [];
+    const legs = route.legs ?? [];
+    if (waypoints.length >= 2 && legs.length === waypoints.length - 1) {
+      let nextAssigned = false;
+      for (const [index, leg] of legs.entries()) {
+        const to = waypoints[index + 1];
+        const status = to?.jobStopId ? stopStatus.get(to.jobStopId) : undefined;
+        let legStatus: string;
+        if (status === "completed") {
+          legStatus = "completed";
+        } else if (status === "skipped" || status === "failed") {
+          legStatus = "exception";
+        } else if (!nextAssigned) {
+          legStatus = "next";
+          nextAssigned = true;
+        } else {
+          legStatus = "remaining";
+        }
+        features.push({
+          type: "Feature",
+          properties: {
+            vehicleId: route.vehicleId,
+            driverId: route.driverId ?? "",
+            legId: leg.id,
+            sequence: leg.sequence,
+            status: legStatus,
+          },
+          geometry: {
+            type: "LineString",
+            coordinates: toGeoJsonCoordinates(leg.points),
+          },
+        });
+      }
+      continue;
+    }
+    features.push({
       type: "Feature",
-      properties: { vehicleId: route.vehicleId, driverId: route.driverId ?? "" },
+      properties: {
+        vehicleId: route.vehicleId,
+        driverId: route.driverId ?? "",
+        legId: "",
+        sequence: 0,
+        status: "route",
+      },
       geometry: {
         type: "LineString",
         coordinates: toGeoJsonCoordinates(route.points),
       },
-    })),
-  };
+    });
+  }
+  return { type: "FeatureCollection", features };
 }
 
 function bearingDeg(
@@ -295,6 +342,15 @@ export function MapCanvas({
       selected: boolean;
     }>
   >([]);
+  const stopStatusById = useMemo(
+    () =>
+      new Map(
+        state.jobs.flatMap((job) =>
+          job.stops.map((stop) => [stop.id, stop.status] as const),
+        ),
+      ),
+    [state.jobs],
+  );
   const driversById = useMemo(
     () => new Map(state.drivers.map((driver) => [driver.id, driver])),
     [state.drivers],
@@ -319,7 +375,7 @@ export function MapCanvas({
   // source when its signature changes, not on every GPS update.
   const lastValidRoutesRef = useRef<RoutePathLike[]>([]);
   const routeSet = useMemo(
-    () => reconcileRoutes(lastValidRoutesRef.current, state.routes),
+    () => reconcileRoutes(lastValidRoutesRef.current, state.routes as RoutePathLike[]),
     [state.routes],
   );
   const lastRouteSignatureRef = useRef("");
@@ -535,26 +591,51 @@ export function MapCanvas({
       lastRouteSignatureRef.current = routeSet.signature;
       map.addSource("vehicle-routes", {
         type: "geojson",
-        data: routeGeoJson(routeSet.routes),
+        data: routeGeoJson(routeSet.routes, stopStatusById),
       });
       map.addLayer({
         id: "vehicle-routes-casing",
         type: "line",
         source: "vehicle-routes",
+        filter: ["match", ["get", "status"], ["completed", "exception"], false, true],
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": "#FFFFFF",
-          "line-width": 8,
-          "line-opacity": 0.9,
+          "line-width": 9,
+          "line-opacity": 0.85,
         },
       });
       map.addLayer({
         id: "vehicle-routes-line",
         type: "line",
         source: "vehicle-routes",
+        layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#276EF1",
-          "line-width": 4,
-          "line-opacity": 0.95,
+          "line-color": [
+            "match",
+            ["get", "status"],
+            "completed", "#52525B",
+            "exception", "#B45309",
+            "next", "#276EF1",
+            "remaining", "#1D4ED8",
+            "#276EF1",
+          ],
+          "line-width": [
+            "match",
+            ["get", "status"],
+            "completed", 2.5,
+            "exception", 3,
+            "next", 6,
+            "remaining", 4,
+            4,
+          ],
+          "line-opacity": [
+            "match",
+            ["get", "status"],
+            "completed", 0.55,
+            "exception", 0.9,
+            0.95,
+          ],
         },
       });
       map.addLayer({
@@ -601,7 +682,7 @@ export function MapCanvas({
     if (routesChanged(lastRouteSignatureRef.current, routeSet.signature)) {
       lastRouteSignatureRef.current = routeSet.signature;
       const source = map.getSource("vehicle-routes") as maplibregl.GeoJSONSource | undefined;
-      source?.setData(routeGeoJson(routeSet.routes));
+      source?.setData(routeGeoJson(routeSet.routes, stopStatusById));
     }
     const selectedLayer = map.getLayer("vehicle-routes-selected");
     if (selectedLayer) {
@@ -621,7 +702,7 @@ export function MapCanvas({
       map.setPaintProperty("vehicle-routes-line", "line-width", dimmed ? 3 : 4);
       map.setPaintProperty("vehicle-routes-line", "line-opacity", dimmed ? 0.6 : 0.95);
     }
-  }, [routeSet, ready, selectedDriverId, mapStyle]);
+  }, [routeSet, ready, selectedDriverId, mapStyle, stopStatusById]);
 
   // Project geo points to container pixels for the overlay layer.
   function project(point: GeoPoint | undefined): { x: number; y: number } | null {
@@ -1006,6 +1087,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 

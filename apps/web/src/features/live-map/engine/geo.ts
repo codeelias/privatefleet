@@ -12,6 +12,25 @@ export interface RoutePathLike {
   vehicleId: string;
   driverId?: string | undefined;
   points: GeoPoint[];
+  waypoints?: Array<{
+    id: string;
+    sequence: number;
+    kind: "origin" | "job_stop" | "destination";
+    jobStopId?: string;
+    jobId?: string;
+    stopType?: "pickup" | "dropoff" | "service";
+    location: GeoPoint;
+    plannedArrivalAt?: string | null;
+  }>;
+  legs?: Array<{
+    id: string;
+    sequence: number;
+    fromWaypointId: string;
+    toWaypointId: string;
+    points: GeoPoint[];
+    distanceM: number;
+    estimatedDurationS: number;
+  }>;
 }
 
 export interface RouteValidation {
@@ -105,3 +124,4 @@ export function formatMetres(metres: number): string {
   }
   return `${Math.round(metres)} m`;
 }
+
