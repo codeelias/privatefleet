@@ -109,6 +109,9 @@ export class VroomClient {
         end_index: vehicle.endIndex,
         ...(vehicle.capacity ? { capacity: vehicle.capacity } : {}),
         ...(vehicle.timeWindow ? { time_window: vehicle.timeWindow } : {}),
+    ...(vehicle.maxDistance ? { max_distance: vehicle.maxDistance } : {}),
+    ...(vehicle.maxTravelTime ? { max_travel_time: vehicle.maxTravelTime } : {}),
+    ...(vehicle.maxTasks ? { max_tasks: vehicle.maxTasks } : {}),
         ...(vehicle.skills?.length
           ? { skills: vehicle.skills.map((name) => skillId(name)) }
           : {}),

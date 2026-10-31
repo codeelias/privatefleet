@@ -41,6 +41,9 @@ export interface VehicleInput {
   capacity?: number[];
   timeWindow?: [string, string];
   skills?: string[];
+  maxDistance?: number;
+  maxTravelTime?: number;
+  maxTasks?: number;
 }
 
 export interface PlanRequest {
@@ -194,6 +197,9 @@ export async function planFleet(
     if (vehicle.skills?.length) {
       entry.skills = vehicle.skills;
     }
+    if (vehicle.maxDistance) entry.maxDistance = vehicle.maxDistance;
+    if (vehicle.maxTravelTime) entry.maxTravelTime = vehicle.maxTravelTime;
+    if (vehicle.maxTasks) entry.maxTasks = vehicle.maxTasks;
     return entry;
   });
 

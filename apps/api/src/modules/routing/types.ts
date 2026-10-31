@@ -49,6 +49,10 @@ export interface VroomVehicleInput {
   timeWindow?: [number, number];
   /** VROOM skills; a job requiring a skill only fits a vehicle with it. */
   skills?: string[];
+  /** Hard dispatch limits. */
+  maxDistance?: number;
+  maxTravelTime?: number;
+  maxTasks?: number;
 }
 
 export interface VroomJobInput {

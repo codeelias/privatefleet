@@ -22,6 +22,7 @@ import {
 import type { RoutingClients } from "../routing/types.js";
 import { OptimizationError } from "./service.js";
 import { buildRoutePlan } from "./route-plan.js";
+import { DISPATCH_LIMITS } from "./dispatch-policy.js";
 
 const ENGINE = "osrm+vroom";
 const ENGINE_VERSION = "2";
@@ -288,6 +289,9 @@ export async function createFleetProposal(
         ...(row.required_capabilities?.length
           ? { skills: row.required_capabilities }
           : {}),
+        maxDistance: DISPATCH_LIMITS.maxRouteDistanceM,
+        maxTravelTime: DISPATCH_LIMITS.maxRouteTravelTimeS,
+        maxTasks: DISPATCH_LIMITS.maxRouteTasks,
       });
       vehicleMeta.set(id, {
         driverId: row.driver_id,
@@ -477,6 +481,23 @@ export async function createFleetProposal(
       reasons.push(
         `Proposal leaves ${stored.unassigned.length} jobs unassigned; baseline has ${base.unassigned_jobs}.`,
       );
+    }
+    for (const route of routes) {
+      if (route.distanceMetres > DISPATCH_LIMITS.maxRouteDistanceM) {
+        reasons.push(
+          `${route.driverName}: route ${Math.round(route.distanceMetres / 1000)} km exceeds the ${Math.round(DISPATCH_LIMITS.maxRouteDistanceM / 1000)} km limit.`,
+        );
+      }
+      if (route.stops.length > DISPATCH_LIMITS.maxRouteTasks) {
+        reasons.push(
+          `${route.driverName}: ${route.stops.length} visits exceed the ${DISPATCH_LIMITS.maxRouteTasks} stop limit.`,
+        );
+      }
+      if (route.durationSeconds > DISPATCH_LIMITS.maxRouteTravelTimeS) {
+        reasons.push(
+          `${route.driverName}: route travel time exceeds the limit.`,
+        );
+      }
     }
     if (
       stored.shipmentCount <= Number(base.assigned_stops) &&
