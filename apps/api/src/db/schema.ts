@@ -179,6 +179,9 @@ export const routes = pgTable(
     plannedDurationS: integer("planned_duration_s"),
     /** Validated road geometry persisted at publish time (Phase 5). */
     geometry: jsonb("geometry").$type<Array<{ latitude: number; longitude: number }>>(),
+    /** Version-scoped route plan and OSRM-derived legs (Stage 1). */
+    waypoints: jsonb("waypoints"),
+    legs: jsonb("legs"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     createdAt,
   },

@@ -368,7 +368,7 @@ export const RouteWaypointSchema = z.object({
   kind: z.enum(["origin", "job_stop", "destination"]),
   jobStopId: IdSchema.optional(),
   jobId: IdSchema.optional(),
-  stopType: z.enum(["pickup", "dropoff"]).optional(),
+  stopType: z.enum(["pickup", "dropoff", "service"]).optional(),
   location: GeoPointSchema,
   /** Absolute planner arrival; null when the plan has no absolute basis. */
   plannedArrivalAt: z.string().datetime().nullable().optional(),
