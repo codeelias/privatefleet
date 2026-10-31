@@ -380,12 +380,10 @@ export function MapCanvas({
   );
   useEffect(() => {
     if (selectedDriverId !== null) return;
-    const routed = new Set(routeSet.routes.map((route) => route.driverId).filter(Boolean));
-    const preferred = state.vehicles.find(
-      (vehicle) => vehicle.driverId && routed.has(vehicle.driverId),
-    )?.driverId;
-    const first = preferred ?? routeSet.routes.find((route) => route.driverId)?.driverId;
-    if (first) setSelectedDriverId(first);
+    const preferred = state.vehicles[0]?.driverId;
+    if (preferred && routeSet.routes.some((route) => route.driverId === preferred)) {
+      setSelectedDriverId(preferred);
+    }
   }, [routeSet, selectedDriverId, state.vehicles]);
 
   const lastRouteSignatureRef = useRef("");
@@ -610,7 +608,7 @@ export function MapCanvas({
         filter: ["match", ["get", "status"], ["completed", "exception"], false, true],
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": "#FFFFFF",
+          "line-color": mapStyle === "dark" ? "#FFFFFF" : "#1E3A8A",
           "line-width": 9,
           "line-opacity": 0.85,
         },
@@ -624,11 +622,11 @@ export function MapCanvas({
           "line-color": [
             "match",
             ["get", "status"],
-            "completed", "#52525B",
+            "completed", mapStyle === "dark" ? "#52525B" : "#94A3B8",
             "exception", "#B45309",
-            "next", "#276EF1",
-            "remaining", "#1D4ED8",
-            "#276EF1",
+            "next", mapStyle === "dark" ? "#276EF1" : "#1D4ED8",
+            "remaining", mapStyle === "dark" ? "#1D4ED8" : "#3B82F6",
+            mapStyle === "dark" ? "#276EF1" : "#1D4ED8",
           ],
           "line-width": [
             "match",
@@ -654,7 +652,7 @@ export function MapCanvas({
         source: "vehicle-routes",
         filter: ["==", ["get", "driverId"], ""],
         paint: {
-          "line-color": "#60A5FA",
+          "line-color": mapStyle === "dark" ? "#60A5FA" : "#1D4ED8",
           "line-width": 6,
           "line-opacity": 1,
         },
@@ -1109,6 +1107,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 
