@@ -1,4 +1,4 @@
--- Post-migration SQL (idempotent): PostGIS columns/indexes + RLS.
+﻿-- Post-migration SQL (idempotent): PostGIS columns/indexes + RLS.
 -- Applied after drizzle migrations by src/db/apply-post-migration.ts.
 -- Secrets/roles are created by scripts/db-setup.sql (superuser).
 
@@ -40,7 +40,8 @@ BEGIN
     'users', 'vehicles', 'drivers', 'jobs', 'job_stops', 'job_events',
     'alerts', 'outbox', 'refresh_tokens', 'idempotency_keys', 'demo_scenarios',
     'location_points', 'routes', 'route_stops', 'optimization_runs',
-    'proof_policies', 'stop_evidence', 'geofences', 'geofence_states', 'tracking_tokens'
+    'proof_policies', 'stop_evidence', 'geofences', 'geofence_states', 'tracking_tokens',
+    'dispatch_policies', 'dispatch_policy_overrides'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
@@ -133,6 +134,7 @@ AS $$
 $$;
 
 GRANT EXECUTE ON FUNCTION auth_driver_by_id(uuid) TO privatefleet_app;
+
 
 
 
