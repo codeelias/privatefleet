@@ -47,6 +47,19 @@ describe("route plan builder", () => {
     ).toThrow(RoutePlanError);
   });
 
+  it("handles a revisited road/loop without borrowing geometry", () => {
+    const geometry = [p(51.5, -0.12), p(51.51, -0.11), p(51.5, -0.12), p(51.52, -0.1)];
+    const plan = buildRoutePlan({
+      routeId: "route-loop",
+      geometry,
+      legs: legsFor(geometry),
+      stops: [{ stopId: "a" }, { stopId: "b" }, { stopId: "c" }],
+    });
+    expect(plan.legs).toHaveLength(3);
+    expect(plan.legs[1]!.fromWaypointId).toBe(plan.waypoints[1]!.id);
+    expect(plan.legs[1]!.toWaypointId).toBe(plan.waypoints[2]!.id);
+  });
+
   it("supports co-located stops and keeps distinct leg identities", () => {
     const geometry = [p(51.5, -0.12), p(51.5, -0.12), p(51.5, -0.12)];
     const plan = buildRoutePlan({
@@ -59,4 +72,5 @@ describe("route plan builder", () => {
     expect(plan.legs[0]!.id).not.toBe(plan.legs[1]!.id);
   });
 });
+
 
