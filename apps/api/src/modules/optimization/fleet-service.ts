@@ -21,6 +21,7 @@ import {
 } from "../routing/plan.js";
 import type { RoutingClients } from "../routing/types.js";
 import { OptimizationError } from "./service.js";
+import { buildRoutePlan } from "./route-plan.js";
 
 const ENGINE = "osrm+vroom";
 const ENGINE_VERSION = "2";
@@ -35,6 +36,8 @@ interface FleetRouteRecord {
   distanceMetres: number;
   durationSeconds: number;
   jobIds: string[];
+  legs?: Array<{ points: GeoPoint[]; distanceMetres: number; durationSeconds: number }>;
+  stopArrivals?: Array<number | undefined>;
 }
 
 interface FleetStoredResult {
@@ -395,6 +398,8 @@ export async function createFleetProposal(
         distanceMetres: planned.distanceMetres,
         durationSeconds: planned.durationSeconds,
         jobIds: planned.orderedUnits.map((unit) => unit.id),
+        ...(planned.legs ? { legs: planned.legs } : {}),
+        stopArrivals: planned.stopArrivals,
       });
     }
 
@@ -639,26 +644,39 @@ export async function approveFleetProposal(
     `);
 
     for (const route of stored.vehicles) {
-      const inserted = (await db.execute(sql`
+      const plan = buildRoutePlan({
+        geometry: route.geometry,
+        legs: route.legs,
+        stops: route.stops.map((stop) => ({
+          stopId: stop.stopId,
+          jobId: stop.jobId,
+          stopType: stop.stopType,
+        })),
+        stopArrivals: route.stopArrivals,
+      });
+      await db.execute(sql`
         INSERT INTO routes
-          (tenant_id, route_date, driver_id, vehicle_id, status, version,
-           planned_distance_m, planned_duration_s, geometry, published_at)
+          (id, tenant_id, route_date, driver_id, vehicle_id, status, version,
+           planned_distance_m, planned_duration_s, geometry, waypoints, legs, published_at)
         VALUES
-          (${tenantId}, current_date, ${route.driverId}, ${route.vehicleId}, 'published',
+          (${plan.routeId}, ${tenantId}, current_date, ${route.driverId}, ${route.vehicleId}, 'published',
            ${nextVersion}, ${Math.round(route.distanceMetres)}, ${Math.round(route.durationSeconds)},
-           ${JSON.stringify(route.geometry)}::jsonb, now())
-        RETURNING id
-      `)) as unknown as Array<{ id: string }>;
-      const routeId = inserted[0]?.id;
-      if (!routeId) {
-        throw new OptimizationError("RUN_NOT_READY");
-      }
+           ${JSON.stringify(route.geometry)}::jsonb,
+           ${JSON.stringify(plan.waypoints)}::jsonb,
+           ${JSON.stringify(plan.legs)}::jsonb, now())
+      `);
+      const routeId = plan.routeId;
       routeIds.push(routeId);
 
       for (const [index, stop] of route.stops.entries()) {
         await db.execute(sql`
-          INSERT INTO route_stops (tenant_id, route_id, job_stop_id, sequence_no)
-          VALUES (${tenantId}, ${routeId}, ${stop.stopId}, ${index + 1})
+          INSERT INTO route_stops
+            (tenant_id, route_id, job_stop_id, sequence_no, planned_arrival_at)
+          VALUES
+            (${tenantId}, ${routeId}, ${stop.stopId}, ${index + 1},
+             ${route.stopArrivals?.[index]
+               ? new Date(route.stopArrivals[index]! * 1000).toISOString()
+               : null})
         `);
       }
 

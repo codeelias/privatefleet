@@ -17,7 +17,9 @@ import type {
   JobImportPreview,
   JobStopDto,
   ImportJob,
+  RouteLeg,
   RoutePath,
+  RouteWaypoint,
   VehicleDto,
 } from "@privatefleet/contracts";
 import {
@@ -116,6 +118,8 @@ interface RouteRow {
   driver_id: string | null;
   version: number;
   geometry: Array<{ latitude: number; longitude: number }> | null;
+  waypoints: unknown[] | null;
+  legs: unknown[] | null;
 }
 
 interface AlertRow {
@@ -185,7 +189,7 @@ export class PgFleetService {
       const includeRoutes = options.includeRoutes !== false;
       const routeRows = (await db.execute(sql`
         SELECT vehicle_id, driver_id, version
-               ${includeRoutes ? sql`, geometry` : sql``}
+               ${includeRoutes ? sql`, geometry, waypoints, legs` : sql``}
         FROM routes
         WHERE status IN ('published', 'in_progress')
         ORDER BY version DESC
@@ -204,6 +208,8 @@ export class PgFleetService {
               ...(row.driver_id ? { driverId: row.driver_id } : {}),
               points: row.geometry as Array<{ latitude: number; longitude: number }>,
               version: Number(row.version),
+              ...(Array.isArray(row.waypoints) ? { waypoints: row.waypoints as RouteWaypoint[] } : {}),
+              ...(Array.isArray(row.legs) ? { legs: row.legs as RouteLeg[] } : {}),
             }))
         : [];
       const routeVersion =
@@ -294,7 +300,7 @@ export class PgFleetService {
   async routes(tenantId: string): Promise<{ routes: RoutePath[]; routeVersion: number }> {
     return withTenant(this.handle, tenantId, async (db) => {
       const rows = (await db.execute(sql`
-        SELECT vehicle_id, driver_id, version, geometry
+        SELECT vehicle_id, driver_id, version, geometry, waypoints, legs
         FROM routes
         WHERE status IN ('published', 'in_progress')
         ORDER BY version DESC
@@ -312,6 +318,8 @@ export class PgFleetService {
           ...(row.driver_id ? { driverId: row.driver_id } : {}),
           points: row.geometry as Array<{ latitude: number; longitude: number }>,
           version: Number(row.version),
+          ...(Array.isArray(row.waypoints) ? { waypoints: row.waypoints as RouteWaypoint[] } : {}),
+          ...(Array.isArray(row.legs) ? { legs: row.legs as RouteLeg[] } : {}),
         }));
       const routeVersion =
         rows.length > 0 ? Math.max(...rows.map((row) => Number(row.version))) : 1;
@@ -1134,6 +1142,7 @@ export class PgFleetService {
     }
   }
 }
+
 
 
 
