@@ -24,6 +24,7 @@ import { StatusBar } from "expo-status-bar";
 import type { DriverQueue, JobDto, StoredSession } from "./src/api";
 import { api, clearSession, driverLogin, loadSession } from "./src/api";
 import { enqueue, flush, loadQueue } from "./src/queue";
+import { startLocationTracking, stopLocationTracking } from "./src/location";
 
 function newCommandId(): string {
   const cryptoApi = globalThis.crypto as { randomUUID?: () => string } | undefined;
@@ -580,7 +581,10 @@ export default function App() {
       <Pressable
         accessibilityRole="button"
         onPress={() => {
-          void api.startShift().then(() => refreshQueue());
+          void api.startShift().then(async () => {
+            await startLocationTracking();
+            refreshQueue();
+          });
         }}
         style={[styles.secondaryButton, { marginTop: 18 }]}
       >
@@ -589,7 +593,10 @@ export default function App() {
       <Pressable
         accessibilityRole="button"
         onPress={() => {
-          void clearSession().then(() => setSession(null));
+          void clearSession().then(() => {
+            stopLocationTracking();
+            setSession(null);
+          });
         }}
         style={[styles.secondaryButton, { marginTop: 8 }]}
       >
@@ -739,6 +746,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 });
+
 
 
 

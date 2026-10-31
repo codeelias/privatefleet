@@ -216,6 +216,18 @@ export const api = {
       body: JSON.stringify(input),
     }),
   driverQueue: () => request<DriverQueue>("/v1/driver/queue"),
+  telemetry: (samples: Array<{
+    latitude: number;
+    longitude: number;
+    capturedAt: string;
+    accuracyMetres?: number;
+    headingDeg?: number;
+    speedMps?: number;
+  }>) =>
+    request<{ accepted: number; rejected: number }>("/v1/telemetry", {
+      method: "POST",
+      body: JSON.stringify({ samples }),
+    }),
   startShift: () => request<DriverDto>("/v1/driver/shift/start", { method: "POST" }),
   arrive: (jobId: string, stopId: string, driverId: string, commandId: string) =>
     request(`/v1/jobs/${jobId}/stops/${stopId}/arrive`, {
@@ -249,6 +261,7 @@ export const api = {
       body: JSON.stringify({ driverId, reasonCode, note }),
     }),
 };
+
 
 
 
