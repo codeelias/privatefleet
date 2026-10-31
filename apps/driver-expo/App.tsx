@@ -196,6 +196,13 @@ export default function App() {
     })();
   }, [refreshQueue]);
 
+  // A restored session that is already on shift must resume foreground GPS.
+  useEffect(() => {
+    if (session?.driver.status === "on_route") {
+      void startLocationTracking();
+    }
+  }, [session]);
+
   const submitLogin = async (): Promise<void> => {
     setBusy(true);
     setError(null);
@@ -580,15 +587,24 @@ export default function App() {
       ))}
       <Pressable
         accessibilityRole="button"
+        disabled={session?.driver.status === "on_route"}
         onPress={() => {
-          void api.startShift().then(async () => {
+          void api.startShift().then(async (driver) => {
             await startLocationTracking();
+            setSession((previous) =>
+              previous ? { ...previous, driver: { ...previous.driver, ...driver } } : previous,
+            );
             refreshQueue();
           });
         }}
-        style={[styles.secondaryButton, { marginTop: 18 }]}
+        style={[
+          styles.secondaryButton,
+          { marginTop: 18, opacity: session?.driver.status === "on_route" ? 0.55 : 1 },
+        ]}
       >
-        <Text style={styles.secondaryButtonText}>Start shift</Text>
+        <Text style={styles.secondaryButtonText}>
+          {session?.driver.status === "on_route" ? "Shift active - tracking on" : "Start shift"}
+        </Text>
       </Pressable>
       <Pressable
         accessibilityRole="button"
