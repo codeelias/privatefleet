@@ -344,8 +344,11 @@ export function MapCanvas({
   );
   useEffect(() => {
     if (selectedDriverId !== null) return;
-    const preferred = state.vehicles[0]?.driverId;
-    if (preferred && routeSet.routes.some((route) => route.driverId === preferred)) {
+    const routed = routeSet.routes.filter((route) => route.driverId);
+    const preferred = routed.some((route) => route.driverId === state.vehicles[0]?.driverId)
+      ? state.vehicles[0]?.driverId
+      : routed[0]?.driverId;
+    if (preferred) {
       onSelectDriver(preferred);
     }
   }, [routeSet, selectedDriverId, state.vehicles, onSelectDriver]);
@@ -1113,6 +1116,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 
