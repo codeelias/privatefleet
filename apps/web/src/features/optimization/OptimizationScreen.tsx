@@ -4,7 +4,7 @@
  * labelling, and a dispatcher approval step before publishing. No fake
  * loading - the async state is the real API call.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
   FleetOptimizationProposal,
@@ -12,7 +12,11 @@ import type {
   OptimizationProposal,
   OptimizedStop,
 } from "@privatefleet/contracts";
-import { api, HttpError } from "../../shared/api/client";
+import {
+  api,
+  HttpError,
+  type DispatchPolicyView,
+} from "../../shared/api/client";
 import { Panel } from "../../shared/ui/Panel";
 import { StatusChip } from "../../shared/ui/StatusChip";
 
@@ -83,7 +87,62 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
   const [busy, setBusy] = useState(false);
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [policy, setPolicy] = useState<DispatchPolicyView | null>(null);
+  const [policyError, setPolicyError] = useState<string | null>(null);
+  const [savingPolicy, setSavingPolicy] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
+  const [draft, setDraft] = useState({
+    km: 200,
+    travelHours: 9,
+    workingHours: 10,
+    visits: 50,
+  });
   const live = state.demoMode === false;
+
+  useEffect(() => {
+    if (!live) return;
+    void api
+      .getDispatchPolicy()
+      .then((next) => {
+        setPolicy(next);
+        setDraft({
+          km: Math.round(next.maxDistanceM / 1000),
+          travelHours: Math.round(next.maxTravelTimeS / 3600),
+          workingHours: Math.round(next.maxWorkingDurationS / 3600),
+          visits: next.maxVisits,
+        });
+      })
+      .catch((err) => setPolicyError(err instanceof Error ? err.message : "Policy load failed"));
+  }, [live]);
+
+  async function savePolicy(input: {
+    preset?: "local" | "balanced" | "extended";
+    maxDistanceM?: number;
+    maxTravelTimeS?: number;
+    maxWorkingDurationS?: number;
+    maxVisits?: number;
+  }) {
+    if (!policy) return;
+    setSavingPolicy(true);
+    setPolicyError(null);
+    try {
+      const next = await api.updateDispatchPolicy({
+        expectedRevision: policy.revision,
+        ...input,
+      });
+      setPolicy(next);
+      setDraft({
+        km: Math.round(next.maxDistanceM / 1000),
+        travelHours: Math.round(next.maxTravelTimeS / 3600),
+        workingHours: Math.round(next.maxWorkingDurationS / 3600),
+        visits: next.maxVisits,
+      });
+    } catch (err) {
+      setPolicyError(err instanceof Error ? err.message : "Policy update failed");
+    } finally {
+      setSavingPolicy(false);
+    }
+  }
   const hasPendingWork = state.jobs.some(
     (job) => job.status !== "completed" && job.status !== "cancelled",
   );
@@ -207,6 +266,140 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
         <p className="rounded-lg border border-status-danger/40 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
           {error}
         </p>
+      )}
+
+      {live && (
+        <Panel
+          title="Dispatch policy"
+          action={
+            <StatusChip
+              tone={policy ? "success" : "warning"}
+              label={
+                policy
+                  ? `${policy.preset} - revision ${policy.revision}`
+                  : "not loaded"
+              }
+            />
+          }
+        >
+          <p className="text-sm text-text-secondary">
+            The company sets the operating limits once; optimisation and approval
+            both use this same policy revision.
+          </p>
+          {policyError && (
+            <p className="mt-2 text-sm text-status-danger">{policyError}</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(["local", "balanced", "extended"] as const).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                disabled={savingPolicy || !policy}
+                onClick={() => void savePolicy({ preset })}
+                className={
+                  "rounded-xl px-3 py-2 text-sm font-bold " +
+                  (policy?.preset === preset
+                    ? "bg-brand-primary text-on-brand"
+                    : "border border-command-border bg-command-surface text-text-primary")
+                }
+              >
+                {preset === "local"
+                  ? "Local"
+                  : preset === "balanced"
+                    ? "Balanced Urban"
+                    : "Extended"}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setAdvanced((value) => !value)}
+              className="rounded-xl border border-command-border px-3 py-2 text-sm font-bold text-text-primary"
+            >
+              {advanced ? "Hide advanced" : "Advanced"}
+            </button>
+          </div>
+          {policy && !advanced && (
+            <p className="mt-3 text-xs text-text-secondary">
+              Max {Math.round(policy.maxDistanceM / 1000)} km -{" "}
+              {Math.round(policy.maxTravelTimeS / 3600)} h travel -{" "}
+              {Math.round(policy.maxWorkingDurationS / 3600)} h working -{" "}
+              {policy.maxVisits} visits per route. Minimum route utilisation is a
+              soft balancing target, never a reason to add empty driving.
+            </p>
+          )}
+          {policy && advanced && (
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+              <label className="block text-xs text-text-secondary">
+                Max km
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.km}
+                  onChange={(event) => setDraft({ ...draft, km: Number(event.target.value) })}
+                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                />
+              </label>
+              <label className="block text-xs text-text-secondary">
+                Travel hours
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.travelHours}
+                  onChange={(event) =>
+                    setDraft({ ...draft, travelHours: Number(event.target.value) })
+                  }
+                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                />
+              </label>
+              <label className="block text-xs text-text-secondary">
+                Working hours
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.workingHours}
+                  onChange={(event) =>
+                    setDraft({ ...draft, workingHours: Number(event.target.value) })
+                  }
+                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                />
+              </label>
+              <label className="block text-xs text-text-secondary">
+                Visits
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.visits}
+                  onChange={(event) =>
+                    setDraft({ ...draft, visits: Number(event.target.value) })
+                  }
+                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                />
+              </label>
+
+              <div className="col-span-2 flex items-end gap-2 md:col-span-4">
+                <button
+                  type="button"
+                  disabled={savingPolicy}
+                  onClick={() =>
+                    void savePolicy({
+                      maxDistanceM: draft.km * 1000,
+                      maxTravelTimeS: draft.travelHours * 3600,
+                      maxWorkingDurationS: draft.workingHours * 3600,
+                      maxVisits: draft.visits,
+                    })
+                  }
+                  className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand"
+                >
+                  {savingPolicy ? "Saving..." : "Save custom limits"}
+                </button>
+                <span className="text-xs text-text-secondary">
+                  Working duration includes travel, service and waiting; it is not
+                  the same as the travel-time limit.
+                </span>
+              </div>
+            </div>
+          )}
+        </Panel>
       )}
 
       {live && liveRun && (

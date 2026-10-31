@@ -163,6 +163,23 @@ function toSession(
   };
 }
 
+export interface DispatchPolicyView {
+  revision: number;
+  preset: "local" | "balanced" | "extended";
+  maxDistanceM: number;
+  maxTravelTimeS: number;
+  maxWorkingDurationS: number;
+  maxVisits: number;
+  overrides: Array<{
+    vehicleId: string;
+    maxDistanceM?: number;
+    maxTravelTimeS?: number;
+    maxWorkingDurationS?: number;
+    maxVisits?: number;
+  }>;
+  enabled: boolean;
+}
+
 export const api = {
   meta: () =>
     rawRequest<{ name: string; version: string; demoMode: boolean; repositoryMode: string }>(
@@ -228,6 +245,19 @@ export const api = {
       headers: { "idempotency-key": idempotencyKey },
       body: JSON.stringify({ jobId, driverId }),
     }),
+  getDispatchPolicy: () => request<DispatchPolicyView>("/v1/dispatch-policy"),
+  updateDispatchPolicy: (input: {
+    expectedRevision: number;
+    preset?: "local" | "balanced" | "extended";
+    maxDistanceM?: number;
+    maxTravelTimeS?: number;
+    maxWorkingDurationS?: number;
+    maxVisits?: number;
+  }) =>
+    request<DispatchPolicyView>("/v1/dispatch-policy", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
   runFleetOptimization: () =>
     request<FleetOptimizationProposal>("/v1/optimization/fleet-run", {
       method: "POST",
@@ -270,6 +300,7 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 
 

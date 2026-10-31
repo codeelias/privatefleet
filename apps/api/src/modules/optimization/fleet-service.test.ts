@@ -366,7 +366,7 @@ describe("fleet optimisation", () => {
       SELECT request->>'resultSchemaVersion' AS schema_version
       FROM optimization_runs WHERE id = ${first.runId}
     `;
-    expect((rows[0] as unknown as { schema_version: string }).schema_version).toBe("7");
+    expect((rows[0] as unknown as { schema_version: string }).schema_version).toBe("9");
 
     // Corrupt the persisted result: drop all service stops while leaving the
     // single-stop count and totals intact (legacy result shape).
@@ -416,6 +416,8 @@ describe("fleet optimisation", () => {
     expect(fleetB.routes).toHaveLength(0);
   });
 });
+
+
 
 
 

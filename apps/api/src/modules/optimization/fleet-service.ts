@@ -22,7 +22,11 @@ import {
 import type { RoutingClients } from "../routing/types.js";
 import { OptimizationError } from "./service.js";
 import { buildRoutePlan } from "./route-plan.js";
-import { DISPATCH_LIMITS } from "./dispatch-policy.js";
+import {
+  effectivePolicy,
+  getDispatchPolicy,
+} from "./policy-service.js";
+import type { DispatchPolicy } from "./dispatch-policy.js";
 
 const ENGINE = "osrm+vroom";
 const ENGINE_VERSION = "2";
@@ -66,6 +70,17 @@ interface FleetStoredResult {
     unassignedJobs: number;
   };
   gate?: { allowed: boolean; reasons: string[] };
+  policy?: {
+    revision: number;
+    preset: string;
+    effective: Array<{
+      vehicleId: string;
+      maxDistanceM: number;
+      maxTravelTimeS: number;
+      maxWorkingDurationS: number;
+      maxVisits: number;
+    }>;
+  };
 }
 
 interface DriverVehicleRow {
@@ -129,6 +144,7 @@ export async function createFleetProposal(
   tenantId: string,
   options: FleetProposalOptions = {},
 ): Promise<FleetOptimizationProposal> {
+  const policySnapshot = await getDispatchPolicy(handle, tenantId);
   return withTenant(handle, tenantId, async (db) => {
     const versionRows = (await db.execute(sql`
       SELECT coalesce(max(version), 1) AS current
@@ -269,6 +285,7 @@ export async function createFleetProposal(
     }
 
     const vehicles: VehicleInput[] = [];
+    const policyByVehicle = new Map<string, DispatchPolicy>();
     const vehicleMeta = new Map<
       number,
       { driverId: string; vehicleId: string; driverName: string }
@@ -282,6 +299,8 @@ export async function createFleetProposal(
         continue;
       }
       const id = index;
+      const effective = effectivePolicy(policySnapshot, row.vehicle_id);
+      policyByVehicle.set(row.vehicle_id, effective);
       vehicles.push({
         id,
         depot,
@@ -289,9 +308,9 @@ export async function createFleetProposal(
         ...(row.required_capabilities?.length
           ? { skills: row.required_capabilities }
           : {}),
-        maxDistance: DISPATCH_LIMITS.maxRouteDistanceM,
-        maxTravelTime: DISPATCH_LIMITS.maxRouteTravelTimeS,
-        maxTasks: DISPATCH_LIMITS.maxRouteTasks,
+        maxDistance: effective.maxDistanceM,
+        maxTravelTime: effective.maxTravelTimeS,
+        maxTasks: effective.maxVisits,
       });
       vehicleMeta.set(id, {
         driverId: row.driver_id,
@@ -309,9 +328,10 @@ export async function createFleetProposal(
       datasetVersion: DATASET_VERSION,
       // Bump when persisted fleet-result semantics change; old cached results
       // must never be served as valid proposals.
-      resultSchemaVersion: 7,
+      resultSchemaVersion: 9,
       scope: selected ? "subset" : "fleet",
       expectedRouteVersion,
+      policyRevision: policySnapshot.revision,
       vehicles,
       shipments,
       jobs: singleJobs,
@@ -326,6 +346,17 @@ export async function createFleetProposal(
         driverId: group.assignedDriverId,
         status: group.status,
       })),
+      policy: {
+        revision: policySnapshot.revision,
+        preset: policySnapshot.preset,
+        effective: [...policyByVehicle.entries()].map(([vehicleId, effective]) => ({
+          vehicleId,
+          maxDistanceM: effective.maxDistanceM,
+          maxTravelTimeS: effective.maxTravelTimeS,
+          maxWorkingDurationS: effective.maxWorkingDurationS,
+          maxVisits: effective.maxVisits,
+        })),
+      },
     };
     const inputHash = hash(request);
 
@@ -443,6 +474,18 @@ export async function createFleetProposal(
       })),
     };
 
+    stored.policy = {
+      revision: policySnapshot.revision,
+      preset: policySnapshot.preset,
+      effective: [...policyByVehicle.entries()].map(([vehicleId, effective]) => ({
+        vehicleId,
+        maxDistanceM: effective.maxDistanceM,
+        maxTravelTimeS: effective.maxTravelTimeS,
+        maxWorkingDurationS: effective.maxWorkingDurationS,
+        maxVisits: effective.maxVisits,
+      })),
+    };
+
     const baselineRows = (await db.execute(sql`
       SELECT
         (SELECT count(*)::int FROM routes
@@ -482,20 +525,27 @@ export async function createFleetProposal(
         `Proposal leaves ${stored.unassigned.length} jobs unassigned; baseline has ${base.unassigned_jobs}.`,
       );
     }
+    const workingSecondsFor = (route: (typeof routes)[number]) =>
+      route.durationSeconds + route.stops.length * 300;
     for (const route of routes) {
-      if (route.distanceMetres > DISPATCH_LIMITS.maxRouteDistanceM) {
+      const effective = policyByVehicle.get(route.vehicleId);
+      if (!effective) continue;
+      if (route.distanceMetres > effective.maxDistanceM) {
         reasons.push(
-          `${route.driverName}: route ${Math.round(route.distanceMetres / 1000)} km exceeds the ${Math.round(DISPATCH_LIMITS.maxRouteDistanceM / 1000)} km limit.`,
+          `${route.driverName}: route ${Math.round(route.distanceMetres / 1000)} km exceeds the ${Math.round(effective.maxDistanceM / 1000)} km limit.`,
         );
       }
-      if (route.stops.length > DISPATCH_LIMITS.maxRouteTasks) {
+      if (route.stops.length > effective.maxVisits) {
         reasons.push(
-          `${route.driverName}: ${route.stops.length} visits exceed the ${DISPATCH_LIMITS.maxRouteTasks} stop limit.`,
+          `${route.driverName}: ${route.stops.length} visits exceed the ${effective.maxVisits} visit limit.`,
         );
       }
-      if (route.durationSeconds > DISPATCH_LIMITS.maxRouteTravelTimeS) {
+      if (route.durationSeconds > effective.maxTravelTimeS) {
+        reasons.push(`${route.driverName}: route travel time exceeds the limit.`);
+      }
+      if (workingSecondsFor(route) > effective.maxWorkingDurationS) {
         reasons.push(
-          `${route.driverName}: route travel time exceeds the limit.`,
+          `${route.driverName}: scheduled working duration exceeds ${Math.round(effective.maxWorkingDurationS / 3600)} h.`,
         );
       }
     }
@@ -657,6 +707,7 @@ function fleetProposal(runId: string, result: FleetStoredResult): FleetOptimizat
     datasetVersion: result.datasetVersion,
     ...(result.baseline ? { baseline: result.baseline } : {}),
     ...(result.gate ? { gate: result.gate } : {}),
+    ...(result.policy ? { policy: result.policy } : {}),
   };
 }
 
@@ -683,6 +734,22 @@ export async function approveFleetProposal(
       throw new OptimizationError("RUN_NOT_FOUND");
     }
     const stored = run.result;
+    const policyRows = (await db.execute(sql`
+      SELECT revision FROM dispatch_policies WHERE tenant_id = ${tenantId}
+    `)) as unknown as Array<{ revision: number }>;
+    const currentRevision = Number(policyRows[0]?.revision ?? 0);
+    if (!stored.policy || currentRevision !== stored.policy.revision) {
+      throw new OptimizationError(
+        "STALE_DISPATCH_POLICY",
+        `Proposal used policy revision ${stored.policy?.revision ?? 0}; current is ${currentRevision}`,
+      );
+    }
+    if (stored.gate && !stored.gate.allowed) {
+      throw new OptimizationError(
+        "CONSTRAINTS_INCOMPLETE",
+        stored.gate.reasons.join(" "),
+      );
+    }
     if (stored.published) {
       return {
         version: stored.published.version,
@@ -818,6 +885,10 @@ export async function approveFleetProposal(
 
 // Keep the type import referenced for consumers of this module.
 export type { FleetStoredResult };
+
+
+
+
 
 
 

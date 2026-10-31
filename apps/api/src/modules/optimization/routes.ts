@@ -10,6 +10,11 @@ import type { DbHandle } from "../../db/client.js";
 import { RoutingError, type RoutingClients } from "../routing/types.js";
 import { approveProposal, createProposal, OptimizationError } from "./service.js";
 import { approveFleetProposal, createFleetProposal } from "./fleet-service.js";
+import {
+  DispatchPolicyConflict,
+  getDispatchPolicy,
+  updateDispatchPolicy,
+} from "./policy-service.js";
 
 const RunBodySchema = z.object({ driverId: z.string().uuid() });
 const ApproveBodySchema = z.object({
@@ -133,7 +138,18 @@ export function registerOptimizationRoutes(
               uiMessage: "That proposal no longer exists. Run the optimization again.",
             });
           }
-          if (err.code === "ROUTE_VERSION_STALE") {
+          if (err.code === "STALE_DISPATCH_POLICY") {
+      return reply.status(409).send({
+        type: "https://privatefleet.example/errors/stale_dispatch_policy",
+        title: "Policy changed",
+        status: 409,
+        code: "STALE_DISPATCH_POLICY",
+        detail: err.message,
+        uiMessage:
+          "The dispatch policy changed after this proposal was created. Re-run optimisation.",
+      });
+    }
+    if (err.code === "ROUTE_VERSION_STALE") {
             return reply.status(409).send({
               type: "https://privatefleet.example/errors/route-version-stale",
               title: "Plan changed",
@@ -199,6 +215,17 @@ export function registerOptimizationRoutes(
           code: err.code,
           detail: "No fleet optimization run with that id",
           uiMessage: "That proposal no longer exists. Run the optimization again.",
+        });
+      }
+      if (err.code === "STALE_DISPATCH_POLICY") {
+        return reply.status(409).send({
+          type: "https://privatefleet.example/errors/stale_dispatch_policy",
+          title: "Policy changed",
+          status: 409,
+          code: "STALE_DISPATCH_POLICY",
+          detail: err.message,
+          uiMessage:
+            "The dispatch policy changed after this proposal was created. Re-run optimisation.",
         });
       }
       if (err.code === "ROUTE_VERSION_STALE") {
@@ -279,7 +306,85 @@ export function registerOptimizationRoutes(
       }
     },
   );
+
+  const PolicyPatchSchema = z.object({
+    expectedRevision: z.number().int().positive(),
+    preset: z.enum(["local", "balanced", "extended"]).optional(),
+    maxDistanceM: z.number().int().positive().max(1_000_000).optional(),
+    maxTravelTimeS: z.number().int().positive().max(24 * 3600).optional(),
+    maxWorkingDurationS: z.number().int().positive().max(24 * 3600).optional(),
+    maxVisits: z.number().int().positive().max(500).optional(),
+    overrides: z
+      .array(
+        z.object({
+          vehicleId: z.string().uuid(),
+          maxDistanceM: z.number().int().positive().max(1_000_000).optional(),
+          maxTravelTimeS: z.number().int().positive().max(24 * 3600).optional(),
+          maxWorkingDurationS: z.number().int().positive().max(24 * 3600).optional(),
+          maxVisits: z.number().int().positive().max(500).optional(),
+        }),
+      )
+      .max(500)
+      .optional(),
+  });
+
+  function policyView(snapshot: Awaited<ReturnType<typeof getDispatchPolicy>>) {
+    return {
+      revision: snapshot.revision,
+      preset: snapshot.preset,
+      maxDistanceM: snapshot.policy.maxDistanceM,
+      maxTravelTimeS: snapshot.policy.maxTravelTimeS,
+      maxWorkingDurationS: snapshot.policy.maxWorkingDurationS,
+      maxVisits: snapshot.policy.maxVisits,
+      overrides: snapshot.overrides,
+      enabled: true,
+    };
+  }
+
+  app.get("/v1/dispatch-policy", { preHandler: guard }, async (request, reply) => {
+    if (!requireDispatcher(request, reply)) return reply;
+    const tenantId = request.auth?.tenantId ?? "";
+    return policyView(await getDispatchPolicy(handle, tenantId));
+  });
+
+  app.patch("/v1/dispatch-policy", { preHandler: guard }, async (request, reply) => {
+    if (request.auth?.role !== "owner" && request.auth?.role !== "admin") {
+      return reply.status(403).send({
+        type: "https://privatefleet.example/errors/owner_only",
+        title: "Owner action",
+        status: 403,
+        code: "OWNER_ONLY",
+        detail: "Dispatch policy changes require an owner or admin",
+        uiMessage: "Only an owner or admin can change dispatch policy.",
+      });
+    }
+    const tenantId = request.auth?.tenantId ?? "";
+    const body = PolicyPatchSchema.parse(request.body);
+    try {
+      return policyView(await updateDispatchPolicy(handle, tenantId, body));
+    } catch (err) {
+      if (err instanceof DispatchPolicyConflict) {
+        return reply.status(409).send({
+          type: "https://privatefleet.example/errors/stale_dispatch_policy",
+          title: "Policy changed",
+          status: 409,
+          code:
+            err.code === "DISPATCH_POLICY_CONFLICT"
+              ? "STALE_DISPATCH_POLICY"
+              : "DISPATCH_POLICY_INVALID",
+          detail: err.message,
+          uiMessage:
+            err.code === "DISPATCH_POLICY_CONFLICT"
+              ? "The dispatch policy changed. Reload and try again."
+              : "The dispatch policy values are invalid.",
+        });
+      }
+      throw err;
+    }
+  });
 }
+
+
 
 
 

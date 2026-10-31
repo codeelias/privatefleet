@@ -21,6 +21,7 @@ export type OptimizationErrorCode =
   | "RUN_NOT_READY"
   | "ROUTE_VERSION_STALE"
   | "CONSTRAINTS_INCOMPLETE"
+  | "STALE_DISPATCH_POLICY"
   | "ROUTING_INVALID_RESPONSE";
 
 export class OptimizationError extends Error {

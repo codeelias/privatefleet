@@ -368,6 +368,21 @@ export const FleetOptimizationProposalSchema = z.object({
       unassignedJobs: z.number().int().nonnegative(),
     })
     .optional(),
+  policy: z
+    .object({
+      revision: z.number().int().nonnegative(),
+      preset: z.string(),
+      effective: z.array(
+        z.object({
+          vehicleId: IdSchema,
+          maxDistanceM: z.number().nonnegative(),
+          maxTravelTimeS: z.number().nonnegative(),
+          maxWorkingDurationS: z.number().nonnegative(),
+          maxVisits: z.number().int().nonnegative(),
+        }),
+      ),
+    })
+    .optional(),
   /** Deterministic publish gate derived from baseline vs proposal. */
   gate: z
     .object({
@@ -588,4 +603,5 @@ export const AssignResponseSchema = z.object({
   etaImpactMinutes: z.number().int().nonnegative(),
 });
 export type AssignResponse = z.infer<typeof AssignResponseSchema>;
+
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Smart Dispatch policy presets and deterministic resolution.
  * A preset is only a starting point: every effective limit is explicit,
  * versioned and resolved through one function used by optimisation and the
@@ -18,10 +18,10 @@ export interface DispatchPolicy {
 }
 
 export interface VehiclePolicyOverride {
-  maxDistanceM?: number;
-  maxTravelTimeS?: number;
-  maxWorkingDurationS?: number;
-  maxVisits?: number;
+  maxDistanceM?: number | undefined;
+  maxTravelTimeS?: number | undefined;
+  maxWorkingDurationS?: number | undefined;
+  maxVisits?: number | undefined;
 }
 
 export const PRESET_VALUES: Record<
@@ -98,3 +98,4 @@ export const DISPATCH_LIMITS = {
   maxRouteTravelTimeS: PRESET_VALUES.balanced.maxTravelTimeS,
   maxRouteTasks: PRESET_VALUES.balanced.maxVisits,
 } as const;
+
