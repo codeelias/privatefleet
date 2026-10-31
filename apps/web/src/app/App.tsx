@@ -476,8 +476,8 @@ function Dashboard({
 
                   {/* Floating selected-vehicle panel: expanded, compact, or closed. */}
                   {vehiclePanel !== "closed" ? (
-                    <aside className="pointer-events-none absolute left-7 top-4 z-30 hidden w-[300px] lg:block">
-                      <div className="pf-dark-panel pointer-events-auto overflow-hidden rounded-2xl border border-[#27272A] bg-[#18181B] text-[#E4E4E7] shadow-[0_18px_50px_rgba(0,0,0,0.45)]">
+                    <aside className="pointer-events-none absolute left-5 top-4 z-30 hidden w-[280px] lg:block">
+                      <div className="pf-floating-panel pf-panel-scroll pointer-events-auto overflow-hidden rounded-2xl">
                         <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
                           <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-secondary">
                             Selected vehicle
@@ -588,7 +588,7 @@ function Dashboard({
                     <button
                       type="button"
                       onClick={() => setVehiclePanel("compact")}
-                      className="absolute left-7 top-4 z-30 hidden min-h-8 items-center gap-2 rounded-full border border-[#27272A] bg-[#18181B] px-3 text-[11px] font-semibold text-[#E4E4E7] shadow-sm lg:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      className="pf-floating-panel absolute left-5 top-4 z-30 hidden min-h-8 items-center gap-2 rounded-full px-3 text-[11px] font-semibold shadow-sm lg:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                       aria-label="Open selected vehicle panel"
                     >
                       <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" />
@@ -598,7 +598,7 @@ function Dashboard({
 
                   {/* Bottom work queue overlays the map and never resizes it. */}
                   <div className="pointer-events-none absolute inset-x-6 bottom-3 z-30">
-                    <div className="pf-dark-panel pointer-events-auto overflow-hidden rounded-2xl border border-[#27272A] bg-[#18181B]/95 text-[#E4E4E7] shadow-[0_-8px_30px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                    <div className="pf-floating-panel pointer-events-auto overflow-hidden rounded-2xl backdrop-blur-xl">
                       <button
                         type="button"
                         onClick={() => setQueueOpen((value) => !value)}
@@ -821,6 +821,7 @@ export function App() {
     />
   );
 }
+
 
 
 

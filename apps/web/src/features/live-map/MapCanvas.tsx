@@ -252,6 +252,9 @@ function VehiclePin({
       title={`${driverName} - ${vehicle.registration} - ${gpsLabel}`}
     >
       <span className="relative flex h-10 w-10 items-center justify-center">
+        {vehicle.stale && (
+          <span className="absolute -right-1 -top-1 z-10 h-2.5 w-2.5 rounded-full border-2 border-white bg-amber-400" />
+        )}
         {vehicle.status === "on_route" && !vehicle.stale && (
           <span
             aria-hidden="true"
@@ -266,8 +269,8 @@ function VehiclePin({
         >
           <path
             d="M16 3 L28 28 L16 22.8 L4 28 Z"
-            fill={vehicle.stale ? "#6B7280" : "#276EF1"}
-            stroke={vehicle.stale ? "#9CA3AF" : "#FFFFFF"}
+            fill={vehicle.stale ? "#9CA3AF" : "#276EF1"}
+            stroke={vehicle.stale ? "#FFFFFF" : "#FFFFFF"}
             strokeWidth="2.5"
             strokeLinejoin="round"
             strokeDasharray={vehicle.stale ? "3 3" : undefined}
@@ -310,6 +313,10 @@ export function MapCanvas({
     } catch {
       // Storage may be unavailable; the toggle still works for this session.
     }
+  }, [mapStyle]);
+
+  useEffect(() => {
+    document.documentElement.dataset.mapTheme = mapStyle;
   }, [mapStyle]);
 
   const [vectorProvider, setVectorProvider] = useState<string>(
@@ -1107,6 +1114,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 
