@@ -21,6 +21,7 @@ import "leaflet/dist/leaflet.css";
 import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
 import { reconcileRoutes, routesChanged } from "./engine/routes";
 import { toLeafletLatLngs } from "./engine/projection";
+import { haversineMetres } from "./engine/geo";
 import { routeLegFeatures, type StopStatusMap } from "./engine/route-progress";
 import { markPainted } from "./engine/benchmark";
 import {
@@ -1016,7 +1017,14 @@ export function MapCanvas({
             />
           )}
           {!useCanvasPins && state.vehicles.map((vehicle) => {
-            const pos = project(vehicle.location ?? routeStartByVehicle.get(vehicle.id));
+            const routeStart = routeStartByVehicle.get(vehicle.id);
+            const offRouteStale =
+              vehicle.stale &&
+              vehicle.location &&
+              routeStart &&
+              haversineMetres(vehicle.location, routeStart) > 3000;
+            if (offRouteStale) return null;
+            const pos = project(vehicle.location ?? routeStart);
             if (!pos) {
               return null;
             }
@@ -1098,6 +1106,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 
