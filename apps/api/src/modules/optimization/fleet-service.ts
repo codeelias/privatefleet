@@ -309,7 +309,7 @@ export async function createFleetProposal(
       datasetVersion: DATASET_VERSION,
       // Bump when persisted fleet-result semantics change; old cached results
       // must never be served as valid proposals.
-      resultSchemaVersion: 4,
+      resultSchemaVersion: 5,
       scope: selected ? "subset" : "fleet",
       expectedRouteVersion,
       vehicles,
@@ -818,6 +818,7 @@ export async function approveFleetProposal(
 
 // Keep the type import referenced for consumers of this module.
 export type { FleetStoredResult };
+
 
 
 
