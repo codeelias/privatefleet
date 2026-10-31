@@ -53,6 +53,25 @@ export async function startLocationTracking(): Promise<void> {
       distanceInterval: 5,
     },
     (location) => {
+      // Reject poor fixes (network/coarse) and implausible teleports; the
+      // dispatcher must never show a stale pin kilometres off-route because
+      // of one bad first fix.
+      if (location.coords.accuracy !== null && location.coords.accuracy > 75) {
+        return;
+      }
+      const last = buffer[buffer.length - 1];
+      if (last) {
+        const dt = (location.timestamp - Date.parse(last.capturedAt)) / 1000;
+        const dLat = (location.coords.latitude - last.latitude) * 111_320;
+        const dLon =
+          (location.coords.longitude - last.longitude) *
+          111_320 *
+          Math.cos((last.latitude * Math.PI) / 180);
+        const metres = Math.sqrt(dLat * dLat + dLon * dLon);
+        if (dt < 120 && metres > 3000 && (location.coords.accuracy ?? 999) > 30) {
+          return;
+        }
+      }
       buffer.push({
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
@@ -83,3 +102,4 @@ export function stopLocationTracking(): void {
   void flush();
   console.log("[pf-location] foreground tracking stopped");
 }
+

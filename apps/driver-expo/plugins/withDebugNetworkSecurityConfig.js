@@ -75,6 +75,8 @@ module.exports = function withDebugNetworkSecurityConfig(config) {
     const app = cfg.modResults.manifest.application?.[0];
     if (app) {
       app.$["android:networkSecurityConfig"] = "@xml/network_security_config";
+      // Pilot-only release test builds connect to the tethered HTTP API.
+      app.$["android:usesCleartextTraffic"] = "true";
     }
     return cfg;
   });
@@ -116,5 +118,6 @@ module.exports = function withDebugNetworkSecurityConfig(config) {
     },
   ]);
 };
+
 
 
