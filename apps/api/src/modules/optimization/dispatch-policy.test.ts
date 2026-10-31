@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DispatchPolicyError,
+  scheduledWorkingSeconds,
   presetPolicy,
   resolveVehiclePolicy,
   validatePolicy,
@@ -34,6 +35,11 @@ describe("dispatch policy", () => {
     expect(effective.version).toBe(7);
   });
 
+  it("computes working duration as travel plus service, not travel alone", () => {
+    expect(scheduledWorkingSeconds(3600, 10)).toBe(3600 + 10 * 300);
+    expect(scheduledWorkingSeconds(3600, 10)).toBeGreaterThan(3600);
+  });
+
   it("keeps working duration and travel time separate and rejects inversion", () => {
     const policy = presetPolicy("balanced", 1);
     expect(policy.maxWorkingDurationS).not.toBe(policy.maxTravelTimeS);
@@ -54,3 +60,4 @@ describe("dispatch policy", () => {
     ).toThrow();
   });
 });
+

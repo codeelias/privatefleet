@@ -75,6 +75,15 @@ export function resolveVehiclePolicy(
   };
 }
 
+/** Working duration = travel + service/waiting estimate per visit. */
+export function scheduledWorkingSeconds(
+  travelSeconds: number,
+  visits: number,
+  serviceSeconds = 300,
+): number {
+  return travelSeconds + visits * serviceSeconds;
+}
+
 export function validatePolicy(policy: DispatchPolicy): void {
   const valid =
     Number.isInteger(policy.maxDistanceM) &&
@@ -98,4 +107,5 @@ export const DISPATCH_LIMITS = {
   maxRouteTravelTimeS: PRESET_VALUES.balanced.maxTravelTimeS,
   maxRouteTasks: PRESET_VALUES.balanced.maxVisits,
 } as const;
+
 

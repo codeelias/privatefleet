@@ -26,7 +26,7 @@ import {
   effectivePolicy,
   getDispatchPolicy,
 } from "./policy-service.js";
-import type { DispatchPolicy } from "./dispatch-policy.js";
+import { scheduledWorkingSeconds, type DispatchPolicy } from "./dispatch-policy.js";
 
 const ENGINE = "osrm+vroom";
 const ENGINE_VERSION = "2";
@@ -526,7 +526,7 @@ export async function createFleetProposal(
       );
     }
     const workingSecondsFor = (route: (typeof routes)[number]) =>
-      route.durationSeconds + route.stops.length * 300;
+      scheduledWorkingSeconds(route.durationSeconds, route.stops.length);
     for (const route of routes) {
       const effective = policyByVehicle.get(route.vehicleId);
       if (!effective) continue;
@@ -885,6 +885,7 @@ export async function approveFleetProposal(
 
 // Keep the type import referenced for consumers of this module.
 export type { FleetStoredResult };
+
 
 
 

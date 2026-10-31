@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tenant dispatch policy persistence. One revision per tenant covers the
  * preset, advanced limits and every vehicle override; all writes increment
  * it atomically so optimisation and approval can compare one number.
@@ -186,7 +186,11 @@ export async function updateDispatchPolicy(
       if (vehicleIds.length > 0) {
         const owned = (await db.execute(sql`
           SELECT id FROM vehicles
-          WHERE tenant_id = ${tenantId} AND id = ANY(${vehicleIds}::uuid[])
+          WHERE tenant_id = ${tenantId}
+            AND id IN (${sql.join(
+              vehicleIds.map((id) => sql`${id}`),
+              sql`, `,
+            )})
         `)) as unknown as Array<{ id: string }>;
         if (owned.length !== new Set(vehicleIds).size) {
           throw new DispatchPolicyConflict("DISPATCH_POLICY_INVALID");
@@ -211,5 +215,6 @@ export async function updateDispatchPolicy(
     return readSnapshot(db, tenantId);
   });
 }
+
 
 
