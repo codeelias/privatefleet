@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Phase 2 fleet service: server-authoritative job lifecycle over
  * Postgres with RLS, command idempotency and a transactional outbox
  * (docs/04.5, docs/08, ADR-0008). Same response shapes as the demo
@@ -262,6 +262,14 @@ export class PgFleetService {
           stale:
             !vehicle.captured_at ||
             Date.now() - epoch(vehicle.captured_at) > STALE_AFTER_MS,
+          locationStatus:
+            vehicle.latitude === null || vehicle.longitude === null
+              ? "unknown"
+              : !vehicle.captured_at ||
+                  Date.now() - epoch(vehicle.captured_at) > STALE_AFTER_MS
+                ? "stale"
+                : "live",
+          ...(iso(vehicle.captured_at) ? { lastSeenAt: iso(vehicle.captured_at) } : {}),
         })),
         jobs: jobs.map((job) => ({
           id: job.id,
@@ -1142,6 +1150,7 @@ export class PgFleetService {
     }
   }
 }
+
 
 
 

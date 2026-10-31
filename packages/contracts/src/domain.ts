@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Canonical domain vocabulary shared by api, web and driver.
  * Values mirror the database CHECK constraints in docs/07 and the
  * state machines in docs/08 - the documentation is the source of truth.
@@ -121,5 +121,10 @@ export const VehicleDtoSchema = z.object({
   driverId: IdSchema.optional(),
   location: GeoPointSchema.optional(),
   stale: z.boolean().default(false),
+  /** Explicit location provenance; stale is never treated as live. */
+  locationStatus: z.enum(["live", "stale", "unknown"]).optional(),
+  lastSeenAt: z.string().datetime().optional(),
 });
 export type VehicleDto = z.infer<typeof VehicleDtoSchema>;
+
+
