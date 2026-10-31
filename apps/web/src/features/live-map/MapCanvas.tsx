@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Live map canvas (docs/05.6, ADR-0010).
  *
  * Geographic rendering: vehicles and job markers are placed by their real
@@ -20,7 +20,8 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
 import { reconcileRoutes, routesChanged } from "./engine/routes";
-import { toGeoJsonCoordinates, toLeafletLatLngs } from "./engine/projection";
+import { toLeafletLatLngs } from "./engine/projection";
+import { routeLegFeatures, type StopStatusMap } from "./engine/route-progress";
 import { markPainted } from "./engine/benchmark";
 import {
   isActive,
@@ -113,65 +114,14 @@ function drawDebugGrid(
   ctx.fillText(`${metres} m grid - debug alignment`, 10, 18);
 }
 
-type StopStatusMap = ReadonlyMap<string, string>;
-
 function routeGeoJson(
   routes: RoutePathLike[],
   stopStatus: StopStatusMap,
 ): GeoJSON.FeatureCollection {
-  const features: Array<GeoJSON.Feature> = [];
-  for (const route of routes) {
-    const waypoints = route.waypoints ?? [];
-    const legs = route.legs ?? [];
-    if (waypoints.length >= 2 && legs.length === waypoints.length - 1) {
-      let nextAssigned = false;
-      for (const [index, leg] of legs.entries()) {
-        const to = waypoints[index + 1];
-        const status = to?.jobStopId ? stopStatus.get(to.jobStopId) : undefined;
-        let legStatus: string;
-        if (status === "completed") {
-          legStatus = "completed";
-        } else if (status === "skipped" || status === "failed") {
-          legStatus = "exception";
-        } else if (!nextAssigned) {
-          legStatus = "next";
-          nextAssigned = true;
-        } else {
-          legStatus = "remaining";
-        }
-        features.push({
-          type: "Feature",
-          properties: {
-            vehicleId: route.vehicleId,
-            driverId: route.driverId ?? "",
-            legId: leg.id,
-            sequence: leg.sequence,
-            status: legStatus,
-          },
-          geometry: {
-            type: "LineString",
-            coordinates: toGeoJsonCoordinates(leg.points),
-          },
-        });
-      }
-      continue;
-    }
-    features.push({
-      type: "Feature",
-      properties: {
-        vehicleId: route.vehicleId,
-        driverId: route.driverId ?? "",
-        legId: "",
-        sequence: 0,
-        status: "route",
-      },
-      geometry: {
-        type: "LineString",
-        coordinates: toGeoJsonCoordinates(route.points),
-      },
-    });
-  }
-  return { type: "FeatureCollection", features };
+  return {
+    type: "FeatureCollection",
+    features: routeLegFeatures(routes, stopStatus) as GeoJSON.Feature[],
+  };
 }
 
 function bearingDeg(
@@ -1148,6 +1098,8 @@ export function MapCanvas({
     </section>
   );
 }
+
+
 
 
 
