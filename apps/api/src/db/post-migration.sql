@@ -1,4 +1,4 @@
-﻿-- Post-migration SQL (idempotent): PostGIS columns/indexes + RLS.
+-- Post-migration SQL (idempotent): PostGIS columns/indexes + RLS.
 -- Applied after drizzle migrations by src/db/apply-post-migration.ts.
 -- Secrets/roles are created by scripts/db-setup.sql (superuser).
 
