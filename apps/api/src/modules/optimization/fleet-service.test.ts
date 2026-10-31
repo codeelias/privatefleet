@@ -187,10 +187,19 @@ describe("fleet optimisation", () => {
     };
     expect(fleet.routeVersion).toBe(approval.version);
     expect(fleet.routes).toHaveLength(proposal.vehicles.length);
+    const allLegIds: string[] = [];
     for (const route of fleet.routes) {
       expect(route.version).toBe(approval.version);
       expect(route.points.length).toBeGreaterThanOrEqual(2);
+      const typed = route as unknown as {
+        waypoints?: Array<{ id: string }>;
+        legs?: Array<{ id: string; fromWaypointId: string; toWaypointId: string }>;
+      };
+      expect(typed.waypoints?.length).toBeGreaterThanOrEqual(2);
+      expect(typed.legs?.length).toBe((typed.waypoints?.length ?? 0) - 1);
+      allLegIds.push(...(typed.legs ?? []).map((leg) => leg.id));
     }
+    expect(new Set(allLegIds).size).toBe(allLegIds.length);
 
     const stopCount = proposal.vehicles.reduce((sum, route) => sum + route.stops.length, 0);
     let storedStops = 0;
@@ -211,6 +220,18 @@ describe("fleet optimisation", () => {
     const again = await approveFleetProposal(runtime, tenantId, proposal.runId);
     expect(again.version).toBe(approval.version);
     expect(again.routeIds).toEqual(approval.routeIds);
+
+    const persistedLegIds: string[] = [];
+    for (const routeId of approval.routeIds) {
+      const rows = (await migrator.sql`
+        SELECT legs FROM routes WHERE id = ${routeId}
+      `) as unknown as Array<{ legs: Array<{ id: string }> }>;
+      const ids = rows[0]?.legs?.map((leg) => leg.id) ?? [];
+      expect(ids.every((id) => id.startsWith(`${routeId}:leg:`))).toBe(true);
+      persistedLegIds.push(...ids);
+    }
+    expect(new Set(persistedLegIds).size).toBe(persistedLegIds.length);
+    expect(persistedLegIds.sort()).toEqual(allLegIds.sort());
   });
 
   it("rejects a stale fleet version and does not publish twice under concurrency", async () => {
@@ -395,6 +416,7 @@ describe("fleet optimisation", () => {
     expect(fleetB.routes).toHaveLength(0);
   });
 });
+
 
 
 
