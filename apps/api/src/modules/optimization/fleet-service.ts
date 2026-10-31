@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Fleet-wide optimisation (docs/10): one VROOM solve over all eligible
  * vehicles and pending shipments, persisted as a proposal; approval
  * publishes every affected route in one transaction against the current
@@ -132,7 +132,7 @@ export async function createFleetProposal(
   return withTenant(handle, tenantId, async (db) => {
     const versionRows = (await db.execute(sql`
       SELECT coalesce(max(version), 1) AS current
-      FROM routes WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress')
+      FROM routes WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress') AND version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})
     `)) as unknown as Array<{ current: number }>;
     const expectedRouteVersion = Number(versionRows[0]?.current ?? 1);
 
@@ -309,7 +309,7 @@ export async function createFleetProposal(
       datasetVersion: DATASET_VERSION,
       // Bump when persisted fleet-result semantics change; old cached results
       // must never be served as valid proposals.
-      resultSchemaVersion: 5,
+      resultSchemaVersion: 7,
       scope: selected ? "subset" : "fleet",
       expectedRouteVersion,
       vehicles,
@@ -351,47 +351,48 @@ export async function createFleetProposal(
         throw new OptimizationError("PLAN_INFEASIBLE");
       }
       const stops: LiveProposalStop[] = [];
-      let arrivalIndex = 0;
-      for (const unit of planned.orderedUnits) {
-        if (unit.kind === "shipment") {
-          const group = pairedEligible.find((candidate) => candidate.jobId === unit.id);
+      const visits: Array<{
+        kind: "shipment" | "job";
+        id: string;
+        role: "pickup" | "delivery" | "job";
+      }> = [];
+      if (planned.orderedVisits) {
+        visits.push(...planned.orderedVisits);
+      } else {
+        for (const unit of planned.orderedUnits) {
+          if (unit.kind === "shipment") {
+            visits.push({ ...unit, role: "pickup" }, { ...unit, role: "delivery" });
+          } else {
+            visits.push({ ...unit, role: "job" });
+          }
+        }
+      }
+      for (const [index, visit] of visits.entries()) {
+        const arrival = planned.stopArrivals[index];
+        if (visit.kind === "shipment") {
+          const group = pairedEligible.find((candidate) => candidate.jobId === visit.id);
           if (!group?.pickup || !group.dropoff) {
             throw new OptimizationError("PLAN_INFEASIBLE");
           }
-          const pickupArrival = planned.stopArrivals[arrivalIndex];
-          const deliveryArrival = planned.stopArrivals[arrivalIndex + 1];
-          stops.push(
-            {
-              jobId: unit.id,
-              jobRef: group.reference,
-              stopId: group.pickup.stop_id,
-              stopType: "pickup",
-              address: group.pickup.address,
-              ...(pickupArrival && pickupArrival > 1_000_000_000
-                ? { arrivalAt: new Date(pickupArrival * 1000).toISOString() }
-                : {}),
-            },
-            {
-              jobId: unit.id,
-              jobRef: group.reference,
-              stopId: group.dropoff.stop_id,
-              stopType: "dropoff",
-              address: group.dropoff.address,
-              ...(deliveryArrival && deliveryArrival > 1_000_000_000
-                ? { arrivalAt: new Date(deliveryArrival * 1000).toISOString() }
-                : {}),
-            },
-          );
-          arrivalIndex += 2;
+          const stop = visit.role === "pickup" ? group.pickup : group.dropoff;
+          stops.push({
+            jobId: visit.id,
+            jobRef: group.reference,
+            stopId: stop.stop_id,
+            stopType: visit.role === "pickup" ? "pickup" : "dropoff",
+            address: stop.address,
+            ...(arrival && arrival > 1_000_000_000
+              ? { arrivalAt: new Date(arrival * 1000).toISOString() }
+              : {}),
+          });
         } else {
-          const group = singleStop.find((candidate) => candidate.jobId === unit.id);
+          const group = singleStop.find((candidate) => candidate.jobId === visit.id);
           const stop = group?.pickup ?? group?.dropoff;
           if (!group || !stop) {
             throw new OptimizationError("PLAN_INFEASIBLE");
           }
-          const arrival = planned.stopArrivals[arrivalIndex];
           stops.push({
-            jobId: unit.id,
+            jobId: visit.id,
             jobRef: group.reference,
             stopId: stop.stop_id,
             stopType: "service",
@@ -400,7 +401,6 @@ export async function createFleetProposal(
               ? { arrivalAt: new Date(arrival * 1000).toISOString() }
               : {}),
           });
-          arrivalIndex += 1;
         }
       }
       routes.push({
@@ -446,14 +446,14 @@ export async function createFleetProposal(
     const baselineRows = (await db.execute(sql`
       SELECT
         (SELECT count(*)::int FROM routes
-          WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress')) AS route_count,
+          WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress') AND version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})) AS route_count,
         (SELECT count(*)::int FROM route_stops rs
           JOIN routes r ON r.id = rs.route_id
-          WHERE r.tenant_id = ${tenantId} AND r.status IN ('published', 'in_progress')) AS assigned_stops,
+          WHERE r.tenant_id = ${tenantId} AND r.status IN ('published', 'in_progress') AND r.version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})) AS assigned_stops,
         (SELECT coalesce(sum(planned_distance_m), 0)::float FROM routes
-          WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress')) AS distance,
+          WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress') AND version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})) AS distance,
         (SELECT coalesce(sum(planned_duration_s), 0)::float FROM routes
-          WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress')) AS duration,
+          WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress') AND version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})) AS duration,
         (SELECT count(*)::int FROM jobs
           WHERE tenant_id = ${tenantId} AND status = 'unassigned') AS unassigned_jobs
     `)) as unknown as Array<{
@@ -693,7 +693,7 @@ export async function approveFleetProposal(
 
     const versionRows = (await db.execute(sql`
       SELECT coalesce(max(version), 1) AS current
-      FROM routes WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress')
+      FROM routes WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress') AND version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})
     `)) as unknown as Array<{ current: number }>;
     const current = Number(versionRows[0]?.current ?? 1);
     const expected = expectedRouteVersion ?? stored.expectedRouteVersion;
@@ -818,6 +818,11 @@ export async function approveFleetProposal(
 
 // Keep the type import referenced for consumers of this module.
 export type { FleetStoredResult };
+
+
+
+
+
 
 
 

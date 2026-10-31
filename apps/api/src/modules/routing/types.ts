@@ -80,11 +80,20 @@ export type VroomUnitRef = {
   id: string;
 };
 
+/** One physical visit in the solved order (pickup and delivery are separate). */
+export type VroomVisitRef = {
+  kind: "shipment" | "job";
+  id: string;
+  role: "pickup" | "delivery" | "job";
+};
+
 export interface VroomSolution {
   /** Ordered shipment ids per vehicle (compatibility view). */
   orderByVehicle: Map<number, string[]>;
   /** Exact solved stop units per vehicle, preserving interleaving. */
   ordersByVehicle: Map<number, VroomUnitRef[]>;
+  /** Exact physical visit sequence, including pickup/delivery split. */
+  visitsByVehicle?: Map<number, VroomVisitRef[]>;
   /** Solver-provided arrival seconds per unit: key "kind:id:role". */
   arrivalsByVehicle: Map<number, Map<string, number>>;
   unassigned: string[];
@@ -139,4 +148,5 @@ export function validateGeometry(points: GeoPoint[], depot: GeoPoint): void {
     throw new RoutingError("ROUTING_INVALID_RESPONSE", "geometry does not start at the depot");
   }
 }
+
 

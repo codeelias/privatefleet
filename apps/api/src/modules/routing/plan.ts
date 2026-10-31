@@ -13,6 +13,7 @@ import {
   type VroomJobInput,
   type VroomShipmentInput,
   type VroomUnitRef,
+  type VroomVisitRef,
   type VroomVehicleInput,
 } from "./types.js";
 
@@ -66,6 +67,12 @@ export interface PlannedVehicle {
   geometry: GeoPoint[];
   distanceMetres: number;
   durationSeconds: number;
+  /** Exact physical visit order (pickup/delivery included separately). */
+  orderedVisits?: Array<{
+    kind: "shipment" | "job";
+    id: string;
+    role: "pickup" | "delivery" | "job";
+  }>;
   /** Waypoint-bounded legs from the routing engine (one per adjacent stop). */
   legs?: Array<{ points: GeoPoint[]; distanceMetres: number; durationSeconds: number }>;
 }
@@ -275,26 +282,37 @@ export async function planFleet(
       continue;
     }
     const arrivals = solution.arrivalsByVehicle.get(route.vehicleId);
+    const fallbackVisits = units.flatMap<VroomVisitRef>((unit) =>
+      unit.kind === "shipment"
+        ? [
+            { ...unit, role: "pickup" as const },
+            { ...unit, role: "delivery" as const },
+          ]
+        : [{ ...unit, role: "job" as const }],
+    );
+    const visits: VroomVisitRef[] =
+      solution.visitsByVehicle?.get(route.vehicleId) ?? fallbackVisits;
     const coordinates: GeoPoint[] = [{ ...vehicle.depot }];
     const stopArrivals: Array<number | undefined> = [];
-    for (const unit of units) {
-      if (unit.kind === "shipment") {
-        const shipment = shipmentById.get(unit.id);
+    for (const visit of visits) {
+      if (visit.kind === "shipment") {
+        const shipment = shipmentById.get(visit.id);
         if (!shipment) {
           throw new RoutingError("ROUTING_INVALID_RESPONSE", "VROOM returned an unknown shipment");
         }
-        coordinates.push({ ...shipment.pickup }, { ...shipment.dropoff });
+        coordinates.push(
+          visit.role === "pickup" ? { ...shipment.pickup } : { ...shipment.dropoff },
+        );
         stopArrivals.push(
-          arrivals?.get(`shipment:${unit.id}:pickup`),
-          arrivals?.get(`shipment:${unit.id}:delivery`),
+          arrivals?.get(`shipment:${visit.id}:${visit.role === "pickup" ? "pickup" : "delivery"}`),
         );
       } else {
-        const job = jobById.get(unit.id);
+        const job = jobById.get(visit.id);
         if (!job) {
           throw new RoutingError("ROUTING_INVALID_RESPONSE", "VROOM returned an unknown job");
         }
         coordinates.push({ ...job.location });
-        stopArrivals.push(arrivals?.get(`job:${unit.id}:job`));
+        stopArrivals.push(arrivals?.get(`job:${visit.id}:job`));
       }
     }
     const geometry = await clients.route(coordinates);
@@ -303,6 +321,7 @@ export async function planFleet(
       vehicleId: route.vehicleId,
       orderedShipmentIds: units.filter((unit) => unit.kind === "shipment").map((unit) => unit.id),
       orderedUnits: units.map((unit) => ({ ...unit })),
+      orderedVisits: visits.map((visit) => ({ ...visit })),
       stopArrivals,
       geometry: geometry.points,
       distanceMetres: geometry.distanceMetres,
@@ -382,6 +401,9 @@ export async function planShipments(
     shipments: request.shipments,
   });
 }
+
+
+
 
 
 

@@ -10,6 +10,7 @@ import {
   type VroomShipmentInput,
   type VroomSolution,
   type VroomUnitRef,
+  type VroomVisitRef,
   type VroomVehicleInput,
 } from "./types.js";
 
@@ -162,6 +163,7 @@ export class VroomClient {
 
     const orderByVehicle = new Map<number, string[]>();
     const ordersByVehicle = new Map<number, VroomUnitRef[]>();
+    const visitsByVehicle = new Map<number, VroomVisitRef[]>();
     const arrivalsByVehicle = new Map<number, Map<string, number>>();
     const routes: VroomSolution["routes"] = [];
     for (const route of payload.routes ?? []) {
@@ -169,6 +171,7 @@ export class VroomClient {
         continue;
       }
       const units: VroomUnitRef[] = [];
+      const visits: VroomVisitRef[] = [];
       const arrivalMap = new Map<string, number>();
       for (const step of route.steps ?? []) {
         if (step.type !== "pickup" && step.type !== "delivery" && step.type !== "job") {
@@ -182,11 +185,17 @@ export class VroomClient {
         if (typeof step.arrival === "number" && Number.isFinite(step.arrival)) {
           arrivalMap.set(key, step.arrival);
         }
+        visits.push({
+          kind: unit.kind,
+          id: unit.id,
+          role: step.type === "job" ? "job" : step.type,
+        });
         if (!units.some((entry) => entry.kind === unit.kind && entry.id === unit.id)) {
           units.push({ ...unit });
         }
       }
       ordersByVehicle.set(route.vehicle, units);
+      visitsByVehicle.set(route.vehicle, visits);
       arrivalsByVehicle.set(route.vehicle, arrivalMap);
       orderByVehicle.set(
         route.vehicle,
@@ -217,6 +226,7 @@ export class VroomClient {
     return {
       orderByVehicle,
       ordersByVehicle,
+      visitsByVehicle,
       arrivalsByVehicle,
       unassigned,
       unassignedReasons,
@@ -224,6 +234,7 @@ export class VroomClient {
     };
   }
 }
+
 
 
 
