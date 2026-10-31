@@ -2,7 +2,9 @@
   "name": "privatefleet",
   "private": true,
   "packageManager": "pnpm@12.15.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
@@ -17,10 +19,8 @@
     "db:seed": "pnpm --filter @privatefleet/api exec tsx src/db/seed.ts"
   },
   "devDependencies": {
+    "babel-preset-expo": "13.2.5",
     "tsx": "^4.19.2",
     "turbo": "^2.3.3"
   }
 }
-
-
-

@@ -9,7 +9,7 @@
  * Optional PF_DEBUG_CA_CERT copies a PEM CA into debug resources for emulator
  * verification; it is never referenced by release builds.
  */
-const { withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
+const { withAndroidManifest, withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -67,6 +67,17 @@ module.exports = function withDebugNetworkSecurityConfig(config) {
     }
     return cfg;
   });
+  // The pilot also ships a release-signed test build so the JS bundle is
+  // embedded (no Metro dependency). The same LAN trust/cleartext config is
+  // applied to the main manifest for that variant. Never use this for a
+  // publicly distributed build.
+  config = withAndroidManifest(config, (cfg) => {
+    const app = cfg.modResults.manifest.application?.[0];
+    if (app) {
+      app.$["android:networkSecurityConfig"] = "@xml/network_security_config";
+    }
+    return cfg;
+  });
   return withDangerousMod(config, [
     "android",
     async (cfg) => {
@@ -89,6 +100,18 @@ module.exports = function withDebugNetworkSecurityConfig(config) {
         path.join(root, "app", "src", "debug", "AndroidManifest.xml"),
         DEBUG_MANIFEST,
       );
+      // Main (all builds) copy for the pilot release variant.
+      const mainXml = path.join(root, "app", "src", "main", "res", "xml");
+      fs.mkdirSync(mainXml, { recursive: true });
+      fs.writeFileSync(
+        path.join(mainXml, "network_security_config.xml"),
+        CONFIG_XML(bundledCa),
+      );
+      if (bundledCa) {
+        const mainRaw = path.join(root, "app", "src", "main", "res", "raw");
+        fs.mkdirSync(mainRaw, { recursive: true });
+        fs.copyFileSync(caPath, path.join(mainRaw, "caddy_root.crt"));
+      }
       return cfg;
     },
   ]);
