@@ -516,9 +516,48 @@ export const tenantTables = [
   geofences,
   geofenceStates,
   trackingTokens,
+  dispatchPolicies,
+  dispatchPolicyOverrides,
 ] as const;
 
 /** Tables isolated by tenant_id (tenants itself keys on id). */
+
+export const dispatchPolicies = pgTable("dispatch_policies", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  preset: text("preset").notNull().default("balanced"),
+  maxDistanceM: integer("max_distance_m").notNull().default(200000),
+  maxTravelTimeS: integer("max_travel_time_s").notNull().default(32400),
+  maxWorkingDurationS: integer("max_working_duration_s").notNull().default(36000),
+  maxVisits: integer("max_visits").notNull().default(50),
+  /** One monotonically increasing revision per tenant, overrides included. */
+  revision: integer("revision").notNull().default(1),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const dispatchPolicyOverrides = pgTable(
+  "dispatch_policy_overrides",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    vehicleId: uuid("vehicle_id")
+      .notNull()
+      .references(() => vehicles.id, { onDelete: "cascade" }),
+    maxDistanceM: integer("max_distance_m"),
+    maxTravelTimeS: integer("max_travel_time_s"),
+    maxWorkingDurationS: integer("max_working_duration_s"),
+    maxVisits: integer("max_visits"),
+  },
+  (table) => [
+    uniqueIndex("dispatch_policy_overrides_vehicle_idx").on(
+      table.tenantId,
+      table.vehicleId,
+    ),
+  ],
+);
 export const tenantScopedTables = [
   users,
   vehicles,
@@ -536,7 +575,10 @@ export const tenantScopedTables = [
   geofences,
   geofenceStates,
   trackingTokens,
+  dispatchPolicies,
+  dispatchPolicyOverrides,
 ] as const;
+
 
 
 
