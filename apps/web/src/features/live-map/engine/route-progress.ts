@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Route leg hierarchy (Stage 2). Pure derivation: no React, no map library.
  * `next` means the first outstanding planned stop, not GPS-inferred progress.
  * Skipped/failed stops are exceptions, never successful completions.

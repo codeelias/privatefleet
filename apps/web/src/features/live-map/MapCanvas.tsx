@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Live map canvas (docs/05.6, ADR-0010).
  *
  * Geographic rendering: vehicles and job markers are placed by their real
