@@ -72,8 +72,15 @@ export async function flush(): Promise<{ ok: boolean; message?: string; conflict
   return flushInFlight;
 }
 
-async function readPhotoBase64(uri: string): Promise<string> {
-  return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+async function readPhotoBase64(uri: string): Promise<string | null> {
+  try {
+    return await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  } catch {
+    // The local file can already be gone after a previous accepted upload
+    // (cleanup removes media). A duplicate queued action must still be able
+    // to dispatch; the server's idempotency/evidence check is authoritative.
+    return null;
+  }
 }
 
 async function removeLocalPhoto(uri: string | undefined): Promise<void> {
@@ -96,19 +103,23 @@ async function uploadEvidence(command: QueuedCommand): Promise<void> {
   }
   if (command.photoUri) {
     const dataBase64 = await readPhotoBase64(command.photoUri);
-    await api.uploadEvidence(command.jobId, command.stopId, {
-      kind: "photo",
-      dataBase64,
-      capturedAt,
-    });
+    if (dataBase64) {
+      await api.uploadEvidence(command.jobId, command.stopId, {
+        kind: "photo",
+        dataBase64,
+        capturedAt,
+      });
+    }
   }
   if (command.failurePhotoUri) {
     const dataBase64 = await readPhotoBase64(command.failurePhotoUri);
-    await api.uploadEvidence(command.jobId, command.stopId, {
-      kind: "failure_photo",
-      dataBase64,
-      capturedAt,
-    });
+    if (dataBase64) {
+      await api.uploadEvidence(command.jobId, command.stopId, {
+        kind: "failure_photo",
+        dataBase64,
+        capturedAt,
+      });
+    }
   }
 }
 
