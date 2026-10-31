@@ -516,8 +516,6 @@ export const tenantTables = [
   geofences,
   geofenceStates,
   trackingTokens,
-  dispatchPolicies,
-  dispatchPolicyOverrides,
 ] as const;
 
 /** Tables isolated by tenant_id (tenants itself keys on id). */
