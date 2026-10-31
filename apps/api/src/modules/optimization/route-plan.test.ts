@@ -47,6 +47,22 @@ describe("route plan builder", () => {
     ).toThrow(RoutePlanError);
   });
 
+  it("keeps leg identities version-scoped and deterministic for the same route", () => {
+    const geometry = [p(51.5, -0.12), p(51.51, -0.11)];
+    const base = {
+      geometry,
+      legs: legsFor(geometry),
+      stops: [{ stopId: "stop-1" }],
+    };
+    const first = buildRoutePlan({ ...base, routeId: "route-v1" });
+    const again = buildRoutePlan({ ...base, routeId: "route-v1" });
+    const nextVersion = buildRoutePlan({ ...base, routeId: "route-v2" });
+    expect(again.legs.map((leg) => leg.id)).toEqual(first.legs.map((leg) => leg.id));
+    expect(nextVersion.legs.map((leg) => leg.id)).not.toEqual(first.legs.map((leg) => leg.id));
+    expect(first.legs[0]!.id).toContain("route-v1");
+    expect(nextVersion.legs[0]!.id).toContain("route-v2");
+  });
+
   it("handles a revisited road/loop without borrowing geometry", () => {
     const geometry = [p(51.5, -0.12), p(51.51, -0.11), p(51.5, -0.12), p(51.52, -0.1)];
     const plan = buildRoutePlan({
@@ -72,5 +88,6 @@ describe("route plan builder", () => {
     expect(plan.legs[0]!.id).not.toBe(plan.legs[1]!.id);
   });
 });
+
 
 
