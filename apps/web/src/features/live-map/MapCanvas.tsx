@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Live map canvas (docs/05.6, ADR-0010).
  *
  * Geographic rendering: vehicles and job markers are placed by their real
@@ -378,6 +378,12 @@ export function MapCanvas({
     () => reconcileRoutes(lastValidRoutesRef.current, state.routes as RoutePathLike[]),
     [state.routes],
   );
+  useEffect(() => {
+    if (selectedDriverId !== null) return;
+    const first = routeSet.routes.find((route) => route.driverId)?.driverId;
+    if (first) setSelectedDriverId(first);
+  }, [routeSet, selectedDriverId]);
+
   const lastRouteSignatureRef = useRef("");
   const headingsRef = useRef<Map<string, { latitude: number; longitude: number; heading: number }>>(
     new Map(),
@@ -693,14 +699,15 @@ export function MapCanvas({
       ]);
     }
     if (map.getLayer("vehicle-routes-line")) {
-      const dimmed = selectedDriverId !== null;
+      // Keep status colours (completed/next/remaining) intact; only fade
+      // routes that are not the selected driver.
       map.setPaintProperty(
         "vehicle-routes-line",
-        "line-color",
-        dimmed ? (mapStyle === "dark" ? "#333333" : "#C7C7CC") : "#276EF1",
+        "line-opacity",
+        selectedDriverId
+          ? ["case", ["==", ["get", "driverId"], selectedDriverId], 1, 0.22]
+          : 0.95,
       );
-      map.setPaintProperty("vehicle-routes-line", "line-width", dimmed ? 3 : 4);
-      map.setPaintProperty("vehicle-routes-line", "line-opacity", dimmed ? 0.6 : 0.95);
     }
   }, [routeSet, ready, selectedDriverId, mapStyle, stopStatusById]);
 
@@ -1087,6 +1094,8 @@ export function MapCanvas({
     </section>
   );
 }
+
+
 
 
 
