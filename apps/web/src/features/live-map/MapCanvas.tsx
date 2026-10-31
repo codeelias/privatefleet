@@ -393,6 +393,9 @@ export function MapCanvas({
     }
   }, [routeSet, selectedDriverId, state.vehicles]);
 
+  const selectedRoute = selectedDriverId
+    ? routeSet.routes.find((route) => route.driverId === selectedDriverId)
+    : undefined;
   const lastRouteSignatureRef = useRef("");
   const headingsRef = useRef<Map<string, { latitude: number; longitude: number; heading: number }>>(
     new Map(),
@@ -1005,6 +1008,37 @@ export function MapCanvas({
               </div>
             );
           })}
+          {selectedRoute?.waypoints
+            ?.filter((waypoint) => waypoint.kind === "job_stop")
+            .map((waypoint, index) => {
+              const position = project(waypoint.location);
+              if (!position) return null;
+              const status = waypoint.jobStopId
+                ? stopStatusById.get(waypoint.jobStopId)
+                : undefined;
+              const tone =
+                status === "completed"
+                  ? "bg-[#16A34A] text-white"
+                  : status === "skipped" || status === "failed"
+                    ? "bg-[#B45309] text-white"
+                    : index === 0
+                      ? "bg-[#276EF1] text-white ring-2 ring-white"
+                      : "bg-white text-[#18181B] border border-[#71717A]";
+              return (
+                <div
+                  key={waypoint.id}
+                  className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
+                  style={{ left: `${position.x}px`, top: `${position.y}px` }}
+                  title={`Stop ${index + 1}${status ? " - " + status : ""}`}
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold shadow ${tone}`}
+                  >
+                    {status === "completed" ? "\u2713" : index + 1}
+                  </span>
+                </div>
+              );
+            })}
           {DEBUG_MAP && (
             <canvas
               ref={debugCanvasRef}
@@ -1114,6 +1148,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 
