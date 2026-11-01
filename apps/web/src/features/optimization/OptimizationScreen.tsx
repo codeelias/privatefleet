@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Route Optimisation Workbench (screen 3, docs/10.2 and handoff section
  * 3): side-by-side baseline vs proposal, honest simulated-result
  * labelling, and a dispatcher approval step before publishing. No fake
@@ -17,6 +17,7 @@ import {
   HttpError,
   type DispatchPolicyView,
   type RecommendationResponse,
+  type WorkRequestView,
 } from "../../shared/api/client";
 import { Panel } from "../../shared/ui/Panel";
 import { StatusChip } from "../../shared/ui/StatusChip";
@@ -92,6 +93,8 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationResponse | null>(null);
   const [recommendationError, setRecommendationError] = useState<string | null>(null);
+  const [workRequests, setWorkRequests] = useState<WorkRequestView[]>([]);
+  const [workRequestError, setWorkRequestError] = useState<string | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [overrideDraft, setOverrideDraft] = useState<
@@ -132,6 +135,29 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
         ),
       );
   }, [live]);
+
+  useEffect(() => {
+    if (!live) return;
+    void api
+      .getWorkRequests()
+      .then(setWorkRequests)
+      .catch((err) =>
+        setWorkRequestError(err instanceof Error ? err.message : "Work requests failed"),
+      );
+  }, [live]);
+
+  async function decideWorkRequest(
+    id: string,
+    decision: "approved" | "declined",
+  ) {
+    setWorkRequestError(null);
+    try {
+      await api.decideWorkRequest(id, decision);
+      setWorkRequests(await api.getWorkRequests());
+    } catch (err) {
+      setWorkRequestError(err instanceof Error ? err.message : "Decision failed");
+    }
+  }
 
   async function savePolicy(input: {
     preset?: "local" | "balanced" | "extended";
@@ -436,7 +462,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
                     return (
                       <div key={vehicle.id} className="grid grid-cols-2 items-end gap-2 md:grid-cols-4">
                         <span className="text-xs text-text-secondary">
-                          {vehicle.registration} Ã‚Â· {driverName}
+                          {vehicle.registration} Ãƒâ€šÃ‚Â· {driverName}
                         </span>
                         <label className="text-xs text-text-secondary">
                           Max km
@@ -523,16 +549,16 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
           {recommendations && (
             <>
               <p className="mt-2 text-xs text-text-secondary">
-                Rates: fuel Â£{(recommendations.economics.fuelPencePerKm / 100).toFixed(2)}/km,
-                vehicle Â£{(recommendations.economics.vehiclePencePerKm / 100).toFixed(2)}/km,
-                driver Â£{(recommendations.economics.driverPencePerHour / 100).toFixed(2)}/h,
+                Rates: fuel Ã‚Â£{(recommendations.economics.fuelPencePerKm / 100).toFixed(2)}/km,
+                vehicle Ã‚Â£{(recommendations.economics.vehiclePencePerKm / 100).toFixed(2)}/km,
+                driver Ã‚Â£{(recommendations.economics.driverPencePerHour / 100).toFixed(2)}/h,
                 max detour {recommendations.economics.maxDetourKm} km.
               </p>
               <div className="mt-2 grid grid-cols-1 gap-1 text-xs md:grid-cols-3">
                 {recommendations.routes.map((route) => (
                   <span key={route.driverId} className="rounded-lg bg-command-raised px-2 py-1">
                     {route.driverName}: {(route.distanceMetres / 1000).toFixed(1)} km,{" "}
-                    Â£{(route.estimatedCostPence / 100).toFixed(2)} estimated cost
+                    Ã‚Â£{(route.estimatedCostPence / 100).toFixed(2)} estimated cost
                   </span>
                 ))}
               </div>
@@ -550,10 +576,10 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusChip tone={item.priority === "stat" ? "danger" : "neutral"} label={item.reference} />
                       <span className="text-sm font-bold text-text-primary">
-                        {item.driverName} Â· {item.registration}
+                        {item.driverName} Ã‚Â· {item.registration}
                       </span>
                       <span className="text-xs text-text-secondary">
-                        +{item.detourKm} km Â· +{item.addedMinutes} min Â· Â£
+                        +{item.detourKm} km Ã‚Â· +{item.addedMinutes} min Ã‚Â· Ã‚Â£
                         {(item.addedCostPence / 100).toFixed(2)} incremental
                       </span>
                     </div>
@@ -579,6 +605,71 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
               </button>
             </>
           )}
+        </Panel>
+      )}
+      {live && (
+        <Panel
+          title="Driver work requests"
+          action={<StatusChip tone={workRequests.some((r) => r.status === "pending") ? "warning" : "success"} label={`${workRequests.filter((r) => r.status === "pending").length} pending`} />}
+        >
+          <p className="text-sm text-text-secondary">
+            A request is the driver asking for more work. Approval records the decision;
+            assigning jobs still happens through optimisation so the route stays valid.
+          </p>
+          {workRequestError && (
+            <p className="mt-2 text-sm text-status-danger">{workRequestError}</p>
+          )}
+          <ul className="mt-3 space-y-2">
+            {workRequests.length === 0 && (
+              <li className="text-sm text-text-secondary">No work requests yet.</li>
+            )}
+            {workRequests.map((request) => (
+              <li
+                key={request.id}
+                className="rounded-lg border border-command-border bg-command-surface px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusChip
+                    tone={request.status === "pending" ? "warning" : request.status === "approved" ? "success" : "neutral"}
+                    label={request.status}
+                  />
+                  <span className="text-sm font-bold text-text-primary">
+                    {request.driverName} · {request.registration ?? "no vehicle"}
+                  </span>
+                  <span className="text-xs text-text-secondary">
+                    route v{request.routeVersion ?? "?"} · policy rev {request.policyRevision ?? "?"}
+                    {request.gpsAgeSeconds !== null
+                      ? ` · GPS ${Math.round(request.gpsAgeSeconds / 60)}m old`
+                      : " · no GPS"}
+                  </span>
+                </div>
+                {request.note && (
+                  <p className="mt-1 text-xs text-text-secondary">“{request.note}”</p>
+                )}
+                {request.status === "pending" && (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void decideWorkRequest(request.id, "approved")}
+                      className="rounded-lg bg-status-success px-2 py-1 text-[11px] font-bold text-on-brand"
+                    >
+                      Approve request
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void decideWorkRequest(request.id, "declined")}
+                      className="rounded-lg border border-command-border px-2 py-1 text-[11px] font-bold text-text-primary"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                )}
+                {request.decisionNote && (
+                  <p className="mt-1 text-xs text-text-secondary">{request.decisionNote}</p>
+                )}
+              </li>
+            ))}
+          </ul>
         </Panel>
       )}
       {live && liveRun && (
@@ -852,6 +943,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
     </div>
   );
 }
+
 
 
 

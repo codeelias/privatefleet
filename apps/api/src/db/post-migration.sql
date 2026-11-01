@@ -41,7 +41,7 @@ BEGIN
     'alerts', 'outbox', 'refresh_tokens', 'idempotency_keys', 'demo_scenarios',
     'location_points', 'routes', 'route_stops', 'optimization_runs',
     'proof_policies', 'stop_evidence', 'geofences', 'geofence_states', 'tracking_tokens',
-    'dispatch_policies', 'dispatch_policy_overrides'
+    'dispatch_policies', 'dispatch_policy_overrides', 'driver_work_requests'
   ]
   LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);

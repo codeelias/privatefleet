@@ -13,6 +13,11 @@ import { approveFleetProposal, createFleetProposal } from "./fleet-service.js";
 import { closeRoute, RouteCloseError } from "./route-close.js";
 import { getAssignmentRecommendations } from "./recommendation-service.js";
 import {
+  decideWorkRequest,
+  listWorkRequests,
+  WorkRequestError,
+} from "../driver/work-requests.js";
+import {
   DispatchPolicyConflict,
   getDispatchPolicy,
   updateDispatchPolicy,
@@ -429,7 +434,49 @@ export function registerOptimizationRoutes(
       const tenantId = request.auth?.tenantId ?? "";
       return getAssignmentRecommendations(handle, tenantId);
     },
+  );
+  app.get("/v1/dispatch/work-requests", { preHandler: guard }, async (request, reply) => {
+    if (!requireDispatcher(request, reply)) return reply;
+    return listWorkRequests(handle, request.auth?.tenantId ?? "");
+  });
+
+  app.post(
+    "/v1/dispatch/work-requests/:requestId/decide",
+    { preHandler: guard },
+    async (request, reply) => {
+      if (!requireDispatcher(request, reply)) return reply;
+      const params = z.object({ requestId: z.string().uuid() }).parse(request.params);
+      const body = z
+        .object({
+          decision: z.enum(["approved", "declined"]),
+          note: z.string().max(300).optional(),
+        })
+        .parse(request.body);
+      try {
+        return await decideWorkRequest(
+          handle,
+          request.auth?.tenantId ?? "",
+          params.requestId,
+          request.auth?.userId ?? "",
+          body.decision,
+          body.note,
+        );
+      } catch (err) {
+        if (err instanceof WorkRequestError) {
+          return reply.status(409).send({
+            type: "https://privatefleet.example/errors/work-request",
+            title: "Work request",
+            status: 409,
+            code: err.code,
+            detail: err.message,
+            uiMessage: "That request was already decided. Refresh the board.",
+          });
+        }
+        throw err;
+      }
+    },
   );}
+
 
 
 

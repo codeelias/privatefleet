@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Expo driver API client: device PIN session, refresh and queue access
  * against the real API. API base is EXPO_PUBLIC_API_URL (Expo inlines
  * EXPO_PUBLIC_* at build time).
@@ -202,6 +202,14 @@ export async function driverLogin(input: {
   return next;
 }
 
+export interface WorkRequestDto {
+  id: string;
+  status: "pending" | "approved" | "declined";
+  requestedAt: string;
+  note: string | null;
+  decisionNote: string | null;
+}
+
 export interface EvidenceUpload {
   kind: "signature" | "photo" | "failure_photo";
   dataBase64?: string;
@@ -210,6 +218,12 @@ export interface EvidenceUpload {
 }
 
 export const api = {
+  getWorkRequest: () => request<WorkRequestDto | null>("/v1/driver/work-requests"),
+  requestMoreWork: (note?: string) =>
+    request<WorkRequestDto>("/v1/driver/work-requests", {
+      method: "POST",
+      body: JSON.stringify(note ? { note } : {}),
+    }),
   uploadEvidence: async (jobId: string, stopId: string, input: EvidenceUpload) => {
     try {
       return await request(`/v1/jobs/${jobId}/stops/${stopId}/evidence`, {
@@ -275,6 +289,7 @@ export const api = {
       body: JSON.stringify({ driverId, reasonCode, note }),
     }),
 };
+
 
 
 

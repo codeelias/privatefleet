@@ -1,4 +1,4 @@
-﻿# PrivateFleet — implemented system, status and runbook
+# PrivateFleet — implemented system, status and runbook
 
 Last updated: 2026-11-01  
 Commit baseline: `f0a44f4`  

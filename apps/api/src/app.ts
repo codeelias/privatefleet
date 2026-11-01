@@ -343,7 +343,7 @@ export function buildApp(config: AppConfig): {
     registerReportRoutes(app, auth, db);
     registerGeofenceRoutes(app, auth, db);
     registerPublicTrackingRoutes(app, auth, db);
-    registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter);
+    registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter, db);
     registerTrackingRoutes(app, auth, bus, db);
     const routingClients =
       config.osrmBaseUrl && config.vroomBaseUrl
@@ -371,6 +371,7 @@ export function buildApp(config: AppConfig): {
 
   return { app, demo, postgres };
 }
+
 
 
 

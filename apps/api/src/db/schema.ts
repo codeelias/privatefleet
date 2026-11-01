@@ -20,6 +20,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const userRoleEnum = pgEnum("user_role", ["owner", "dispatcher", "admin"]);
 export const driverStatusEnum = pgEnum("driver_status", [
@@ -556,6 +557,43 @@ export const dispatchPolicyOverrides = pgTable(
     ),
   ],
 );
+
+export const driverWorkRequests = pgTable(
+  "driver_work_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    driverId: uuid("driver_id")
+      .notNull()
+      .references(() => drivers.id, { onDelete: "cascade" }),
+    vehicleId: uuid("vehicle_id").references(() => vehicles.id, {
+      onDelete: "set null",
+    }),
+    status: text("status").notNull().default("pending"),
+    routeVersion: integer("route_version"),
+    policyRevision: integer("policy_revision"),
+    note: text("note"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decidedBy: uuid("decided_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    decisionNote: text("decision_note"),
+    requestedAt: timestamp("requested_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("driver_work_requests_tenant_status_idx").on(
+      table.tenantId,
+      table.status,
+    ),
+    uniqueIndex("driver_work_requests_pending_uq")
+      .on(table.tenantId, table.driverId)
+      .where(sql`status = 'pending'`),
+  ],
+);
 export const tenantScopedTables = [
   users,
   vehicles,
@@ -575,7 +613,9 @@ export const tenantScopedTables = [
   trackingTokens,
   dispatchPolicies,
   dispatchPolicyOverrides,
+  driverWorkRequests,
 ] as const;
+
 
 
 

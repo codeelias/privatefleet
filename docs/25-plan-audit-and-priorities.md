@@ -153,7 +153,7 @@ risk. It cannot be closed by engineering.
 
 ### P1 — product completeness
 
-7. Driver “Request more jobs” workflow.
+7. Driver “Request more jobs” — request/decision loop deployed; one-click assignment and re-optimisation remains.
 8. Dispatch-origin resolver (depot, driver/dispatcher confirmation, fresh GPS).
 9. One-click “assign recommendation and re-optimise” with atomic publication.
 10. Plain-language unassigned reasons beyond `SOLVER_UNASSIGNED`.

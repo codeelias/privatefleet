@@ -21,7 +21,7 @@ import Svg, { Path } from "react-native-svg";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import { StatusBar } from "expo-status-bar";
-import type { DriverQueue, JobDto, StoredSession } from "./src/api";
+import type { DriverQueue, JobDto, StoredSession, WorkRequestDto } from "./src/api";
 import { api, clearSession, driverLogin, loadSession } from "./src/api";
 import { enqueue, flush, loadQueue } from "./src/queue";
 import { startLocationTracking, stopLocationTracking } from "./src/location";
@@ -121,6 +121,8 @@ export default function App() {
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [recipient, setRecipient] = useState("");
+  const [workRequest, setWorkRequest] = useState<WorkRequestDto | null>(null);
+  const [requestBusy, setRequestBusy] = useState(false);
   const [notes, setNotes] = useState("");
   const [signaturePath, setSignaturePath] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -202,6 +204,14 @@ export default function App() {
       void startLocationTracking();
     }
   }, [session]);
+
+  useEffect(() => {
+    if (screen !== "shift" || !session) return;
+    void api
+      .getWorkRequest()
+      .then(setWorkRequest)
+      .catch(() => undefined);
+  }, [screen, session]);
 
   const submitLogin = async (): Promise<void> => {
     setBusy(true);
@@ -604,6 +614,40 @@ export default function App() {
       >
         <Text style={styles.secondaryButtonText}>
           {session?.driver.status === "on_route" ? "Shift active - tracking on" : "Start shift"}
+        </Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        disabled={requestBusy || workRequest?.status === "pending"}
+        onPress={() => {
+          setRequestBusy(true);
+          setError(null);
+          void api
+            .requestMoreWork()
+            .then(setWorkRequest)
+            .catch((err) =>
+              setError(err instanceof Error ? err.message : "Work request failed"),
+            )
+            .finally(() => setRequestBusy(false));
+        }}
+        style={[
+          styles.secondaryButton,
+          {
+            marginTop: 8,
+            opacity: requestBusy || workRequest?.status === "pending" ? 0.55 : 1,
+          },
+        ]}
+      >
+        <Text style={styles.secondaryButtonText}>
+          {requestBusy
+            ? "Sending request..."
+            : workRequest?.status === "pending"
+              ? "Request sent - waiting for dispatch"
+              : workRequest?.status === "approved"
+                ? "More work approved - dispatch will assign"
+                : workRequest?.status === "declined"
+                  ? "Request declined - ask dispatch"
+                  : "Request more jobs"}
         </Text>
       </Pressable>
       <Pressable

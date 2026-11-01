@@ -213,6 +213,22 @@ export interface RecommendationResponse {
   }>;
   recommendations: AssignmentRecommendation[];
 }
+export interface WorkRequestView {
+  id: string;
+  driverId: string;
+  driverName: string;
+  vehicleId: string | null;
+  registration: string | null;
+  status: string;
+  requestedAt: string;
+  routeVersion: number | null;
+  policyRevision: number | null;
+  note: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  lastGpsAt: string | null;
+  gpsAgeSeconds: number | null;
+}
 export const api = {
   meta: () =>
     rawRequest<{ name: string; version: string; demoMode: boolean; repositoryMode: string }>(
@@ -298,6 +314,12 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
+  getWorkRequests: () => request<WorkRequestView[]>("/v1/dispatch/work-requests"),
+  decideWorkRequest: (id: string, decision: "approved" | "declined", note?: string) =>
+    request<WorkRequestView>(`/v1/dispatch/work-requests/${id}/decide`, {
+      method: "POST",
+      body: JSON.stringify({ decision, ...(note ? { note } : {}) }),
+    }),
   getRecommendations: () => request<RecommendationResponse>("/v1/dispatch/recommendations"),
   closeFleetRoute: (vehicleId: string, version: number) =>
     request<{ routeId: string; freedJobs: number; status: string }>(
@@ -349,6 +371,7 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 
 

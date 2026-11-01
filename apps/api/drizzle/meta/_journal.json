@@ -85,6 +85,13 @@
       "when": 1793484440347,
       "tag": "0011_high_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793549449102,
+      "tag": "0012_curved_secret_warriors",
+      "breakpoints": true
     }
   ]
 }

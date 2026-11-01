@@ -4,6 +4,13 @@
  * fleet module and enforce the token's driver identity there.
  */
 import type { FastifyInstance, FastifyReply } from "fastify";
+import { z } from "zod";
+import type { DbHandle } from "../../db/client.js";
+import {
+  createWorkRequest,
+  getDriverWorkRequest,
+  WorkRequestError,
+} from "./work-requests.js";
 import { AuthError, type AuthService } from "../auth/service.js";
 import { makeAuthGuard } from "../auth/guard.js";
 import type { AuthAttemptLimiter } from "../auth/rate-limit.js";
@@ -32,6 +39,7 @@ export function registerDriverDeviceRoutes(
   auth: AuthService,
   fleet: PgFleetService,
   limiter: AuthAttemptLimiter,
+  handle: DbHandle,
 ): void {
   const guard = makeAuthGuard(auth);
 
@@ -88,4 +96,43 @@ export function registerDriverDeviceRoutes(
     const tenantId = request.auth?.tenantId ?? "";
     return fleet.startShift(tenantId, driverId);
   });
-}
+
+  app.get("/v1/driver/work-requests", { preHandler: guard }, async (request, reply) => {
+    const driverId = requireDriver(request, reply);
+    if (!driverId) return reply;
+    return getDriverWorkRequest(handle, request.auth?.tenantId ?? "", driverId);
+  });
+
+  app.post("/v1/driver/work-requests", { preHandler: guard }, async (request, reply) => {
+    const driverId = requireDriver(request, reply);
+    if (!driverId) return reply;
+    const body = z
+      .object({ note: z.string().max(300).optional() })
+      .parse(request.body ?? {});
+    try {
+      return await createWorkRequest(
+        handle,
+        request.auth?.tenantId ?? "",
+        driverId,
+        body.note,
+      );
+    } catch (err) {
+      if (err instanceof WorkRequestError) {
+        const status = err.code === "WORK_REQUEST_EXISTS" ? 409 : 422;
+        return reply.status(status).send({
+          type: "https://privatefleet.example/errors/work-request",
+          title: "Work request",
+          status,
+          code: err.code,
+          detail: err.message,
+          uiMessage:
+            err.code === "WORK_REQUEST_EXISTS"
+              ? "You already have a pending request. Dispatch will respond shortly."
+              : "You cannot request more work in your current state.",
+        });
+      }
+      throw err;
+    }
+  });}
+
+
