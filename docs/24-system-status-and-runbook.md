@@ -199,7 +199,7 @@ Serve config persists. Phone must be signed into the same tailnet account.
 4. **Historical published routes** can remain for drivers omitted from a later
    plan. Manual closure and automatic completion now reduce this, but a
    migration is needed to close old published routes.
-5. Current northstar plan: **v121**, Balanced revision 42, all G jobs assigned.
+5. Current northstar plan: **v121**, Local revision 42; 45 assigned, 14 completed, 15 unassigned; no orphan assignments.
 
 ---
 
