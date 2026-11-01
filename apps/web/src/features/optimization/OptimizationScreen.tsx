@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Route Optimisation Workbench (screen 3, docs/10.2 and handoff section
  * 3): side-by-side baseline vs proposal, honest simulated-result
  * labelling, and a dispatcher approval step before publishing. No fake
@@ -16,6 +16,7 @@ import {
   api,
   HttpError,
   type DispatchPolicyView,
+  type RecommendationResponse,
 } from "../../shared/api/client";
 import { Panel } from "../../shared/ui/Panel";
 import { StatusChip } from "../../shared/ui/StatusChip";
@@ -89,6 +90,8 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
   const [error, setError] = useState<string | null>(null);
   const [policy, setPolicy] = useState<DispatchPolicyView | null>(null);
   const [policyError, setPolicyError] = useState<string | null>(null);
+  const [recommendations, setRecommendations] = useState<RecommendationResponse | null>(null);
+  const [recommendationError, setRecommendationError] = useState<string | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [overrideDraft, setOverrideDraft] = useState<
@@ -116,6 +119,18 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
         });
       })
       .catch((err) => setPolicyError(err instanceof Error ? err.message : "Policy load failed"));
+  }, [live]);
+
+  useEffect(() => {
+    if (!live) return;
+    void api
+      .getRecommendations()
+      .then(setRecommendations)
+      .catch((err) =>
+        setRecommendationError(
+          err instanceof Error ? err.message : "Recommendations failed",
+        ),
+      );
   }, [live]);
 
   async function savePolicy(input: {
@@ -421,7 +436,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
                     return (
                       <div key={vehicle.id} className="grid grid-cols-2 items-end gap-2 md:grid-cols-4">
                         <span className="text-xs text-text-secondary">
-                          {vehicle.registration} · {driverName}
+                          {vehicle.registration} Ã‚Â· {driverName}
                         </span>
                         <label className="text-xs text-text-secondary">
                           Max km
@@ -493,6 +508,79 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
         </Panel>
       )}
 
+      {live && (
+        <Panel
+          title="Cost-aware recommendations"
+          action={<StatusChip tone="success" label="advisory only" />}
+        >
+          <p className="text-sm text-text-secondary">
+            Fuel, vehicle running cost and driver wage are estimated per route.
+            Recommendations are suggestions for the dispatcher; nothing is assigned automatically.
+          </p>
+          {recommendationError && (
+            <p className="mt-2 text-sm text-status-danger">{recommendationError}</p>
+          )}
+          {recommendations && (
+            <>
+              <p className="mt-2 text-xs text-text-secondary">
+                Rates: fuel Â£{(recommendations.economics.fuelPencePerKm / 100).toFixed(2)}/km,
+                vehicle Â£{(recommendations.economics.vehiclePencePerKm / 100).toFixed(2)}/km,
+                driver Â£{(recommendations.economics.driverPencePerHour / 100).toFixed(2)}/h,
+                max detour {recommendations.economics.maxDetourKm} km.
+              </p>
+              <div className="mt-2 grid grid-cols-1 gap-1 text-xs md:grid-cols-3">
+                {recommendations.routes.map((route) => (
+                  <span key={route.driverId} className="rounded-lg bg-command-raised px-2 py-1">
+                    {route.driverName}: {(route.distanceMetres / 1000).toFixed(1)} km,{" "}
+                    Â£{(route.estimatedCostPence / 100).toFixed(2)} estimated cost
+                  </span>
+                ))}
+              </div>
+              <ul className="mt-3 space-y-2">
+                {recommendations.recommendations.length === 0 && (
+                  <li className="text-sm text-text-secondary">
+                    No unassigned job is close enough to an existing route under the current policy.
+                  </li>
+                )}
+                {recommendations.recommendations.map((item) => (
+                  <li
+                    key={`${item.jobId}:${item.driverId}`}
+                    className="rounded-lg border border-command-border bg-command-surface px-3 py-2"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusChip tone={item.priority === "stat" ? "danger" : "neutral"} label={item.reference} />
+                      <span className="text-sm font-bold text-text-primary">
+                        {item.driverName} Â· {item.registration}
+                      </span>
+                      <span className="text-xs text-text-secondary">
+                        +{item.detourKm} km Â· +{item.addedMinutes} min Â· Â£
+                        {(item.addedCostPence / 100).toFixed(2)} incremental
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-text-secondary">{item.reason}</p>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() =>
+                  void api
+                    .getRecommendations()
+                    .then(setRecommendations)
+                    .catch((err) =>
+                      setRecommendationError(
+                        err instanceof Error ? err.message : "Recommendations failed",
+                      ),
+                    )
+                }
+                className="mt-3 rounded-xl border border-command-border px-3 py-2 text-sm font-bold text-text-primary"
+              >
+                Refresh recommendations
+              </button>
+            </>
+          )}
+        </Panel>
+      )}
       {live && liveRun && (
         <>
           <div className="rounded-xl border border-brand-primary/40 bg-brand-primary/10 px-4 py-3">
@@ -764,6 +852,8 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
     </div>
   );
 }
+
+
 
 
 

@@ -180,6 +180,39 @@ export interface DispatchPolicyView {
   enabled: boolean;
 }
 
+export interface AssignmentRecommendation {
+  jobId: string;
+  reference: string;
+  priority: string;
+  driverId: string;
+  driverName: string;
+  vehicleId: string;
+  registration: string;
+  detourKm: number;
+  addedMinutes: number;
+  addedCostPence: number;
+  currentRouteCostPence: number;
+  reason: string;
+}
+
+export interface RecommendationResponse {
+  generatedAt: string;
+  economics: {
+    fuelPencePerKm: number;
+    vehiclePencePerKm: number;
+    driverPencePerHour: number;
+    maxDetourKm: number;
+  };
+  routes: Array<{
+    driverId: string;
+    driverName: string;
+    registration: string;
+    distanceMetres: number;
+    durationSeconds: number;
+    estimatedCostPence: number;
+  }>;
+  recommendations: AssignmentRecommendation[];
+}
 export const api = {
   meta: () =>
     rawRequest<{ name: string; version: string; demoMode: boolean; repositoryMode: string }>(
@@ -265,6 +298,7 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
+  getRecommendations: () => request<RecommendationResponse>("/v1/dispatch/recommendations"),
   closeFleetRoute: (vehicleId: string, version: number) =>
     request<{ routeId: string; freedJobs: number; status: string }>(
       "/v1/fleet/routes/close",
@@ -315,6 +349,7 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 
 

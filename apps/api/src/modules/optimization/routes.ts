@@ -11,6 +11,7 @@ import { RoutingError, type RoutingClients } from "../routing/types.js";
 import { approveProposal, createProposal, OptimizationError } from "./service.js";
 import { approveFleetProposal, createFleetProposal } from "./fleet-service.js";
 import { closeRoute, RouteCloseError } from "./route-close.js";
+import { getAssignmentRecommendations } from "./recommendation-service.js";
 import {
   DispatchPolicyConflict,
   getDispatchPolicy,
@@ -419,7 +420,17 @@ export function registerOptimizationRoutes(
       }
       throw err;
     }
-  });}
+  });
+  app.get(
+    "/v1/dispatch/recommendations",
+    { preHandler: guard },
+    async (request, reply) => {
+      if (!requireDispatcher(request, reply)) return reply;
+      const tenantId = request.auth?.tenantId ?? "";
+      return getAssignmentRecommendations(handle, tenantId);
+    },
+  );}
+
 
 
 

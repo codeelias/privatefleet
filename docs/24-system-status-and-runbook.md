@@ -1,4 +1,4 @@
-# PrivateFleet — implemented system, status and runbook
+﻿# PrivateFleet â€” implemented system, status and runbook
 
 Last updated: 2026-11-01  
 Commit baseline: `f0a44f4`  
@@ -14,17 +14,17 @@ two.
 
 ```text
 Android driver app (Galaxy S22)
-  ├── LAN:   https://api.privatefleet.home.arpa
-  └── WAN:   https://pf-node.tail060a86.ts.net  (Tailscale Serve)
-                    │
+  â”œâ”€â”€ LAN:   https://api.privatefleet.home.arpa
+  â””â”€â”€ WAN:   https://pf-node.tail060a86.ts.net  (Tailscale Serve)
+                    â”‚
 Windows host 192.168.1.128
-  ├── Caddy :443  app.privatefleet.home.arpa / api.privatefleet.home.arpa
-  ├── API Fastify 127.0.0.1:4000
-  ├── PostgreSQL/PostGIS 127.0.0.1:5432  (never exposed)
-  ├── OSRM 127.0.0.1:5000
-  ├── VROOM 127.0.0.1:3000 (Docker, digest-pinned)
-  ├── dnsmasq (Docker) :53 for *.privatefleet.home.arpa
-  └── Tailscale node pf-node (100.76.118.22)
+  â”œâ”€â”€ Caddy :443  app.privatefleet.home.arpa / api.privatefleet.home.arpa
+  â”œâ”€â”€ API Fastify 127.0.0.1:4000
+  â”œâ”€â”€ PostgreSQL/PostGIS 127.0.0.1:5432  (never exposed)
+  â”œâ”€â”€ OSRM 127.0.0.1:5000
+  â”œâ”€â”€ VROOM 127.0.0.1:3000 (Docker, digest-pinned)
+  â”œâ”€â”€ dnsmasq (Docker) :53 for *.privatefleet.home.arpa
+  â””â”€â”€ Tailscale node pf-node (100.76.118.22)
 ```
 
 Dispatcher web: `https://app.privatefleet.home.arpa`.
@@ -55,13 +55,14 @@ Dispatcher web: `https://app.privatefleet.home.arpa`.
 | External access via Tailscale Serve | Deployed | `{"status":"ok"}` from mobile data |
 | Local DNS via dnsmasq | Deployed | app/api resolve to 192.168.1.128 |
 | Customer tracking, alerts, reports | Existing modules | earlier phases |
+| Cost-aware assignment recommendations (fuel, running cost, wage, detour) | Deployed, advisory only | `/v1/dispatch/recommendations`, `f0a44f4`+ |
 
 ### Route lifecycle (current behaviour)
 
-- `arrive` → stop `arrived`, route moves to `in_progress`.
-- `complete` / `skip` → stop terminal, then:
-  - if the route still has open stops → stays `in_progress`;
-  - if no open stops → route becomes `completed`;
+- `arrive` â†’ stop `arrived`, route moves to `in_progress`.
+- `complete` / `skip` â†’ stop terminal, then:
+  - if the route still has open stops â†’ stays `in_progress`;
+  - if no open stops â†’ route becomes `completed`;
   - driver becomes `available` when no other published/in-progress route exists;
   - outbox event `route.completed` is written.
 - Dispatcher can explicitly close a route:
@@ -80,7 +81,7 @@ Extended:       300 km / 11 h travel / 12 h working / 70 visits
 
 - One tenant revision covers preset, advanced values and all vehicle overrides.
 - Optimisation and approval use the same revision.
-- Working duration is `travel + 5 min × visits` — an estimate, **not** legal
+- Working duration is `travel + 5 min Ã— visits` â€” an estimate, **not** legal
   drivers' hours compliance.
 - A new job set is not compared against the old baseline for distance/coverage;
   only identical job sets are regression-checked. Hard limits always apply.
@@ -89,7 +90,7 @@ Extended:       300 km / 11 h travel / 12 h working / 70 visits
 
 ```text
 Tailscale host:  pf-node  (100.76.118.22)
-Serve:           https://pf-node.tail060a86.ts.net → 127.0.0.1:4000
+Serve:           https://pf-node.tail060a86.ts.net â†’ 127.0.0.1:4000
 Phone:           g (100.124.180.48), galaxy-s22 (100.123.137.123)
 ```
 
@@ -103,7 +104,7 @@ Phone:           g (100.124.180.48), galaxy-s22 (100.123.137.123)
 
 ```text
 Container: privatefleet-dns (dnsmasq), port 53 UDP/TCP
-Records:   *.privatefleet.home.arpa → 192.168.1.128
+Records:   *.privatefleet.home.arpa â†’ 192.168.1.128
 Upstream:  192.168.1.254 (BT Hub)
 ```
 
@@ -138,7 +139,7 @@ C:\privatefleet\hard-restart-api.ps1     # kills tsx then starts scheduled task
 curl.exe -s http://127.0.0.1:4000/healthz
 ```
 
-Scheduled task: **PrivateFleet API** → `start-api.ps1` → `tsx src/server.ts`.
+Scheduled task: **PrivateFleet API** â†’ `start-api.ps1` â†’ `tsx src/server.ts`.
 If the API exits, read `C:\PrivateFleet\logs\api.log` and
 `C:\Temp\api-start-full.log`. A common failure is deploying `fleet-service.ts`
 without its new import (`dispatch-policy.ts`).
@@ -187,7 +188,7 @@ Serve config persists. Phone must be signed into the same tailnet account.
 ## 5. Known data issues
 
 1. **Duplicate driver names across tenants.** Two `Sarah Reed` records
-   (`8fee…` northstar, `9581…` load/E2E) and two `Tom Cole` records. Use the
+   (`8feeâ€¦` northstar, `9581â€¦` load/E2E) and two `Tom Cole` records. Use the
    record that owns the route you are working with.
 2. **Duplicate job references.** `J-191` and `J-202` exist twice in northstar
    with different states; one cause of the stuck arrived stop. A unique
@@ -206,7 +207,7 @@ Serve config persists. Phone must be signed into the same tailnet account.
 
 | Item | Status |
 |---|---|
-| Driver “Request more jobs” workflow | Not implemented |
+| Driver â€œRequest more jobsâ€ workflow | Not implemented |
 | Automatic partial assignment policy explanation (beyond solver `SOLVER_UNASSIGNED`) | Partial |
 | Intelligent dispatch-origin resolver: depot, driver/dispatcher confirmation, fresh-GPS request | Not implemented |
 | Native background GPS / screen-off tracking | Foreground only |
@@ -217,7 +218,7 @@ Serve config persists. Phone must be signed into the same tailnet account.
 | Vehicle override UI automated test | Not implemented |
 | Backup restore drill | Not implemented |
 | Tailscale ACL/MFA hardening | Tenant default, not reviewed |
-| 30-day reliability evidence for £10K valuation | Not collected |
+| 30-day reliability evidence for Â£10K valuation | Not collected |
 
 ---
 
@@ -255,3 +256,32 @@ c38db10  feat(policy): vehicle override editor
 69ee6eb  fix(driver): duplicate evidence is success
 f0a44f4  feat(routes): auto-complete routes/release drivers
 ```
+
+## 9. Cost-aware recommendations
+
+Endpoint: `GET /v1/dispatch/recommendations` (dispatcher only).
+Advisory only; it never assigns or publishes.
+
+Incremental cost per candidate job:
+
+```text
+added fuel       = detour km × FUEL_PENCE_PER_KM
+added vehicle    = detour km × VEHICLE_PENCE_PER_KM
+added wage       = added minutes / 60 × DRIVER_PENCE_PER_HOUR
+```
+
+Defaults (environment-overridable): fuel 12p/km, vehicle 8p/km,
+driver £15/h, maximum detour 4 km.
+
+A job is only recommended when:
+
+- pickup and drop-off are both within the detour threshold of an existing
+  published route,
+- the route stays within its visit, distance, travel-time and working-time
+  policy limits.
+
+Each suggestion includes the driver, vehicle, added km, added minutes,
+incremental £ cost, current route estimated cost and a plain-language reason.
+The dispatcher decides whether to assign. Detour estimates are geometric with a
+1.4 road factor, not a re-optimisation; they are directional, not a substitute
+for running the solver.
