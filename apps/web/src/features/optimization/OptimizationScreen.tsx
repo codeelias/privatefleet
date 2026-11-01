@@ -91,6 +91,9 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [advanced, setAdvanced] = useState(false);
+  const [overrideDraft, setOverrideDraft] = useState<
+    Record<string, { km: string; visits: string }>
+  >({});
   const [draft, setDraft] = useState({
     km: 200,
     travelHours: 9,
@@ -131,6 +134,17 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
         ...input,
       });
       setPolicy(next);
+      setOverrideDraft(
+        Object.fromEntries(
+          next.overrides.map((override) => [
+            override.vehicleId,
+            {
+              km: override.maxDistanceM ? String(Math.round(override.maxDistanceM / 1000)) : "",
+              visits: override.maxVisits ? String(override.maxVisits) : "",
+            },
+          ]),
+        ),
+      );
       setDraft({
         km: Math.round(next.maxDistanceM / 1000),
         travelHours: Math.round(next.maxTravelTimeS / 3600),
@@ -392,10 +406,87 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
                 >
                   {savingPolicy ? "Saving..." : "Save custom limits"}
                 </button>
-                <span className="text-xs text-text-secondary">
-                  Working duration includes travel, service and waiting; it is not
-                  the same as the travel-time limit.
-                </span>
+              </div>
+              <div className="col-span-2 mt-4 border-t border-command-border pt-3 md:col-span-4">
+                <h4 className="text-sm font-bold text-text-primary">Vehicle overrides</h4>
+                <p className="mb-2 text-xs text-text-secondary">
+                  Leave a field blank to inherit the company limits. Changes increment the same policy revision.
+                </p>
+                <div className="space-y-2">
+                  {state.vehicles.map((vehicle) => {
+                    const driverName =
+                      state.drivers.find((driver) => driver.id === vehicle.driverId)?.fullName ??
+                      "Unassigned";
+                    const entry = overrideDraft[vehicle.id] ?? { km: "", visits: "" };
+                    return (
+                      <div key={vehicle.id} className="grid grid-cols-2 items-end gap-2 md:grid-cols-4">
+                        <span className="text-xs text-text-secondary">
+                          {vehicle.registration} · {driverName}
+                        </span>
+                        <label className="text-xs text-text-secondary">
+                          Max km
+                          <input
+                            type="number"
+                            min={1}
+                            value={entry.km}
+                            onChange={(event) =>
+                              setOverrideDraft({
+                                ...overrideDraft,
+                                [vehicle.id]: { ...entry, km: event.target.value },
+                              })
+                            }
+                            className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                          />
+                        </label>
+                        <label className="text-xs text-text-secondary">
+                          Visits
+                          <input
+                            type="number"
+                            min={1}
+                            value={entry.visits}
+                            onChange={(event) =>
+                              setOverrideDraft({
+                                ...overrideDraft,
+                                [vehicle.id]: { ...entry, visits: event.target.value },
+                              })
+                            }
+                            className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                          />
+                        </label>
+                        <span className="text-[11px] text-text-secondary">
+                          {entry.km || entry.visits
+                            ? `Override: ${entry.km || "inherit"} km / ${entry.visits || "inherit"} visits`
+                            : "Inherits company limits"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  disabled={savingPolicy}
+                  onClick={() => {
+                    if (!policy) return;
+                    void api
+                      .updateDispatchPolicy({
+                        expectedRevision: policy.revision,
+                        overrides: Object.entries(overrideDraft)
+                          .filter(([, value]) => value.km || value.visits)
+                          .map(([vehicleId, value]) => ({
+                            vehicleId,
+                            ...(value.km ? { maxDistanceM: Number(value.km) * 1000 } : {}),
+                            ...(value.visits ? { maxVisits: Number(value.visits) } : {}),
+                          })),
+                      })
+                      .then((next) => setPolicy(next))
+                      .catch((err) =>
+                        setPolicyError(err instanceof Error ? err.message : "Override save failed"),
+                      );
+                  }}
+                  className="mt-3 rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand"
+                >
+                  Save vehicle overrides
+                </button>
               </div>
             </div>
           )}
@@ -673,6 +764,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
     </div>
   );
 }
+
 
 
 

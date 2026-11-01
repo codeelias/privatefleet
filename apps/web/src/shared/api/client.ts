@@ -253,6 +253,13 @@ export const api = {
     maxTravelTimeS?: number;
     maxWorkingDurationS?: number;
     maxVisits?: number;
+    overrides?: Array<{
+      vehicleId: string;
+      maxDistanceM?: number;
+      maxTravelTimeS?: number;
+      maxWorkingDurationS?: number;
+      maxVisits?: number;
+    }>;
   }) =>
     request<DispatchPolicyView>("/v1/dispatch-policy", {
       method: "PATCH",
@@ -300,6 +307,7 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 
 
