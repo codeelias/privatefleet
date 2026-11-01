@@ -165,7 +165,175 @@ html[data-map-theme="light"] {
   background: #b8afa0;
   border-radius: 999px;
 }
+/* ------------------------------------------------------------------
+   Live-map HUD: inset instrument cards, centered dock, bounded sheets.
+   These are map chrome, not generic app cards: compact by default,
+   internal scrolling, and never allowed to cover the map centre.
+   ------------------------------------------------------------------ */
+.pf-map-hud {
+  background: color-mix(in srgb, var(--pf-panel-bg) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pf-panel-border) 82%, transparent);
+  border-radius: 14px;
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  color: var(--pf-panel-text);
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+}
+.pf-map-hud__header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 4px 12px;
+}
+.pf-map-hud__scroll {
+  max-height: min(52dvh, 430px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--pf-panel-border) transparent;
+}
+.pf-map-hud__scroll::-webkit-scrollbar { width: 6px; }
+.pf-map-hud__scroll::-webkit-scrollbar-thumb {
+  background: var(--pf-panel-border);
+  border-radius: 999px;
+}
+.pf-icon-button {
+  display: inline-flex;
+  min-height: 26px;
+  min-width: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: var(--pf-panel-muted);
+  transition: background 150ms ease, color 150ms ease;
+}
+.pf-icon-button:hover {
+  background: var(--pf-panel-raised);
+  color: var(--pf-panel-text);
+}
+.pf-map-hud .text-text-primary,
+.pf-map-dock .text-text-primary { color: var(--pf-panel-text); }
+.pf-map-hud .text-text-secondary,
+.pf-map-dock .text-text-secondary { color: var(--pf-panel-muted); }
+.pf-map-hud .border-command-border,
+.pf-map-hud .border-command-border\/70,
+.pf-map-dock .border-command-border,
+.pf-map-dock .border-command-border\/70 { border-color: var(--pf-panel-border); }
+.pf-map-hud .bg-command-raised,
+.pf-map-dock .bg-command-raised { background: var(--pf-panel-raised); }
+.pf-map-hud .bg-command-raised\/60 {
+  background: color-mix(in srgb, var(--pf-panel-raised) 72%, transparent);
+  color: var(--pf-panel-text);
+}
+.pf-map-hud .text-brand-ink { color: var(--color-brand-primary); }
 
+/* The queue is a taskbar dock: a small centred icon when minimised,
+   a bounded popover when open. It never spans the map edge to edge. */
+.pf-map-dock {
+  pointer-events: auto;
+  display: flex;
+  width: auto;
+  max-width: min(460px, calc(100vw - 1.5rem));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--pf-panel-border) 86%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pf-panel-bg) 94%, transparent);
+  color: var(--pf-panel-text);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px) saturate(1.08);
+  -webkit-backdrop-filter: blur(16px) saturate(1.08);
+  transition: border-radius 160ms ease, width 160ms ease;
+}
+.pf-map-dock--open {
+  width: min(460px, calc(100vw - 1.5rem));
+  border-radius: 14px;
+}
+.pf-map-dock__trigger {
+  display: flex;
+  min-height: 40px;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 8px;
+  text-align: left;
+}
+.pf-map-dock:not(.pf-map-dock--open) .pf-map-dock__trigger {
+  width: auto;
+  gap: 6px;
+  padding: 0 9px 0 7px;
+}
+.pf-dock-mark {
+  display: inline-flex;
+  height: 26px;
+  width: 26px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  background: var(--pf-panel-raised);
+  color: var(--pf-panel-text);
+}
+.pf-dock-count {
+  min-width: 18px;
+  border-radius: 999px;
+  background: var(--pf-panel-raised);
+  padding: 1px 5px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--pf-panel-text);
+}
+.pf-map-dock__body {
+  max-height: min(30dvh, 220px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: 1px solid color-mix(in srgb, var(--pf-panel-border) 70%, transparent);
+  animation: pf-dock-rise 150ms ease-out;
+}
+.pf-map-dock__body::-webkit-scrollbar { width: 6px; }
+.pf-map-dock__body::-webkit-scrollbar-thumb {
+  background: var(--pf-panel-border);
+  border-radius: 999px;
+}
+@keyframes pf-dock-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Assignment/POD sheet: bounded to the viewport, body scrolls, header stays. */
+.pf-modal-sheet {
+  display: flex;
+  width: 100%;
+  max-width: 32rem;
+  max-height: calc(100dvh - 1.5rem);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-command-border);
+  border-radius: 16px;
+  background: var(--color-command-surface);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+.pf-modal-sheet__body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+@media (max-width: 640px) {
+  .pf-modal-sheet {
+    max-height: calc(100dvh - 0.75rem);
+    border-radius: 16px 16px 0 0;
+  }
+}
 
 
 

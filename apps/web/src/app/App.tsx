@@ -282,6 +282,9 @@ function Dashboard({
     state.vehicles.find((vehicle) => vehicle.driverId === focusedDriverId) ?? state.vehicles[0];
   const selectedDriver = state.drivers.find((d) => d.id === selectedVehicle?.driverId);
   const selectedJob = state.jobs.find((j) => j.assignedVehicleId === selectedVehicle?.id);
+  const selectedRoute = state.routes.find(
+    (route) => route.vehicleId === selectedVehicle?.id,
+  );
   const nextStop = selectedJob?.stops.find((s) => s.status !== "completed");
   const selectedInitials = (selectedDriver?.fullName ?? "No vehicle")
     .split(" ")
@@ -481,195 +484,213 @@ function Dashboard({
                     onSelectDriver={setFocusedDriverId}
                   />
 
-                  {/* Floating selected-vehicle panel: expanded, compact, or closed. */}
-                  {vehiclePanel !== "closed" ? (
-                    <aside className="pointer-events-none absolute left-5 top-4 z-30 hidden w-[280px] lg:block">
-                      <div className="pf-floating-panel pf-panel-scroll pointer-events-auto overflow-hidden rounded-2xl">
-                        <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-text-secondary">
-                            Selected vehicle
+                  {/* Inset map HUD: selected vehicle stays inside the map edge. */}
+                {vehiclePanel !== "closed" ? (
+                  <aside className="pointer-events-none absolute left-5 top-5 z-30 hidden w-[268px] max-w-[calc(100%-1.5rem)] md:block">
+                    <div className="pf-map-hud pointer-events-auto overflow-hidden">
+                      <div className="pf-map-hud__header">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden="true" />
+                          <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
+                            Vehicle
                           </p>
-                          <div className="flex items-center gap-0.5">
-                            <button
-                              type="button"
-                              onClick={() => setVehiclePanel(vehiclePanel === "expanded" ? "compact" : "expanded")}
-                              aria-label={vehiclePanel === "expanded" ? "Minimise selected vehicle" : "Expand selected vehicle"}
-                              className="min-h-7 rounded-md px-1.5 text-[10px] font-medium text-text-secondary transition-colors hover:bg-command-raised hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                            >
-                              {vehiclePanel === "expanded" ? "Minimise" : "Expand"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setVehiclePanel("closed")}
-                              aria-label="Close selected vehicle"
-                              className="min-h-7 rounded-md px-1.5 text-[10px] font-medium text-text-secondary transition-colors hover:bg-command-raised hover:text-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                            >
-                              Close
-                            </button>
-                          </div>
                         </div>
-                        {vehiclePanel === "compact" ? (
+                        <div className="flex items-center gap-0.5">
                           <button
                             type="button"
-                            onClick={() => setVehiclePanel("expanded")}
-                            className="flex w-full items-start gap-2.5 px-3.5 pb-3 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
-                            aria-label="Expand selected vehicle details"
+                            onClick={() => setVehiclePanel(vehiclePanel === "expanded" ? "compact" : "expanded")}
+                            aria-label={vehiclePanel === "expanded" ? "Minimise selected vehicle" : "Expand selected vehicle"}
+                            title={vehiclePanel === "expanded" ? "Minimise" : "Expand"}
+                            className="pf-icon-button focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
                           >
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-[11px] font-bold text-brand-ink">
-                              {selectedInitials}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13px] font-semibold leading-tight">
-                                {selectedDriver?.fullName ?? "No vehicle selected"}
-                              </span>
-                              <span className="mt-0.5 block text-[10px] text-text-secondary">
-                                {selectedVehicle
-                                  ? `${selectedVehicle.registration} ${"\u00b7"} ${selectedVehicle.stale ? "GPS stale" : selectedVehicle.status.replace("_", " ")}`
-                                  : "No vehicles on shift"}
-                              </span>
-                              <span className="mt-2 block truncate text-[11px] font-medium text-text-primary">
-                                {selectedJob
-                                  ? `${selectedJob.reference} ${"\u00b7"} ${nextStop?.address ?? "Next stop to confirm"}`
-                                  : "Ready for assignment"}
-                              </span>
-                              {(() => {
-                                const route = state.routes.find(
-                                  (candidate) => candidate.vehicleId === selectedVehicle?.id,
-                                );
-                                if (!route) return null;
-                                return (
-                                  <>
-                                    {route.legs?.length ? (
-                                      <span className="mt-1 block text-[10px] text-text-secondary">
-                                        Route v{route.version} {"\u00b7"} {route.waypoints?.length ?? 0} waypoints {"\u00b7"}{" "}
-                                        {route.legs.length} legs
-                                      </span>
-                                    ) : null}
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (!window.confirm("Close this route and return unfinished work to the unassigned queue?")) return;
-                                        void api
-                                          .closeFleetRoute(route.vehicleId, route.version)
-                                          .then(() => queryClient.invalidateQueries({ queryKey: ["fleet"] }))
-                                          .catch((err) => window.alert(err instanceof Error ? err.message : "Route close failed"));
-                                      }}
-                                      className="mt-2 rounded-lg border border-status-warning/50 px-2 py-1 text-[10px] font-bold text-status-warning"
-                                    >
-                                      Close route and release work
-                                    </button>
-                                  </>
-                                );
-                              })()}
-                              {openAlerts[0] && (
-                                <span className="mt-1 block truncate text-[10px] font-medium text-status-warning">
-                                  {openAlerts[0].title}
-                                </span>
-                              )}
-                            </span>
-                            <span className="mt-3 text-[10px] font-medium text-brand-ink">Details</span>
+                            <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                              <path d={vehiclePanel === "expanded" ? "M2 7.5 6 3.5l4 4" : "M2 4.5 6 8.5l4-4"} strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
                           </button>
-                        ) : (
-                          <>
-                            <div className="px-3.5 pb-3">
-                              {selectedVehicle ? (
-                                <VehicleDetails
-                                state={state}
-                                vehicleId={selectedVehicle.id}
-                                lastGpsAt={gpsSeenRef.current.get(selectedVehicle.id)}
-                              />
-                              ) : (
-                                <p className="text-sm text-text-secondary">No vehicles on shift.</p>
-                              )}
-                            </div>
-                            <div className="border-t border-command-border/70 px-3.5 py-2.5">
-                              {openAlerts.length === 0 ? (
-                                <p className="text-[11px] text-text-secondary">No current exceptions.</p>
-                              ) : (
-                                <>
-                                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-secondary">
-                                    Needs attention
-                                  </p>
-                                  <ul className="space-y-1.5 text-[11px] text-text-secondary">
-                                    {openAlerts.map((alert) => (
-                                      <li key={alert.id} className="flex items-start gap-2">
-                                        <StatusChip
-                                          tone={alert.severity === "urgent" ? "danger" : "warning"}
-                                          label={alert.severity === "urgent" ? "urgent" : "at risk"}
-                                        />
-                                        {alert.title}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </>
-                              )}
-                            </div>
-                          </>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => setVehiclePanel("closed")}
+                            aria-label="Close selected vehicle"
+                            title="Close"
+                            className="pf-icon-button focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
+                          >
+                            <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                              <path d="m3 3 6 6M9 3 3 9" strokeLinecap="round" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                    </aside>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setVehiclePanel("compact")}
-                      className="pf-floating-panel absolute left-5 top-4 z-30 hidden min-h-8 items-center gap-2 rounded-full px-3 text-[11px] font-semibold shadow-sm lg:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
-                      aria-label="Open selected vehicle panel"
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" />
-                      Selected vehicle
-                    </button>
-                  )}
 
-                  {/* Bottom work queue overlays the map and never resizes it. */}
-                  <div className="pointer-events-none absolute inset-x-6 bottom-3 z-30">
-                    <div className="pf-floating-panel pointer-events-auto overflow-hidden rounded-2xl backdrop-blur-xl">
-                      <button
-                        type="button"
-                        onClick={() => setQueueOpen((value) => !value)}
-                        aria-expanded={queueOpen}
-                        aria-controls="unassigned-drawer"
-                        className="flex min-h-10 w-full items-center gap-3 px-3 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden="true" />
-                        <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-text-secondary">
-                          Unassigned jobs - drag onto a driver or select
-                        </span>
-                        <span className="rounded-full bg-command-raised px-2 py-0.5 text-[10px] font-semibold tabular-nums text-text-primary">
-                          {unassigned.length}
-                        </span>
-                        <svg
-                          viewBox="0 0 12 12"
-                          className={"h-3 w-3 text-text-secondary transition-transform " + (queueOpen ? "rotate-180" : "")}
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          aria-hidden="true"
+                      {vehiclePanel === "compact" ? (
+                        <button
+                          type="button"
+                          onClick={() => setVehiclePanel("expanded")}
+                          className="flex w-full items-start gap-2.5 px-3.5 pb-3 pt-1 text-left focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
+                          aria-label="Expand selected vehicle details"
                         >
-                          <path d="M2 7.5 6 3.5l4 4" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                      {queueOpen && (
-                        <div id="unassigned-drawer" className="max-h-[38vh] overflow-y-auto border-t border-command-border/70 p-3">
-                          <div className="pf-scroll flex gap-3 overflow-x-auto pb-1">
-                            {unassigned.map((job) => (
-                              <JobCard
-                                key={job.id}
-                                job={job}
-                                onSelect={() => openAssignment(job.id)}
-                              />
-                            ))}
-                            {unassigned.length === 0 && (
-                              <p className="py-2 text-xs text-text-secondary">
-                                {state.demoMode
-                                  ? "Queue clear. Reset a scenario to seed new jobs."
-                                  : "No unassigned jobs. Dispatch is clear."}
-                              </p>
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary/15 text-[11px] font-bold text-brand-ink">
+                            {selectedInitials}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-semibold leading-tight">
+                              {selectedDriver?.fullName ?? "No vehicle selected"}
+                            </span>
+                            <span className="mt-0.5 block text-[10px] text-text-secondary">
+                              {selectedVehicle
+                                ? `${selectedVehicle.registration} \u00b7 ${selectedVehicle.stale ? "GPS stale" : selectedVehicle.status.replace("_", " ")}`
+                                : "No vehicles on shift"}
+                            </span>
+                            <span className="mt-2 block truncate text-[11px] font-medium text-text-primary">
+                              {selectedJob
+                                ? `${selectedJob.reference} \u00b7 ${nextStop?.address ?? "Next stop to confirm"}`
+                                : "Ready for assignment"}
+                            </span>
+                            {selectedRoute && (
+                              <span className="mt-1 block text-[10px] text-text-secondary">
+                                Route v{selectedRoute.version} <span aria-hidden="true">{"\u00b7"}</span> {selectedRoute.waypoints?.length ?? 0} stops
+                              </span>
+                            )}
+                            {openAlerts[0] && (
+                              <span className="mt-1 block truncate text-[10px] font-medium text-status-warning">
+                                {openAlerts[0].title}
+                              </span>
+                            )}
+                          </span>
+                          <svg viewBox="0 0 12 12" className="mt-3 h-3 w-3 shrink-0 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                            <path d="m4.5 2.5 3.5 3.5-3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <div className="pf-map-hud__scroll px-3.5 pb-3 pt-1">
+                          {selectedVehicle ? (
+                            <VehicleDetails
+                              state={state}
+                              vehicleId={selectedVehicle.id}
+                              lastGpsAt={gpsSeenRef.current.get(selectedVehicle.id)}
+                            />
+                          ) : (
+                            <p className="text-sm text-text-secondary">No vehicles on shift.</p>
+                          )}
+                          {selectedRoute && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!window.confirm("Close this route and return unfinished work to the unassigned queue?")) return;
+                                void api
+                                  .closeFleetRoute(selectedRoute.vehicleId, selectedRoute.version)
+                                  .then(() => queryClient.invalidateQueries({ queryKey: ["fleet"] }))
+                                  .catch((err) => window.alert(err instanceof Error ? err.message : "Route close failed"));
+                              }}
+                              className="mt-3 w-full rounded-lg border border-status-warning/50 px-2 py-1.5 text-[10px] font-bold text-status-warning hover:bg-status-warning/10"
+                            >
+                              Close route and release work
+                            </button>
+                          )}
+                          <div className="mt-3 border-t border-command-border/70 pt-2.5">
+                            {openAlerts.length === 0 ? (
+                              <p className="text-[10px] text-text-secondary">No current exceptions.</p>
+                            ) : (
+                              <>
+                                <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-text-secondary">
+                                  Needs attention
+                                </p>
+                                <ul className="space-y-1.5 text-[10px] text-text-secondary">
+                                  {openAlerts.map((alert) => (
+                                    <li key={alert.id} className="flex items-start gap-2">
+                                      <StatusChip
+                                        tone={alert.severity === "urgent" ? "danger" : "warning"}
+                                        label={alert.severity === "urgent" ? "urgent" : "at risk"}
+                                      />
+                                      <span className="min-w-0 flex-1">{alert.title}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </>
                             )}
                           </div>
                         </div>
                       )}
                     </div>
+                  </aside>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setVehiclePanel("compact")}
+                    className="pf-map-hud absolute left-5 top-5 z-30 hidden min-h-8 items-center gap-2 rounded-full px-2.5 text-[10px] font-semibold text-text-secondary shadow-sm md:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                    aria-label="Open selected vehicle panel"
+                    title="Show selected vehicle"
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-brand-primary/15 text-brand-ink" aria-hidden="true">
+                      <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M2 7.5h8M3 7.5 4 3h4l1 4.5M3.5 9.5h.01M8.5 9.5h.01" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                    Vehicle
+                  </button>
+                )}
+
+                {/* Bottom dock: a centred taskbar icon when minimised, a bounded popover when open. */}
+                <div className="pointer-events-none absolute inset-x-0 bottom-3 z-30 flex justify-center px-3">
+                  <div className={"pf-map-dock " + (queueOpen ? "pf-map-dock--open" : "")}>
+                    <button
+                      type="button"
+                      onClick={() => setQueueOpen((value) => !value)}
+                      aria-expanded={queueOpen}
+                      aria-controls="unassigned-drawer"
+                      aria-label={queueOpen ? "Close unassigned jobs" : "Open unassigned jobs"}
+                      title="Unassigned jobs"
+                      className="pf-map-dock__trigger focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
+                    >
+                      <span className="pf-dock-mark" aria-hidden="true">
+                        <svg viewBox="0 0 14 14" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.4">
+                          <path d="m7 1.8 4.7 2.6L7 7 2.3 4.4 7 1.8Z" strokeLinejoin="round" />
+                          <path d="m2.3 7 4.7 2.6L11.7 7M2.3 9.6 7 12.2l4.7-2.6" strokeLinejoin="round" />
+                        </svg>
+                      </span>
+                      {queueOpen && (
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="block text-[11px] font-semibold leading-tight text-text-primary">Unassigned jobs</span>
+                          <span className="mt-0.5 block text-[9px] leading-tight text-text-secondary">Drag onto a driver or select</span>
+                        </span>
+                      )}
+                      <span className="pf-dock-count">{unassigned.length}</span>
+                      {queueOpen && (
+                        <svg
+                          viewBox="0 0 12 12"
+                          className="h-3 w-3 shrink-0 rotate-180 text-text-secondary"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                          aria-hidden="true"
+                        >
+                          <path d="M2 7.5 6 3.5l4 4" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </button>
+                    {queueOpen && (
+                      <div id="unassigned-drawer" className="pf-map-dock__body p-3">
+                        <div className="pf-scroll flex flex-col gap-2">
+                          {unassigned.map((job) => (
+                            <JobCard
+                              key={job.id}
+                              job={job}
+                              dense
+                              onSelect={() => openAssignment(job.id)}
+                            />
+                          ))}
+                          {unassigned.length === 0 && (
+                            <p className="py-2 text-xs text-text-secondary">
+                              {state.demoMode
+                                ? "Queue clear. Reset a scenario to seed new jobs."
+                                : "No unassigned jobs. Dispatch is clear."}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
+                </div>
+
                 </div>
               </>
             ) : (
@@ -845,6 +866,8 @@ export function App() {
     />
   );
 }
+
+
 
 
 

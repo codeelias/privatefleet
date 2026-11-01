@@ -10,9 +10,11 @@ import { StatusChip } from "../../shared/ui/StatusChip";
 export function JobCard({
   job,
   onSelect,
+  dense = false,
 }: {
   job: JobDto;
   onSelect?: () => void;
+  dense?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: job.id,
@@ -21,6 +23,51 @@ export function JobCard({
   const pickup = job.stops.find((s) => s.stopType === "pickup");
   const delivery = job.stops.find((s) => s.stopType === "dropoff");
   const urgent = job.priority === "stat" || job.priority === "urgent";
+  if (dense) {
+    return (
+      <button
+        ref={setNodeRef}
+        type="button"
+        onClick={onSelect}
+        className="group flex w-full items-center gap-2 rounded-xl border border-command-border bg-command-raised px-2.5 py-2 text-left transition-colors hover:border-brand-primary/50"
+        style={{
+          transform: transform
+            ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+            : undefined,
+        }}
+      >
+        <span
+          {...listeners}
+          {...attributes}
+          aria-label={`Drag ${job.reference} to assign`}
+          className="cursor-grab touch-none select-none text-[12px] leading-none text-text-secondary active:cursor-grabbing"
+        >
+'          <svg viewBox="0 0 10 16" className="h-4 w-3 shrink-0" fill="currentColor" aria-hidden="true">
+            <circle cx="2" cy="3" r="1" /><circle cx="8" cy="3" r="1" />
+            <circle cx="2" cy="8" r="1" /><circle cx="8" cy="8" r="1" />
+            <circle cx="2" cy="13" r="1" /><circle cx="8" cy="13" r="1" />
+          </svg>'
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-1.5">
+            <span className="truncate text-[11px] font-bold tracking-[-0.01em]">
+              {job.reference}
+            </span>
+            <span className="shrink-0 rounded-full border border-command-border px-1.5 py-px text-[8px] font-bold uppercase tracking-[0.08em] text-text-secondary">
+              {job.priority}
+            </span>
+          </span>
+          <span className="mt-0.5 block truncate text-[10px] text-text-secondary">
+            {pickup?.address ?? "Pickup"} <span aria-hidden="true">{"\u2192"}</span>{" "}
+            {delivery?.address ?? "Destination"}
+          </span>
+        </span>
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.1em] text-brand-primary">
+          Assign
+        </span>
+      </button>
+    );
+  }
   return (
     <button
       ref={setNodeRef}
@@ -48,7 +95,11 @@ export function JobCard({
               aria-label={`Drag ${job.reference} to assign`}
               className="cursor-grab touch-none select-none text-[13px] leading-none text-text-secondary active:cursor-grabbing"
             >
-              {"\u283f"}
+    '          <svg viewBox="0 0 10 16" className="h-4 w-3 shrink-0" fill="currentColor" aria-hidden="true">
+            <circle cx="2" cy="3" r="1" /><circle cx="8" cy="3" r="1" />
+            <circle cx="2" cy="8" r="1" /><circle cx="8" cy="8" r="1" />
+            <circle cx="2" cy="13" r="1" /><circle cx="8" cy="13" r="1" />
+          </svg>'
             </span>
             <span className="truncate text-[13px] font-bold tracking-[-0.01em]">
               {job.reference}
@@ -94,6 +145,9 @@ export function JobCard({
     </button>
   );
 }
+
+
+
 
 
 

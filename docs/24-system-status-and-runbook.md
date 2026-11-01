@@ -56,6 +56,7 @@ Dispatcher web: `https://app.privatefleet.home.arpa`.
 | Native nearest-stop ordering + paging | Deployed | arrived pinned, pending sorted by GPS distance, 3/6 per page |
 | Native encrypted session/queue/evidence | Deployed | Android Keystore AES/GCM, FLAG_SECURE |
 | Native offline evidence queue | Deployed | signature/photo survive network loss and sync on reconnect |
+| Dispatcher map HUD/dock | Deployed | inset vehicle HUD, centred 72 px dock, 460 px popover, bounded assignment sheet |
 | POD evidence + durable queue | Deployed | duplicate upload treated as success `69ee6eb` |
 | External access via Tailscale Serve | Deployed | `{"status":"ok"}` from mobile data |
 | Local DNS via dnsmasq | Deployed | app/api resolve to 192.168.1.128 |
@@ -175,6 +176,8 @@ Phones fall back to `8.8.8.8`; `.home.arpa` will fail until dnsmasq is back.
 
 See `docs/27-stage-plan-review-and-build-order.md` for the consolidated stage
 review, customer-value gaps and commercial build order.
+See `docs/28-dispatcher-map-interaction.md` for the live-map HUD, dock and
+assignment-sheet interaction contract.
 
 ### Tailscale
 
