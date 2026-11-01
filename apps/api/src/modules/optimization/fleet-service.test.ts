@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Fleet-wide optimisation gate (docs/10): joint solve over multiple
  * vehicles/shipments, explicit unassigned work, atomic publication,
  * stale and concurrent approvals, rollback, cache invalidation and
@@ -366,7 +366,7 @@ describe("fleet optimisation", () => {
       SELECT request->>'resultSchemaVersion' AS schema_version
       FROM optimization_runs WHERE id = ${first.runId}
     `;
-    expect((rows[0] as unknown as { schema_version: string }).schema_version).toBe("9");
+    expect((rows[0] as unknown as { schema_version: string }).schema_version).toBe("10");
 
     // Corrupt the persisted result: drop all service stops while leaving the
     // single-stop count and totals intact (legacy result shape).
@@ -416,6 +416,7 @@ describe("fleet optimisation", () => {
     expect(fleetB.routes).toHaveLength(0);
   });
 });
+
 
 
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Fleet-wide optimisation (docs/10): one VROOM solve over all eligible
  * vehicles and pending shipments, persisted as a proposal; approval
  * publishes every affected route in one transaction against the current
@@ -328,7 +328,7 @@ export async function createFleetProposal(
       datasetVersion: DATASET_VERSION,
       // Bump when persisted fleet-result semantics change; old cached results
       // must never be served as valid proposals.
-      resultSchemaVersion: 9,
+      resultSchemaVersion: 10,
       scope: selected ? "subset" : "fleet",
       expectedRouteVersion,
       policyRevision: policySnapshot.revision,
@@ -885,6 +885,7 @@ export async function approveFleetProposal(
 
 // Keep the type import referenced for consumers of this module.
 export type { FleetStoredResult };
+
 
 
 
