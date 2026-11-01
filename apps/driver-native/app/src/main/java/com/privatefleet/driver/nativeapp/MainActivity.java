@@ -209,7 +209,7 @@ public class MainActivity extends Activity {
 
         Button refresh = new Button(this);
         refresh.setText("Refresh queue");
-        refresh.setOnClickListener(v -> refreshQueue());
+        refresh.setOnClickListener(v -> flushQueue());
         root.addView(refresh);
 
         locationView = new TextView(this);
@@ -250,6 +250,7 @@ public class MainActivity extends Activity {
         footer.addView(nextButton);
         root.addView(footer);
         refreshQueue();
+        flushQueue();
 
         Button signOut = new Button(this);
         signOut.setText("Sign out");
@@ -280,6 +281,20 @@ public class MainActivity extends Activity {
     }
 
 
+
+
+    private void queueEvidence(String kind, String jobId, String stopId,
+                               String field, String value) throws Exception {
+        JSONObject command = new JSONObject();
+        command.put("kind", kind);
+        command.put("jobId", jobId);
+        command.put("stopId", stopId);
+        command.put(field, value);
+        command.put("commandId", UUID.randomUUID().toString());
+        command.put("createdAt", java.time.Instant.now().toString());
+        CommandQueue.enqueue(this, command);
+        flushQueue();
+    }
 
     private void queueCommand(String kind, String jobId, String stopId,
                               String recipient, String reasonCode) {
@@ -565,9 +580,9 @@ public class MainActivity extends Activity {
                         : bitmap;
                 ByteArrayOutputStream output = new ByteArrayOutputStream();
                 scaled.compress(Bitmap.CompressFormat.JPEG, 80, output);
-                String base64 = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP);
-                new ApiClient(this).uploadPhoto(jobId, stopId, base64);
-                runOnUiThread(() -> toast("Photo evidence saved"));
+                String path = EvidenceStore.savePhoto(this, output.toByteArray());
+                queueEvidence("evidence_photo", jobId, stopId, "path", path);
+                runOnUiThread(() -> toast("Photo saved - syncing"));
             } catch (Exception error) {
                 runOnUiThread(() -> toast("Photo failed: " + error.getMessage()));
             }
@@ -600,9 +615,9 @@ public class MainActivity extends Activity {
             }
             executor.execute(() -> {
                 try {
-                    new ApiClient(this).uploadSignature(jobId, stopId, pathData);
+                    queueEvidence("evidence_signature", jobId, stopId, "pathData", pathData);
                     runOnUiThread(() -> {
-                        toast("Signature saved");
+                        toast("Signature saved - syncing");
                         dialog.dismiss();
                     });
                 } catch (Exception error) {
@@ -702,6 +717,7 @@ public class MainActivity extends Activity {
                 Toast.LENGTH_LONG).show();
     }
 }
+
 
 
 

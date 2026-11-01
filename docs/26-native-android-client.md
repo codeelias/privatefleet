@@ -54,6 +54,8 @@ nearest ordering: PASS (arrived pinned, pending sorted by distance)
 pagination: PASS (Page 1 of 10 - 29 stops, Next -> Page 2, Previous -> Page 1)
 encrypted session: PASS (relaunch restored the signed-in session)
 Keystore AES/GCM: PASS (no caller-supplied IV)
+offline signature evidence: queued with network disabled; synced on reconnect
+server signature evidence count: 30 -> 31
 FLAG_SECURE: enabled
 ```
 
@@ -80,12 +82,12 @@ configuration is required before distribution.
 ## Known limitations
 
 - Failed-delivery reporting uses a reason picker but no failure photo.
-- Evidence uploads are immediate; only arrive/complete/skip commands are queued
-  offline. A signature/photo captured while offline is not yet persisted for retry.
+- Evidence uploads are queued offline and stored as encrypted app-private files;
+  they sync before later commands in queue order.
 - Native actions use one-shot HTTP; the durable offline command queue is not
   implemented in this client.
-- No offline evidence store yet (commands only).
-- Queue/session are encrypted at rest with an Android Keystore AES/GCM key.
+- No native failure-photo capture yet.
+- Queue/session/evidence are encrypted at rest with an Android Keystore AES/GCM key.
 - No certificate pinning, root/tamper detection or biometric gate yet.
 - Battery impact of time-based updates must be measured over a full shift;
   switch to distance-based updates once movement testing is complete.

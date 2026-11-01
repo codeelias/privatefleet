@@ -36,7 +36,10 @@ public final class CommandQueue {
                 .getString(KEY, "");
         if (stored.isEmpty()) return new JSONArray();
         String raw = SecureStore.decrypt(stored);
-        if (raw == null) return new JSONArray();
+        if (raw == null) {
+            android.util.Log.e("pf-native", "command queue decrypt failed");
+            return new JSONArray();
+        }
         try {
             return new JSONArray(raw);
         } catch (Exception ignored) {
@@ -66,6 +69,7 @@ public final class CommandQueue {
     public static Result flush(Context context) {
         synchronized (LOCK) {
             JSONArray queue = read(context);
+            android.util.Log.i("pf-native", "queue flush: " + queue.length());
             JSONArray remaining = new JSONArray();
             int sent = 0;
             int conflicts = 0;
@@ -80,11 +84,15 @@ public final class CommandQueue {
                     if (error.status >= 400 && error.status < 500) {
                         // The server rejected the command (conflict or bad state).
                         // Keep a visible count but do not retry forever.
+                        if ("evidence_photo".equals(command.optString("kind"))) {
+                            EvidenceStore.delete(command.optString("path"));
+                        }
                         conflicts++;
                     } else {
                         remaining.put(command);
                     }
                 } catch (Exception error) {
+                    android.util.Log.w("pf-native", "queue dispatch failed: " + error.getMessage());
                     remaining.put(command);
                 }
             }
@@ -97,7 +105,7 @@ public final class CommandQueue {
         String kind = command.getString("kind");
         String jobId = command.getString("jobId");
         String stopId = command.getString("stopId");
-        String driverId = command.getString("driverId");
+        String driverId = command.optString("driverId", "");
         String commandId = command.getString("commandId");
         if ("arrive".equals(kind)) {
             api.arrive(jobId, stopId, driverId, commandId);
@@ -106,7 +114,18 @@ public final class CommandQueue {
         } else if ("skip".equals(kind)) {
             api.skip(jobId, stopId, driverId, command.optString("reasonCode", "OTHER"),
                     command.optString("note", null), commandId);
+        } else if ("evidence_signature".equals(kind)) {
+            api.uploadSignature(jobId, stopId, command.getString("pathData"));
+        } else if ("evidence_photo".equals(kind)) {
+            byte[] jpeg = EvidenceStore.readPhoto(command.getString("path"));
+            String base64 = android.util.Base64.encodeToString(jpeg, android.util.Base64.NO_WRAP);
+            api.uploadPhoto(jobId, stopId, base64);
+            EvidenceStore.delete(command.getString("path"));
         }
     }
 }
+
+
+
+
 
