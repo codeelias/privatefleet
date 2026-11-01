@@ -69,7 +69,7 @@ risk. It cannot be closed by engineering.
 | Hot/cold split + staleness | **PASS** | stale flag/provenance, 60s policy |
 | Socket.IO rooms/snapshot | **PASS (code)** | earlier E2E; not re-run today |
 | Field tracking | **PASS** | live pin from S22 |
-| Background/screen-off tracking | **NOT DONE** | foreground only; native service required |
+| Background/screen-off tracking | **PASS (native client)** | screen-off test moved 17→25 telemetry rows |
 | Reliable accuracy filtering | **PASS** | 75 m accuracy + teleport guard |
 | Off-route warning only on fresh GPS | **PARTIAL** | stale pins still shown with stale label |
 
@@ -139,7 +139,7 @@ risk. It cannot be closed by engineering.
 ### P0 — needed before calling this a pilot product
 
 1. **Phase 0 customer validation** — a named operator, metrics and scope.
-2. **Background GPS** — screen-off tracking is not implemented.
+2. **Background GPS** — native client screen-off PASS; battery/8-hour soak and full native parity remain.
 3. **Cross-tenant demo-data cleanup** — a unique `(tenant_id, reference)`
    index already exists and is enforced. Duplicate-looking references such as
    `J-191` are in different tenants, not integrity violations. Remaining work

@@ -51,6 +51,8 @@ Dispatcher web: `https://app.privatefleet.home.arpa`.
 | Manual route closure + release work | Deployed | `4409a02`; Tom v100 cancelled |
 | Automatic route completion | Deployed | `f0a44f4` |
 | Driver app foreground GPS | Deployed | telemetry over LAN and Tailscale |
+| Native Android client (no Expo) | Deployed, pilot parity | `apps/driver-native`, screen-off test PASS |
+| Native background GPS | Verified | 17 to 25 telemetry rows with screen off |
 | POD evidence + durable queue | Deployed | duplicate upload treated as success `69ee6eb` |
 | External access via Tailscale Serve | Deployed | `{"status":"ok"}` from mobile data |
 | Local DNS via dnsmasq | Deployed | app/api resolve to 192.168.1.128 |
@@ -210,7 +212,7 @@ Serve config persists. Phone must be signed into the same tailnet account.
 | Driver â€œRequest more jobsâ€ workflow | Not implemented |
 | Automatic partial assignment policy explanation (beyond solver `SOLVER_UNASSIGNED`) | Partial |
 | Intelligent dispatch-origin resolver: depot, driver/dispatcher confirmation, fresh-GPS request | Not implemented |
-| Native background GPS / screen-off tracking | Foreground only |
+| Native background GPS / screen-off tracking | PASS in native client; Expo client remains foreground-only |
 | Duplicate job-reference constraint + cleanup migration | Not implemented |
 | Unique driver identity cleanup (same name across tenants) | Not implemented |
 | Demo/load tenant isolation and audited reset | Not implemented |
