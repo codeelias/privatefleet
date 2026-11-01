@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Explicit route closure: the dispatcher ends a published route that is no
  * longer operationally valid. Remaining work is returned to the unassigned
  * queue and the driver becomes available, with an audit event.

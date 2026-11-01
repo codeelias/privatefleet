@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Fleet-wide optimisation (docs/10): one VROOM solve over all eligible
  * vehicles and pending shipments, persisted as a proposal; approval
  * publishes every affected route in one transaction against the current
