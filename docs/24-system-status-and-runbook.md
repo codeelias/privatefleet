@@ -175,7 +175,8 @@ If DNS stops after a host reboot, confirm Docker Desktop starts the container.
 Phones fall back to `8.8.8.8`; `.home.arpa` will fail until dnsmasq is back.
 
 See `docs/27-stage-plan-review-and-build-order.md` for the consolidated stage
-review, customer-value gaps and commercial build order.
+review and `docs/29-build-status-ledger.md` for the authoritative five-state
+build ledger.
 See `docs/28-dispatcher-map-interaction.md` for the live-map HUD, dock and
 assignment-sheet interaction contract.
 
@@ -199,52 +200,54 @@ Serve config persists. Phone must be signed into the same tailnet account.
 
 ## 5. Known data issues
 
-1. **Duplicate driver names across tenants.** Two `Sarah Reed` records
-   (`8feeâ€¦` northstar, `9581â€¦` load/E2E) and two `Tom Cole` records. Use the
-   record that owns the route you are working with.
-2. **Duplicate job references.** `J-191` and `J-202` exist twice in northstar
-   with different states; one cause of the stuck arrived stop. A unique
-   `(tenant_id, reference)` constraint plus cleanup is required.
-3. **Load-test tenant** `load-8d0a3a98` holds hundreds of routes and global
-   version numbers (up to 237+). It is separate by tenant/RLS but still causes
-   confusing global version numbers and baseline history.
+1. **Cross-tenant duplicate-looking records are not integrity failures.**
+   The unique `(tenant_id, reference)` index is enforced live. `J-191` and
+   `J-202` appearing twice are different tenants; verify the tenant before use.
+2. **Duplicate driver names exist across tenants** (for example two Sarah Reed
+   and two Tom Cole records). They are isolated by tenant; they still confuse
+   demos and must be retired with the load/E2E tenant.
+3. **Load-test tenant** `load-8d0a3a98` holds historical routes and global
+   version numbers. It is isolated by RLS but pollutes version history and
+   baselines during demonstrations.
 4. **Historical published routes** can remain for drivers omitted from a later
-   plan. Manual closure and automatic completion now reduce this, but a
-   migration is needed to close old published routes.
-5. Current northstar plan: **v121**, Local revision 42; 45 assigned, 14 completed, 15 unassigned; no orphan assignments.
+   plan. Manual closure and automatic completion reduce this, but an audited
+   cleanup is still needed.
+5. Live counts and route versions change during testing. Query the fleet state
+   or run `scripts/audit-status.ps1`; do not quote a stale snapshot.
 
----
+## 6## 6. Pending / not implemented
 
-## 6. Pending / not implemented
+See `docs/29-build-status-ledger.md` for the authoritative five-state ledger:
+completed, started-but-unfinished, uncompleted/superseded, not yet started and
+next.
 
-| Item | Status |
+| Item | State |
 |---|---|
-| Driver â€œRequest more jobsâ€ workflow | Not implemented |
-| Automatic partial assignment policy explanation (beyond solver `SOLVER_UNASSIGNED`) | Partial |
-| Intelligent dispatch-origin resolver: depot, driver/dispatcher confirmation, fresh-GPS request | Not implemented |
-| Native background GPS / screen-off tracking | PASS in native client; Expo client remains foreground-only |
-| Duplicate job-reference constraint + cleanup migration | Not implemented |
-| Unique driver identity cleanup (same name across tenants) | Not implemented |
-| Demo/load tenant isolation and audited reset | Not implemented |
-| Route-completion regression tests | Not implemented (code only) |
-| Vehicle override UI automated test | Not implemented |
-| Backup restore drill | Not implemented |
-| Tailscale ACL/MFA hardening | Tenant default, not reviewed |
-| 30-day reliability evidence for £10K valuation | Not collected |
-
----
+| Driver "Request more jobs" request/decision loop | Deployed; assignment/re-optimisation unfinished |
+| Automatic partial assignment explanation beyond `SOLVER_UNASSIGNED` | Partial |
+| Dispatch-origin resolver (depot, confirmation, fresh GPS) | Not started |
+| Native background GPS / screen-off tracking | Deployed and verified |
+| Native release signing / update channel | Not started |
+| Duplicate job-reference constraint | **Already enforced**; cross-tenant only |
+| Demo/load tenant isolation and audited reset | Not started |
+| Current-build E2E / load / soak rerun | Not started |
+| Restore drill on current schema | Not started |
+| Tailscale ACL/MFA hardening | Not started |
+| 30-day reliability evidence and SLA | Not started |
 
 ## 7. Test status
 
-- Routing/optimization/fleet focused suites: **38/39 passed** in one run;
-  one fleet test is order-dependent and passes in isolation/full rerun.
-  The shared test database cleanup is the likely cause and should be fixed.
+- Last full API suite: **90/90 pass** before the native/web-only changes.
+- The suites must be rerun as part of Stage A because the current build has not
+  been re-proven end-to-end since the map and native changes.
+- One fleet test has shown order dependence against the shared test database;
+  it passed on isolated/full rerun, but test isolation remains a CI risk.
 - Visit-order regression: pass.
 - Policy resolver tests: pass.
-- Web production build: pass.
+- Web production build and typecheck: pass.
 - Live 30-job regression on VROOM 1.15: pass (Mo 134.0 km, Sarah 77.4 km).
-
----
+- Native screen-off GPS, offline command and offline evidence: verified on the
+  physical Galaxy S22.
 
 ## 8. Relevant commits
 

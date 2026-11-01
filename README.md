@@ -8,6 +8,9 @@ LAN-first multi-tenant courier dispatch platform. Synthetic data only.
 **Consolidated stage review and commercial build order:**
 [`docs/27-stage-plan-review-and-build-order.md`](docs/27-stage-plan-review-and-build-order.md)
 
+**Authoritative five-state build ledger:**
+[`docs/29-build-status-ledger.md`](docs/29-build-status-ledger.md)
+
 These documents list exactly what is deployed, what is still pending, known
 data issues, operations commands and the relevant commits. Read them before
 changing dispatch behaviour or demonstrating the system.
@@ -15,10 +18,10 @@ changing dispatch behaviour or demonstrating the system.
 ## Topology
 
 ```text
-Driver Android app â”€â”€ HTTPS â”€â”€â–º Caddy â”€â”€â–º API :4000 â”€â”€â–º PostgreSQL :5432
-                                     â””â”€â”€ OSRM :5000 / VROOM :3000
-Dispatcher web â”€â”€ https://app.privatefleet.home.arpa
-External access â”€â”€ Tailscale Serve (tailnet only)
+Driver Android app Ã¢â€â‚¬Ã¢â€â‚¬ HTTPS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº Caddy Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº API :4000 Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº PostgreSQL :5432
+                                     Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ OSRM :5000 / VROOM :3000
+Dispatcher web Ã¢â€â‚¬Ã¢â€â‚¬ https://app.privatefleet.home.arpa
+External access Ã¢â€â‚¬Ã¢â€â‚¬ Tailscale Serve (tailnet only)
 ```
 
 ## Local development
@@ -41,4 +44,5 @@ pnpm --filter @privatefleet/web dev
 
 The live pilot runs on the Windows host at `192.168.1.128`. Restart and rollback
 procedures are in the status/runbook document.
+
 
