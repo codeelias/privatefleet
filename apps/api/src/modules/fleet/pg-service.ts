@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Phase 2 fleet service: server-authoritative job lifecycle over
  * Postgres with RLS, command idempotency and a transactional outbox
  * (docs/04.5, docs/08, ADR-0008). Same response shapes as the demo
@@ -512,6 +512,7 @@ export class PgFleetService {
         stopId,
         driverId,
       });
+      await this.advanceRouteLifecycle(db, tenantId, actorId, stopId);
       return { stopId, status: "arrived" };
     });
   }
@@ -566,6 +567,7 @@ export class PgFleetService {
           contentHash: item.content_hash,
         })),
       });
+      await this.advanceRouteLifecycle(db, tenantId, actorId, stopId);
       return { stopId, status: "completed", jobStatus };
     });
   }
@@ -623,6 +625,8 @@ export class PgFleetService {
           contentHash: item.content_hash,
         })),
       });
+
+      await this.advanceRouteLifecycle(db, tenantId, actorId, stopId);
 
       const alertId = randomUUID();
       const jobReference = (await db.execute(
@@ -1025,6 +1029,59 @@ export class PgFleetService {
       throw new FleetError("STOP_NOT_ASSIGNED_TO_DRIVER");
     }
     return { id: stop.id, status: stop.status };
+  }
+
+  private async advanceRouteLifecycle(
+    db: Database,
+    tenantId: string,
+    actorId: string,
+    stopId: string,
+  ): Promise<void> {
+    const rows = (await db.execute(sql`
+      SELECT r.id, r.driver_id,
+        (SELECT count(*)::int
+         FROM route_stops rs2
+         JOIN job_stops js2 ON js2.id = rs2.job_stop_id
+         WHERE rs2.route_id = r.id
+           AND js2.status NOT IN ('completed', 'skipped', 'failed')) AS open_stops
+      FROM routes r
+      JOIN route_stops rs ON rs.route_id = r.id
+      WHERE rs.job_stop_id = ${stopId}
+        AND r.status IN ('published', 'in_progress')
+    `)) as unknown as Array<{ id: string; driver_id: string; open_stops: number }>;
+
+    for (const route of rows) {
+      const open = Number(route.open_stops);
+      const nextStatus = open === 0 ? "completed" : "in_progress";
+      await db.execute(sql`
+        UPDATE routes SET status = ${nextStatus}
+        WHERE id = ${route.id} AND status IN ('published', 'in_progress')
+      `);
+      if (open === 0) {
+        await db.execute(sql`
+          UPDATE drivers d SET status = 'available'
+          WHERE d.id = ${route.driver_id}
+            AND d.status = 'on_route'
+            AND NOT EXISTS (
+              SELECT 1 FROM routes r
+              WHERE r.driver_id = d.id
+                AND r.status IN ('published', 'in_progress')
+            )
+        `);
+        await db.execute(sql`
+          INSERT INTO outbox (tenant_id, aggregate_type, aggregate_id, event_type, payload)
+          VALUES (
+            ${tenantId}, 'route', ${route.id}, 'route.completed',
+            ${JSON.stringify({
+              routeId: route.id,
+              driverId: route.driver_id,
+              closedBy: actorId,
+              triggerStopId: stopId,
+            })}::jsonb
+          )
+        `);
+      }
+    }
   }
 
   private async resolveJobStatus(
