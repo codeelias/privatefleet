@@ -1,0 +1,257 @@
+# PrivateFleet — implemented system, status and runbook
+
+Last updated: 2026-11-01  
+Commit baseline: `f0a44f4`  
+Environment: LAN pilot at `192.168.1.128`, synthetic data only.
+
+This is the authoritative description of what is actually deployed. It separates
+verified capability from pending work so demos and reviews do not confuse the
+two.
+
+---
+
+## 1. Deployment topology
+
+```text
+Android driver app (Galaxy S22)
+  ├── LAN:   https://api.privatefleet.home.arpa
+  └── WAN:   https://pf-node.tail060a86.ts.net  (Tailscale Serve)
+                    │
+Windows host 192.168.1.128
+  ├── Caddy :443  app.privatefleet.home.arpa / api.privatefleet.home.arpa
+  ├── API Fastify 127.0.0.1:4000
+  ├── PostgreSQL/PostGIS 127.0.0.1:5432  (never exposed)
+  ├── OSRM 127.0.0.1:5000
+  ├── VROOM 127.0.0.1:3000 (Docker, digest-pinned)
+  ├── dnsmasq (Docker) :53 for *.privatefleet.home.arpa
+  └── Tailscale node pf-node (100.76.118.22)
+```
+
+Dispatcher web: `https://app.privatefleet.home.arpa`.
+
+---
+
+## 2. Implemented and verified
+
+| Capability | State | Evidence |
+|---|---|---|
+| Multi-tenant Postgres/PostGIS with RLS | Deployed | tenants, RLS, migrations |
+| Job import (CSV), validation, preview/commit | Deployed | G batch 30 jobs imported |
+| Pickup/dropoff pairing and precedence | Deployed | shipment model + tests |
+| Fleet optimisation OSRM + VROOM | Deployed | 30-job regression |
+| VROOM visit-order preservation | Fixed | `db50c4c`, `a75ebc7` |
+| Published geometry/distance consistency | Verified | Mo 134.0 km, Sarah 77.4 km |
+| Dispatch policy presets + custom limits | Deployed | revision 41 |
+| Per-vehicle override API + UI editor | Deployed | `c38db10` |
+| Policy revision stored with proposal | Deployed | proposals rev 40/41 |
+| Stale-policy approval rejection | Deployed | `409 STALE_DISPATCH_POLICY` |
+| Baseline vs proposal publish gate | Deployed | distance/coverage/working duration |
+| Gate scope fix for new work | Deployed | `09317cd` |
+| Hard per-vehicle limits | Deployed | 120/200/300 km presets; VROOM max_distance |
+| Manual route closure + release work | Deployed | `4409a02`; Tom v100 cancelled |
+| Automatic route completion | Deployed | `f0a44f4` |
+| Driver app foreground GPS | Deployed | telemetry over LAN and Tailscale |
+| POD evidence + durable queue | Deployed | duplicate upload treated as success `69ee6eb` |
+| External access via Tailscale Serve | Deployed | `{"status":"ok"}` from mobile data |
+| Local DNS via dnsmasq | Deployed | app/api resolve to 192.168.1.128 |
+| Customer tracking, alerts, reports | Existing modules | earlier phases |
+
+### Route lifecycle (current behaviour)
+
+- `arrive` → stop `arrived`, route moves to `in_progress`.
+- `complete` / `skip` → stop terminal, then:
+  - if the route still has open stops → stays `in_progress`;
+  - if no open stops → route becomes `completed`;
+  - driver becomes `available` when no other published/in-progress route exists;
+  - outbox event `route.completed` is written.
+- Dispatcher can explicitly close a route:
+  - API `POST /v1/fleet/routes/close`
+  - UI button **Close route and release work**
+  - unfinished stops reset to `pending`, unfinished jobs to `unassigned`,
+    audit event `route.closed`.
+
+### Dispatch policy
+
+```text
+Local:          120 km / 5 h travel / 7 h working / 30 visits
+Balanced Urban: 200 km / 9 h travel / 10 h working / 50 visits
+Extended:       300 km / 11 h travel / 12 h working / 70 visits
+```
+
+- One tenant revision covers preset, advanced values and all vehicle overrides.
+- Optimisation and approval use the same revision.
+- Working duration is `travel + 5 min × visits` — an estimate, **not** legal
+  drivers' hours compliance.
+- A new job set is not compared against the old baseline for distance/coverage;
+  only identical job sets are regression-checked. Hard limits always apply.
+
+### External access
+
+```text
+Tailscale host:  pf-node  (100.76.118.22)
+Serve:           https://pf-node.tail060a86.ts.net → 127.0.0.1:4000
+Phone:           g (100.124.180.48), galaxy-s22 (100.123.137.123)
+```
+
+- Serve is tailnet-only; Funnel is not used.
+- PostgreSQL stays bound to `127.0.0.1:5432`.
+- Driver APK uses `EXPO_PUBLIC_API_URL=https://pf-node.tail060a86.ts.net`
+  (baked at build; `.env` in `apps/driver-expo`).
+- DNS takeover on Tailscale is disabled so dnsmasq and `.home.arpa` keep working.
+
+### Local DNS
+
+```text
+Container: privatefleet-dns (dnsmasq), port 53 UDP/TCP
+Records:   *.privatefleet.home.arpa → 192.168.1.128
+Upstream:  192.168.1.254 (BT Hub)
+```
+
+Windows ICS DNS proxy is disabled because it held port 53. Docker restart policy
+is `unless-stopped`.
+
+---
+
+## 3. API surface relevant to dispatch
+
+| Method/path | Purpose |
+|---|---|
+| `POST /v1/jobs/import` / commit | CSV import |
+| `POST /v1/optimization/fleet-run` | Constraint-checked proposal |
+| `POST /v1/optimization/fleet/:runId/approve` | Publish plan |
+| `POST /v1/fleet/routes/close` | Close stale route, release work |
+| `GET/PATCH /v1/dispatch-policy` | Presets, limits, overrides |
+| `POST /v1/jobs/:id/stops/:id/arrive` | Driver arrival |
+| `POST /v1/jobs/:id/stops/:id/complete` | Complete with proof policy |
+| `POST /v1/jobs/:id/stops/:id/skip` | Failure/skip |
+| `POST /v1/telemetry` | GPS samples |
+
+---
+
+## 4. Operations runbook
+
+### Start or restart the API
+
+```powershell
+# On the host, as an administrator/SYSTEM task
+C:\privatefleet\hard-restart-api.ps1     # kills tsx then starts scheduled task
+curl.exe -s http://127.0.0.1:4000/healthz
+```
+
+Scheduled task: **PrivateFleet API** → `start-api.ps1` → `tsx src/server.ts`.
+If the API exits, read `C:\PrivateFleet\logs\api.log` and
+`C:\Temp\api-start-full.log`. A common failure is deploying `fleet-service.ts`
+without its new import (`dispatch-policy.ts`).
+
+### VROOM
+
+```text
+Container: privatefleet-vroom
+Image:     ghcr.io/vroom-project/vroom-docker@sha256:247d5683d6745c755d718a156d16b16aac80baccc276a003a68b986c13883b08
+Port:      127.0.0.1:3000
+Rollback:  privatefleet-vroom-rc2 (v1.14.0-rc.2, stopped)
+```
+
+See `docs/23-vroom-115-deployment.md`.
+
+### DNS
+
+```powershell
+docker ps --filter name=privatefleet-dns
+docker restart privatefleet-dns
+# host check
+nslookup app.privatefleet.home.arpa 192.168.1.128
+```
+
+If DNS stops after a host reboot, confirm Docker Desktop starts the container.
+Phones fall back to `8.8.8.8`; `.home.arpa` will fail until dnsmasq is back.
+
+### Tailscale
+
+```powershell
+& "C:\Program Files\Tailscale\tailscale.exe" status
+& "C:\Program Files\Tailscale\tailscale.exe" serve status
+```
+
+Serve config persists. Phone must be signed into the same tailnet account.
+
+### Database
+
+- Local only: `127.0.0.1:5432`.
+- Backups: existing `.dump.age` jobs write to Google Drive; restore drill is
+  still pending.
+- Do not expose 5432 through Tailscale, port forwarding or Funnel.
+
+---
+
+## 5. Known data issues
+
+1. **Duplicate driver names across tenants.** Two `Sarah Reed` records
+   (`8fee…` northstar, `9581…` load/E2E) and two `Tom Cole` records. Use the
+   record that owns the route you are working with.
+2. **Duplicate job references.** `J-191` and `J-202` exist twice in northstar
+   with different states; one cause of the stuck arrived stop. A unique
+   `(tenant_id, reference)` constraint plus cleanup is required.
+3. **Load-test tenant** `load-8d0a3a98` holds hundreds of routes and global
+   version numbers (up to 237+). It is separate by tenant/RLS but still causes
+   confusing global version numbers and baseline history.
+4. **Historical published routes** can remain for drivers omitted from a later
+   plan. Manual closure and automatic completion now reduce this, but a
+   migration is needed to close old published routes.
+5. Current northstar plan: **v120**, Balanced revision 41, all G jobs assigned.
+
+---
+
+## 6. Pending / not implemented
+
+| Item | Status |
+|---|---|
+| Driver “Request more jobs” workflow | Not implemented |
+| Automatic partial assignment policy explanation (beyond solver `SOLVER_UNASSIGNED`) | Partial |
+| Intelligent dispatch-origin resolver: depot, driver/dispatcher confirmation, fresh-GPS request | Not implemented |
+| Native background GPS / screen-off tracking | Foreground only |
+| Duplicate job-reference constraint + cleanup migration | Not implemented |
+| Unique driver identity cleanup (same name across tenants) | Not implemented |
+| Demo/load tenant isolation and audited reset | Not implemented |
+| Route-completion regression tests | Not implemented (code only) |
+| Vehicle override UI automated test | Not implemented |
+| Backup restore drill | Not implemented |
+| Tailscale ACL/MFA hardening | Tenant default, not reviewed |
+| 30-day reliability evidence for £10K valuation | Not collected |
+
+---
+
+## 7. Test status
+
+- Routing/optimization/fleet focused suites: **38/39 passed** in one run;
+  one fleet test is order-dependent and passes in isolation/full rerun.
+  The shared test database cleanup is the likely cause and should be fixed.
+- Visit-order regression: pass.
+- Policy resolver tests: pass.
+- Web production build: pass.
+- Live 30-job regression on VROOM 1.15: pass (Mo 134.0 km, Sarah 77.4 km).
+
+---
+
+## 8. Relevant commits
+
+```text
+db50c4c  fix(routing): preserve vroom visit order
+a75ebc7  test(routing): lock interleaved visit ordering
+0bcc562  fix(optimization): baseline latest route version
+f9d0987  feat(dispatch): versioned policy presets
+8a5fd9a  feat(dispatch): policy tables
+a0853cd  feat(dispatch): policy revision + API
+d89f5a2  feat(dispatch): complete policy integration
+648ee00  fix(dispatch): enable RLS on policy tables
+25fb288  feat(dispatch): hard vehicle limits
+dfc4c4a  ops(vroom): pin v1.15.0
+42ab2a3  fix(map): keep stale off-route vehicles selectable
+0b04d49  feat(fleet): location provenance
+c38db10  feat(policy): vehicle override editor
+4409a02  feat(dispatch): close stale routes
+70d00db  fix(map): explain missing route
+09317cd  fix(optimization): baseline scope comparison
+69ee6eb  fix(driver): duplicate evidence is success
+f0a44f4  feat(routes): auto-complete routes/release drivers
+```
