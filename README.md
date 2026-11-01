@@ -5,17 +5,20 @@ LAN-first multi-tenant courier dispatch platform. Synthetic data only.
 **Authoritative current status and runbook:**
 [`docs/24-system-status-and-runbook.md`](docs/24-system-status-and-runbook.md)
 
-That document lists exactly what is deployed, what is still pending, known data
-issues, operations commands and the relevant commits. Read it before changing
-dispatch behaviour or demonstrating the system.
+**Consolidated stage review and commercial build order:**
+[`docs/27-stage-plan-review-and-build-order.md`](docs/27-stage-plan-review-and-build-order.md)
+
+These documents list exactly what is deployed, what is still pending, known
+data issues, operations commands and the relevant commits. Read them before
+changing dispatch behaviour or demonstrating the system.
 
 ## Topology
 
 ```text
-Driver Android app ── HTTPS ──► Caddy ──► API :4000 ──► PostgreSQL :5432
-                                     └── OSRM :5000 / VROOM :3000
-Dispatcher web ── https://app.privatefleet.home.arpa
-External access ── Tailscale Serve (tailnet only)
+Driver Android app â”€â”€ HTTPS â”€â”€â–º Caddy â”€â”€â–º API :4000 â”€â”€â–º PostgreSQL :5432
+                                     â””â”€â”€ OSRM :5000 / VROOM :3000
+Dispatcher web â”€â”€ https://app.privatefleet.home.arpa
+External access â”€â”€ Tailscale Serve (tailnet only)
 ```
 
 ## Local development
@@ -38,3 +41,4 @@ pnpm --filter @privatefleet/web dev
 
 The live pilot runs on the Windows host at `192.168.1.128`. Restart and rollback
 procedures are in the status/runbook document.
+

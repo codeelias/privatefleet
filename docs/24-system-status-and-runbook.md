@@ -1,7 +1,7 @@
 # PrivateFleet — implemented system, status and runbook
 
 Last updated: 2026-11-01  
-Commit baseline: `f0a44f4`  
+Commit baseline: `c400476` (native offline evidence queue)  
 Environment: LAN pilot at `192.168.1.128`, synthetic data only.
 
 This is the authoritative description of what is actually deployed. It separates
@@ -53,6 +53,9 @@ Dispatcher web: `https://app.privatefleet.home.arpa`.
 | Driver app foreground GPS | Deployed | telemetry over LAN and Tailscale |
 | Native Android client (no Expo) | Deployed, pilot parity | `apps/driver-native`, screen-off test PASS |
 | Native background GPS | Verified | 17 to 25 telemetry rows with screen off |
+| Native nearest-stop ordering + paging | Deployed | arrived pinned, pending sorted by GPS distance, 3/6 per page |
+| Native encrypted session/queue/evidence | Deployed | Android Keystore AES/GCM, FLAG_SECURE |
+| Native offline evidence queue | Deployed | signature/photo survive network loss and sync on reconnect |
 | POD evidence + durable queue | Deployed | duplicate upload treated as success `69ee6eb` |
 | External access via Tailscale Serve | Deployed | `{"status":"ok"}` from mobile data |
 | Local DNS via dnsmasq | Deployed | app/api resolve to 192.168.1.128 |
@@ -98,8 +101,9 @@ Phone:           g (100.124.180.48), galaxy-s22 (100.123.137.123)
 
 - Serve is tailnet-only; Funnel is not used.
 - PostgreSQL stays bound to `127.0.0.1:5432`.
-- Driver APK uses `EXPO_PUBLIC_API_URL=https://pf-node.tail060a86.ts.net`
-  (baked at build; `.env` in `apps/driver-expo`).
+- Native APK uses `BuildConfig.API_BASE=https://pf-node.tail060a86.ts.net`
+  (compiled at build; `apps/driver-native/app/build.gradle`).
+- The Expo APK remains as a legacy fallback and uses `EXPO_PUBLIC_API_URL`.
 - DNS takeover on Tailscale is disabled so dnsmasq and `.home.arpa` keep working.
 
 ### Local DNS
@@ -168,6 +172,9 @@ nslookup app.privatefleet.home.arpa 192.168.1.128
 
 If DNS stops after a host reboot, confirm Docker Desktop starts the container.
 Phones fall back to `8.8.8.8`; `.home.arpa` will fail until dnsmasq is back.
+
+See `docs/27-stage-plan-review-and-build-order.md` for the consolidated stage
+review, customer-value gaps and commercial build order.
 
 ### Tailscale
 

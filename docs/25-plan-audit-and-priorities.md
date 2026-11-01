@@ -69,7 +69,7 @@ risk. It cannot be closed by engineering.
 | Hot/cold split + staleness | **PASS** | stale flag/provenance, 60s policy |
 | Socket.IO rooms/snapshot | **PASS (code)** | earlier E2E; not re-run today |
 | Field tracking | **PASS** | live pin from S22 |
-| Background/screen-off tracking | **PASS (native client)** | screen-off test moved 17→25 telemetry rows |
+| Background/screen-off tracking | **PASS (native client)** | screen-off test moved 17→25 telemetry rows; 8-hour battery soak pending |
 | Reliable accuracy filtering | **PASS** | 75 m accuracy + teleport guard |
 | Off-route warning only on fresh GPS | **PARTIAL** | stale pins still shown with stale label |
 
@@ -89,8 +89,8 @@ risk. It cannot be closed by engineering.
 | Hard distance/travel/visit limits | **PASS** | VROOM-enforced |
 | Cost-aware recommendations | **PASS (advisory)** | endpoint + UI, 4 tests |
 | Automatic partial assignment | **PARTIAL** | VROOM leaves unassigned; no explicit per-job reason beyond solver |
-| Driver “request more jobs” | **NOT DONE** | no workflow |
-| Dispatcher one-click assign recommendation | **NOT DONE** | advisory only; requires re-optimisation |
+| Driver “request more jobs” | **PASS (request/decision)** | durable request + dispatcher decision; assignment/re-optimisation still missing |
+| Dispatcher one-click assign recommendation | **NOT DONE** | advisory only; requires atomic assign + re-optimisation |
 
 ### Phase 6 — Pilot hardening
 
@@ -139,7 +139,7 @@ risk. It cannot be closed by engineering.
 ### P0 — needed before calling this a pilot product
 
 1. **Phase 0 customer validation** — a named operator, metrics and scope.
-2. **Background GPS** — native client screen-off PASS; battery/8-hour soak and full native parity remain.
+2. **Background GPS** — native client screen-off PASS; 8-hour battery soak, release signing and full native parity remain.
 3. **Cross-tenant demo-data cleanup** — a unique `(tenant_id, reference)`
    index already exists and is enforced. Duplicate-looking references such as
    `J-191` are in different tenants, not integrity violations. Remaining work
@@ -172,6 +172,10 @@ risk. It cannot be closed by engineering.
 
 ## 4. What to build next
 
+See `docs/27-stage-plan-review-and-build-order.md` for the consolidated,
+commercial-gate-first build order. The items below are retained as the detailed
+engineering backlog.
+
 ### Next 1 — Data integrity and demo isolation (recommended first)
 
 - confirm the existing `(tenant_id, reference)` unique index in CI,
@@ -183,14 +187,14 @@ This protects every future demo and every optimisation baseline. It is the
 highest-value engineering task because stale data has repeatedly caused false
 incidents (Tom’s v100 route, duplicate `J-191`).
 
-### Next 2 — Driver “Request more jobs”
+### Next 2 — Driver request to assignment
 
 Durable request, dispatcher recommendation, route-impact preview, approval
 that re-optimises the remaining work and preserves completed/in-progress stops.
 
-### Next 3 — Background GPS
+### Next 3 — Native release readiness
 
-Native foreground service, battery/permission handling, screen-off test.
+Release signing, 8-hour battery soak, offline/conflict matrix and push update channel.
 
 ### Next 4 — Dispatch-origin resolver
 
