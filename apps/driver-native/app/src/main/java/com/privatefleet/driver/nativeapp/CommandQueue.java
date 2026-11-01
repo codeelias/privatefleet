@@ -32,8 +32,11 @@ public final class CommandQueue {
     }
 
     private static JSONArray read(Context context) {
-        String raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getString(KEY, "[]");
+        String stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY, "");
+        if (stored.isEmpty()) return new JSONArray();
+        String raw = SecureStore.decrypt(stored);
+        if (raw == null) return new JSONArray();
         try {
             return new JSONArray(raw);
         } catch (Exception ignored) {
@@ -43,7 +46,7 @@ public final class CommandQueue {
 
     private static void write(Context context, JSONArray queue) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                .putString(KEY, queue.toString()).apply();
+                .putString(KEY, SecureStore.encrypt(queue.toString())).apply();
     }
 
     public static void enqueue(Context context, JSONObject command) {
@@ -106,3 +109,4 @@ public final class CommandQueue {
         }
     }
 }
+

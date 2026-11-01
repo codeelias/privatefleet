@@ -106,8 +106,9 @@ public class TelemetryService extends Service implements LocationListener {
 
     @Override
     public void onLocationChanged(Location location) {
-        Log.i(TAG, "location accuracy=" + location.getAccuracy());
         if (location.getAccuracy() > 150f) return;
+        LocationStore.save(this, location.getLatitude(), location.getLongitude(),
+                location.getTime());
         executor.execute(() -> {
             try {
                 JSONObject sample = new JSONObject();
@@ -180,6 +181,7 @@ public class TelemetryService extends Service implements LocationListener {
         return null;
     }
 }
+
 
 
 

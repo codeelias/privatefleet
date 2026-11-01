@@ -10,10 +10,12 @@ WebView or JavaScript runtime.
 ## What it does
 
 - PIN driver login against `https://pf-node.tail060a86.ts.net`
-- durable access/refresh session in SharedPreferences
+- durable access/refresh session encrypted with Android Keystore AES/GCM
 - Start shift / shift status
 - Request more jobs (durable dispatcher request)
-- Refresh queue and render jobs/stops
+- Nearest-stop ordering (arrived pinned first, completed/skipped/failed excluded)
+- Responsive pagination: 3 stops per page on phones, 6 on tablets, Previous/Next
+- Card-based job/stop UI with status chips and distance from the last GPS fix
 - Native Arrive / Complete actions with recipient proof
 - Native signature capture and upload
 - Native failed-delivery reporting (reason code)
@@ -48,6 +50,11 @@ native signature upload: PASS (stop_evidence kind=signature)
 native photo upload: PASS (stop_evidence kind=photo)
 offline arrive: queued with network disabled
 offline queue sync: PASS (queue [] and server stop arrived)
+nearest ordering: PASS (arrived pinned, pending sorted by distance)
+pagination: PASS (Page 1 of 10 - 29 stops, Next -> Page 2, Previous -> Page 1)
+encrypted session: PASS (relaunch restored the signed-in session)
+Keystore AES/GCM: PASS (no caller-supplied IV)
+FLAG_SECURE: enabled
 ```
 
 Build:
@@ -78,7 +85,8 @@ configuration is required before distribution.
 - Native actions use one-shot HTTP; the durable offline command queue is not
   implemented in this client.
 - No offline evidence store yet (commands only).
-- Offline queue lives in SharedPreferences, not encrypted storage.
+- Queue/session are encrypted at rest with an Android Keystore AES/GCM key.
+- No certificate pinning, root/tamper detection or biometric gate yet.
 - Battery impact of time-based updates must be measured over a full shift;
   switch to distance-based updates once movement testing is complete.
 - Force-stop by the user still prevents tracking; Android does not restart a

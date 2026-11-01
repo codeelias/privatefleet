@@ -7,6 +7,8 @@ import android.app.Dialog;
 import android.content.ContentValues;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.provider.MediaStore;
@@ -28,6 +30,10 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -46,10 +52,19 @@ public class MainActivity extends Activity {
     private Uri pendingPhotoUri;
     private String pendingPhotoJobId;
     private String pendingPhotoStopId;
+    private final List<StopItem> stopItems = new ArrayList<>();
+    private int page = 0;
+    private int pageSize = 3;
+    private TextView pageLabel;
+    private Button prevButton;
+    private Button nextButton;
+    private TextView locationView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
         session = Session.load(this);
         if (session.isLoggedIn()) {
             showMain();
@@ -77,7 +92,7 @@ public class MainActivity extends Activity {
         root.addView(brand);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Driver sign in Â· native Android client");
+        subtitle.setText("Driver sign in - native Android client");
         subtitle.setTextSize(14);
         subtitle.setPadding(0, 8, 0, 32);
         subtitle.setGravity(Gravity.CENTER);
@@ -105,8 +120,11 @@ public class MainActivity extends Activity {
                         showMain();
                     });
                 } catch (Exception error) {
-                    login.setEnabled(true);
-                    runOnUiThread(() -> toast(error.getMessage()));
+                    android.util.Log.e("pf-native", "login failed", error);
+                    runOnUiThread(() -> {
+                        login.setEnabled(true);
+                        toast(error.getMessage());
+                    });
                 }
             });
         });
@@ -131,7 +149,9 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(Color.rgb(245, 246, 248));
         root.setPadding(40, 48, 40, 40);
+        pageSize = getResources().getConfiguration().smallestScreenWidthDp >= 600 ? 6 : 3;
         scroll.addView(root);
         setContentView(scroll);
 
@@ -141,7 +161,7 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView driver = new TextView(this);
-        driver.setText(session.driverName + " Â· " + session.tenantSlug);
+        driver.setText(session.driverName + " - " + session.tenantSlug);
         driver.setTextSize(15);
         driver.setPadding(0, 4, 0, 20);
         root.addView(driver);
@@ -151,7 +171,7 @@ public class MainActivity extends Activity {
 
         Button start = new Button(this);
         start.setText("on_route".equals(session.driverStatus)
-                ? "Shift active â€” background tracking on"
+                ? "Shift active - background tracking on"
                 : "Start shift");
         start.setEnabled(!"on_route".equals(session.driverStatus));
         start.setOnClickListener(v -> {
@@ -163,7 +183,7 @@ public class MainActivity extends Activity {
                         TelemetryService.start(this);
                         requestPermissions();
                         showMain();
-                        toast("Shift started â€” background tracking on");
+                        toast("Shift started - background tracking on");
                     });
                 } catch (Exception error) {
                     runOnUiThread(() -> toast(error.getMessage()));
@@ -192,9 +212,43 @@ public class MainActivity extends Activity {
         refresh.setOnClickListener(v -> refreshQueue());
         root.addView(refresh);
 
+        locationView = new TextView(this);
+        locationView.setTextSize(11);
+        locationView.setTextColor(Color.rgb(102, 112, 133));
+        root.addView(locationView);
+
         jobsContainer = new LinearLayout(this);
         jobsContainer.setOrientation(LinearLayout.VERTICAL);
         root.addView(jobsContainer);
+
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        prevButton = new Button(this);
+        prevButton.setText("Previous");
+        prevButton.setOnClickListener(v -> {
+            if (page > 0) {
+                page--;
+                renderPage();
+            }
+        });
+        footer.addView(prevButton);
+        pageLabel = new TextView(this);
+        pageLabel.setTextSize(12);
+        pageLabel.setGravity(android.view.Gravity.CENTER);
+        pageLabel.setLayoutParams(new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        footer.addView(pageLabel);
+        nextButton = new Button(this);
+        nextButton.setText("Next");
+        nextButton.setOnClickListener(v -> {
+            if ((page + 1) * pageSize < stopItems.size()) {
+                page++;
+                renderPage();
+            }
+        });
+        footer.addView(nextButton);
+        root.addView(footer);
         refreshQueue();
 
         Button signOut = new Button(this);
@@ -218,7 +272,7 @@ public class MainActivity extends Activity {
             try {
                 int count = new ApiClient(this).queueCount();
                 runOnUiThread(() -> statusView.setText("Status: "
-                        + session.driverStatus + " Â· " + count + " jobs"));
+                        + session.driverStatus + " - " + count + " jobs"));
             } catch (Exception ignored) {
                 // the status label already shows the session state
             }
@@ -273,88 +327,205 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void renderQueue(JSONObject queue) {
-        if (jobsContainer == null) return;
-        jobsContainer.removeAllViews();
-        JSONArray jobs = queue.optJSONArray("jobs");
-        if (jobs == null || jobs.length() == 0) {
-            TextView empty = new TextView(this);
-            empty.setText("No jobs assigned.");
-            jobsContainer.addView(empty);
-            return;
-        }
-        for (int i = 0; i < jobs.length(); i++) {
-            JSONObject job = jobs.optJSONObject(i);
-            if (job == null) continue;
-            if ("completed".equals(job.optString("status"))) continue;
-            TextView header = new TextView(this);
-            header.setText(job.optString("reference", "Job") + " Â· "
-                    + job.optString("status", ""));
-            header.setTextSize(16);
-            header.setPadding(0, 18, 0, 6);
-            jobsContainer.addView(header);
-
-            JSONArray stops = job.optJSONArray("stops");
-            if (stops == null) continue;
-            for (int s = 0; s < stops.length(); s++) {
-                JSONObject stop = stops.optJSONObject(s);
-                if (stop == null) continue;
-                String jobId = job.optString("id");
-                String stopId = stop.optString("id");
-                String status = stop.optString("status", "pending");
-                LinearLayout row = new LinearLayout(this);
-                row.setOrientation(LinearLayout.HORIZONTAL);
-                row.setPadding(0, 4, 0, 4);
-
-                TextView label = new TextView(this);
-                label.setText(stop.optString("stopType", "stop") + ": "
-                        + stop.optString("address", "") + "\n" + status);
-                label.setTextSize(13);
-                label.setLayoutParams(new LinearLayout.LayoutParams(
-                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-                row.addView(label);
-
-                LinearLayout actions = new LinearLayout(this);
-                actions.setOrientation(LinearLayout.VERTICAL);
-                if ("pending".equals(status)) {
-                    Button arrive = new Button(this);
-                    arrive.setText("Arrive");
-                    arrive.setOnClickListener(v -> queueCommand("arrive", jobId, stopId,
-                            null, null));
-                    actions.addView(arrive);
-                    Button photo = new Button(this);
-                    photo.setText("Photo");
-                    photo.setOnClickListener(v -> promptPhoto(jobId, stopId));
-                    actions.addView(photo);
-                    Button fail = new Button(this);
-                    fail.setText("Fail");
-                    fail.setOnClickListener(v -> promptSkip(jobId, stopId));
-                    actions.addView(fail);
-                } else if ("arrived".equals(status)) {
-                    Button sign = new Button(this);
-                    sign.setText("Sign");
-                    sign.setOnClickListener(v -> promptSignature(jobId, stopId));
-                    actions.addView(sign);
-                    Button complete = new Button(this);
-                    complete.setText("Complete");
-                    complete.setOnClickListener(v -> promptRecipient(jobId, stopId));
-                    actions.addView(complete);
-                    Button photo = new Button(this);
-                    photo.setText("Photo");
-                    photo.setOnClickListener(v -> promptPhoto(jobId, stopId));
-                    actions.addView(photo);
-                    Button fail = new Button(this);
-                    fail.setText("Fail");
-                    fail.setOnClickListener(v -> promptSkip(jobId, stopId));
-                    actions.addView(fail);
-                }
-                row.addView(actions);
-                jobsContainer.addView(row);
-            }
-        }
+    private static final class StopItem {
+        String jobId;
+        String jobRef;
+        String jobStatus;
+        String stopId;
+        String type;
+        String address;
+        String status;
+        double latitude;
+        double longitude;
+        double distanceMetres;
     }
 
+    private void renderQueue(JSONObject queue) {
+        stopItems.clear();
+        page = 0;
+        JSONArray jobs = queue.optJSONArray("jobs");
+        if (jobs != null) {
+            for (int i = 0; i < jobs.length(); i++) {
+                JSONObject job = jobs.optJSONObject(i);
+                if (job == null) continue;
+                String jobStatus = job.optString("status", "");
+                if ("completed".equals(jobStatus) || "cancelled".equals(jobStatus)) continue;
+                JSONArray stops = job.optJSONArray("stops");
+                if (stops == null) continue;
+                for (int s = 0; s < stops.length(); s++) {
+                    JSONObject stop = stops.optJSONObject(s);
+                    if (stop == null) continue;
+                    String status = stop.optString("status", "pending");
+                    if ("completed".equals(status) || "skipped".equals(status)
+                            || "failed".equals(status)) continue;
+                    StopItem item = new StopItem();
+                    item.jobId = job.optString("id");
+                    item.jobRef = job.optString("reference", "Job");
+                    item.jobStatus = jobStatus;
+                    item.stopId = stop.optString("id");
+                    item.type = stop.optString("stopType", "stop");
+                    item.address = stop.optString("address", "");
+                    item.status = status;
+                    JSONObject location = stop.optJSONObject("location");
+                    if (location != null) {
+                        item.latitude = location.optDouble("latitude", 0);
+                        item.longitude = location.optDouble("longitude", 0);
+                    }
+                    stopItems.add(item);
+                }
+            }
+        }
 
+        double[] here = LocationStore.load(this);
+        locationView.setText(here == null
+                ? "Location unavailable - showing route order"
+                : "Sorted by distance from last GPS fix");
+        for (StopItem item : stopItems) {
+            item.distanceMetres = here == null ? Double.MAX_VALUE
+                    : distanceMetres(here[0], here[1], item.latitude, item.longitude);
+        }
+        stopItems.sort(Comparator
+                .comparing((StopItem item) -> !"arrived".equals(item.status))
+                .thenComparingDouble(item -> item.distanceMetres)
+                .thenComparing(item -> item.jobRef));
+        renderPage();
+    }
+
+    private void renderPage() {
+        if (jobsContainer == null) return;
+        jobsContainer.removeAllViews();
+        int total = stopItems.size();
+        if (total == 0) {
+            TextView empty = new TextView(this);
+            empty.setText("No active stops. Pull refresh after dispatch assigns work.");
+            empty.setTextSize(14);
+            empty.setPadding(0, 24, 0, 24);
+            jobsContainer.addView(empty);
+            if (pageLabel != null) pageLabel.setText("0 of 0");
+            if (prevButton != null) prevButton.setEnabled(false);
+            if (nextButton != null) nextButton.setEnabled(false);
+            return;
+        }
+        int from = Math.min(page * pageSize, total);
+        int to = Math.min(from + pageSize, total);
+        for (int i = from; i < to; i++) {
+            jobsContainer.addView(stopCard(stopItems.get(i), i - from + 1));
+        }
+        if (pageLabel != null) {
+            pageLabel.setText("Page " + (page + 1) + " of "
+                    + ((total + pageSize - 1) / pageSize) + " - " + total + " stops");
+        }
+        if (prevButton != null) prevButton.setEnabled(page > 0);
+        if (nextButton != null) nextButton.setEnabled(to < total);
+    }
+
+    private android.view.View stopCard(StopItem item, int position) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(28, 22, 28, 22);
+        card.setBackground(rounded(Color.WHITE, 18f, Color.rgb(228, 231, 236)));
+        card.setElevation(dp(2));
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        cardParams.bottomMargin = dp(12);
+        card.setLayoutParams(cardParams);
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        TextView reference = new TextView(this);
+        reference.setText(position + ". " + item.jobRef + " - " + item.type.toUpperCase(Locale.UK));
+        reference.setTextSize(13);
+        reference.setTextColor(Color.rgb(11, 18, 32));
+        reference.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        reference.setLayoutParams(new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        top.addView(reference);
+        TextView chip = new TextView(this);
+        chip.setText(item.status.toUpperCase(Locale.UK));
+        chip.setTextSize(10);
+        chip.setTextColor("arrived".equals(item.status)
+                ? Color.rgb(180, 83, 9) : Color.rgb(22, 163, 74));
+        chip.setPadding(dp(8), dp(3), dp(8), dp(3));
+        chip.setBackground(rounded(Color.rgb(245, 246, 248), 20f, Color.rgb(228, 231, 236)));
+        top.addView(chip);
+        card.addView(top);
+
+        TextView address = new TextView(this);
+        address.setText(item.address);
+        address.setTextSize(16);
+        address.setTextColor(Color.rgb(17, 24, 39));
+        address.setPadding(0, dp(8), 0, dp(4));
+        card.addView(address);
+
+        TextView meta = new TextView(this);
+        String distance = item.distanceMetres == Double.MAX_VALUE ? "distance unknown"
+                : String.format(Locale.UK, "%.1f km from you", item.distanceMetres / 1000);
+        meta.setText(distance);
+        meta.setTextSize(12);
+        meta.setTextColor(Color.rgb(102, 112, 133));
+        card.addView(meta);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setPadding(0, dp(10), 0, 0);
+        if ("pending".equals(item.status)) {
+            actions.addView(actionButton("Arrive", true,
+                    () -> queueCommand("arrive", item.jobId, item.stopId, null, null)));
+            actions.addView(actionButton("Photo", false,
+                    () -> promptPhoto(item.jobId, item.stopId)));
+            actions.addView(actionButton("Fail", false,
+                    () -> promptSkip(item.jobId, item.stopId)));
+        } else if ("arrived".equals(item.status)) {
+            actions.addView(actionButton("Sign", false,
+                    () -> promptSignature(item.jobId, item.stopId)));
+            actions.addView(actionButton("Complete", true,
+                    () -> promptRecipient(item.jobId, item.stopId)));
+            actions.addView(actionButton("Fail", false,
+                    () -> promptSkip(item.jobId, item.stopId)));
+        }
+        card.addView(actions);
+        return card;
+    }
+
+    private Button actionButton(String text, boolean primary, Runnable action) {
+        Button button = new Button(this);
+        button.setText(text);
+        button.setAllCaps(false);
+        button.setTextSize(12);
+        button.setTextColor(primary ? Color.WHITE : Color.rgb(11, 18, 32));
+        button.setBackground(rounded(primary ? Color.rgb(232, 106, 51) : Color.WHITE,
+                14f, Color.rgb(212, 216, 224)));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        params.rightMargin = dp(6);
+        button.setLayoutParams(params);
+        button.setOnClickListener(v -> action.run());
+        return button;
+    }
+
+    private GradientDrawable rounded(int fill, float radiusDp, int stroke) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(fill);
+        drawable.setCornerRadius(dp(Math.round(radiusDp)));
+        drawable.setStroke(dp(1), stroke);
+        return drawable;
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private static double distanceMetres(double lat1, double lon1, double lat2, double lon2) {
+        double radius = 6371000;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return 2 * radius * Math.asin(Math.sqrt(a));
+    }
 
     private void promptPhoto(String jobId, String stopId) {
         ContentValues values = new ContentValues();
@@ -407,7 +578,7 @@ public class MainActivity extends Activity {
         Dialog dialog = new Dialog(this);
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(32, 32, 32, 32);
+        layout.setPadding(dp(20), dp(20), dp(20), dp(20));
 
         TextView title = new TextView(this);
         title.setText("Recipient signature");
@@ -416,7 +587,7 @@ public class MainActivity extends Activity {
 
         SignatureView pad = new SignatureView(this);
         pad.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 600));
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(240)));
         layout.addView(pad);
 
         Button save = new Button(this);
@@ -445,7 +616,6 @@ public class MainActivity extends Activity {
         cancel.setText("Cancel");
         cancel.setOnClickListener(v -> dialog.dismiss());
         layout.addView(cancel);
-
         dialog.setContentView(layout);
         dialog.show();
     }
@@ -523,7 +693,7 @@ public class MainActivity extends Activity {
         }
         if (requestCode == 11 && results.length > 0
                 && results[0] != PackageManager.PERMISSION_GRANTED) {
-            toast("Background location denied â€” tracking works only while the app is visible");
+            toast("Background location denied - tracking works only while the app is visible");
         }
     }
 
@@ -532,4 +702,7 @@ public class MainActivity extends Activity {
                 Toast.LENGTH_LONG).show();
     }
 }
+
+
+
 

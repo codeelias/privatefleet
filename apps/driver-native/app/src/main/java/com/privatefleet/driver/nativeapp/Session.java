@@ -15,11 +15,17 @@ public final class Session {
     public String driverStatus = "";
     public String tenantSlug = "";
 
+    private static String decrypt(String value) {
+        if (value.isEmpty()) return "";
+        String plain = SecureStore.decrypt(value);
+        return plain == null ? "" : plain;
+    }
+
     public static Session load(Context context) {
         SharedPreferences p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         Session s = new Session();
-        s.accessToken = p.getString("accessToken", "");
-        s.refreshToken = p.getString("refreshToken", "");
+        s.accessToken = decrypt(p.getString("accessToken", ""));
+        s.refreshToken = decrypt(p.getString("refreshToken", ""));
         s.expiresAt = p.getLong("expiresAt", 0L);
         s.driverId = p.getString("driverId", "");
         s.driverName = p.getString("driverName", "");
@@ -30,8 +36,8 @@ public final class Session {
 
     public void save(Context context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                .putString("accessToken", accessToken)
-                .putString("refreshToken", refreshToken)
+                .putString("accessToken", SecureStore.encrypt(accessToken))
+                .putString("refreshToken", SecureStore.encrypt(refreshToken))
                 .putLong("expiresAt", expiresAt)
                 .putString("driverId", driverId)
                 .putString("driverName", driverName)
@@ -48,3 +54,5 @@ public final class Session {
         return !accessToken.isEmpty() && !refreshToken.isEmpty() && !driverId.isEmpty();
     }
 }
+
+
