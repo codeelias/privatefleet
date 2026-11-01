@@ -23,4 +23,8 @@ apps/api/.data/
 .tmp/
 apps/driver-expo/android/
 apps/driver-expo/ios/
-
+# Native release signing material (never commit)
+secrets/
+apps/driver-native/keystore.properties
+*.jks
+*.keystore

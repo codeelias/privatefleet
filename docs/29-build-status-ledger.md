@@ -32,6 +32,8 @@ is in exactly one state:
 | Transactional outbox | job/route/request events |
 | Orphan-assignment invariant | assigned jobs must be on a published route |
 | Manual route close | unfinished work returned to unassigned; driver released |
+| Demo/load tenant retirement | `load-8d0a3a98` removed after 773 MB backup; Northstar untouched |
+| Native release signing | RSA 4096 keystore, version 1.0.1, signed APK verified |
 
 ### Dispatch and optimisation
 
@@ -99,7 +101,7 @@ is in exactly one state:
 | Phase 6 hardening | DNS, Tailscale, TLS, backups | Restore drill on current schema, soak/load rerun, monitoring/alerting, release signing |
 | Driver request loop | Request and dispatcher decision | Approval does not assign work or re-optimise the route |
 | Customer tracking | Portal/tracking components and ETA display | Real customer link, branding, proactive delay notification, dispute-ready proof export not proven |
-| Native release | Debug-signed APK, live pilot install | Release signing, update channel, 8-hour battery soak |
+| Native release | Signed APK produced and verified | Physical-phone release install, update channel, 8-hour battery soak |
 | Accessibility | Keyboard, focus, labels, Escape | Screen-reader pass and 200% zoom not done |
 | Map mobile experience | Responsive dock, assignment sheet | Vehicle HUD intentionally hidden below `md`; no mobile detail sheet |
 
@@ -122,6 +124,8 @@ maintenance cost and must not become a permanent product decision.
 ---
 
 ## 4. Not yet started
+
+> Completed in Stage A so far: load-tenant retirement (backup retained), signed native release 1.0.1. Remaining Stage A work is verification, alerting, physical install and the commercial baseline/rehearsal.
 
 ### Commercial
 
@@ -166,9 +170,9 @@ maintenance cost and must not become a permanent product decision.
 
 ### Stage A - Prove and package (2-3 weeks)
 
-1. Audit/clean demo and load tenants; close historical published routes.
+1. ~~Audit/clean demo and load tenants~~; close remaining historical Northstar routes.
 2. Rerun E2E, load/soak and restore drill on the current schema.
-3. Release-sign the native app and define the internal update path.
+3. ~~Release-sign the native app~~; define the internal update path and install on the phone.
 4. Add alerting and a one-page support escalation runbook.
 5. Prepare the operator baseline sheet and rehearse the 120-second demo.
 

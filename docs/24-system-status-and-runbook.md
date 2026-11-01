@@ -206,9 +206,8 @@ Serve config persists. Phone must be signed into the same tailnet account.
 2. **Duplicate driver names exist across tenants** (for example two Sarah Reed
    and two Tom Cole records). They are isolated by tenant; they still confuse
    demos and must be retired with the load/E2E tenant.
-3. **Load-test tenant** `load-8d0a3a98` holds historical routes and global
-   version numbers. It is isolated by RLS but pollutes version history and
-   baselines during demonstrations.
+3. **Load-test tenant retired** on 2026-11-01 after a 773 MB backup. Only
+   Northstar remains; global route-version pollution is gone.
 4. **Historical published routes** can remain for drivers omitted from a later
    plan. Manual closure and automatic completion reduce this, but an audited
    cleanup is still needed.
@@ -227,11 +226,11 @@ next.
 | Automatic partial assignment explanation beyond `SOLVER_UNASSIGNED` | Partial |
 | Dispatch-origin resolver (depot, confirmation, fresh GPS) | Not started |
 | Native background GPS / screen-off tracking | Deployed and verified |
-| Native release signing / update channel | Not started |
+| Native release signing | Complete (RSA 4096, 1.0.1, verified); update channel not defined |
 | Duplicate job-reference constraint | **Already enforced**; cross-tenant only |
-| Demo/load tenant isolation and audited reset | Not started |
+| Demo/load tenant isolation and audited reset | Load tenant retired; reset procedure still to be written |
 | Current-build E2E / load / soak rerun | Not started |
-| Restore drill on current schema | Not started |
+| Restore drill on current schema | Not started; pre-retirement dump retained |
 | Tailscale ACL/MFA hardening | Not started |
 | 30-day reliability evidence and SLA | Not started |
 

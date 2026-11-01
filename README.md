@@ -11,6 +11,9 @@ LAN-first multi-tenant courier dispatch platform. Synthetic data only.
 **Authoritative five-state build ledger:**
 [`docs/29-build-status-ledger.md`](docs/29-build-status-ledger.md)
 
+**Data retirement and release signing:**
+[`docs/30-data-retirement-and-release-signing.md`](docs/30-data-retirement-and-release-signing.md)
+
 These documents list exactly what is deployed, what is still pending, known
 data issues, operations commands and the relevant commits. Read them before
 changing dispatch behaviour or demonstrating the system.

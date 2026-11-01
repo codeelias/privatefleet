@@ -462,7 +462,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
                     return (
                       <div key={vehicle.id} className="grid grid-cols-2 items-end gap-2 md:grid-cols-4">
                         <span className="text-xs text-text-secondary">
-                          {vehicle.registration} Ãƒâ€šÃ‚Â· {driverName}
+                          {vehicle.registration} · {driverName}
                         </span>
                         <label className="text-xs text-text-secondary">
                           Max km
@@ -549,16 +549,16 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
           {recommendations && (
             <>
               <p className="mt-2 text-xs text-text-secondary">
-                Rates: fuel Ã‚Â£{(recommendations.economics.fuelPencePerKm / 100).toFixed(2)}/km,
-                vehicle Ã‚Â£{(recommendations.economics.vehiclePencePerKm / 100).toFixed(2)}/km,
-                driver Ã‚Â£{(recommendations.economics.driverPencePerHour / 100).toFixed(2)}/h,
+                Rates: fuel £{(recommendations.economics.fuelPencePerKm / 100).toFixed(2)}/km,
+                vehicle £{(recommendations.economics.vehiclePencePerKm / 100).toFixed(2)}/km,
+                driver £{(recommendations.economics.driverPencePerHour / 100).toFixed(2)}/h,
                 max detour {recommendations.economics.maxDetourKm} km.
               </p>
               <div className="mt-2 grid grid-cols-1 gap-1 text-xs md:grid-cols-3">
                 {recommendations.routes.map((route) => (
                   <span key={route.driverId} className="rounded-lg bg-command-raised px-2 py-1">
                     {route.driverName}: {(route.distanceMetres / 1000).toFixed(1)} km,{" "}
-                    Ã‚Â£{(route.estimatedCostPence / 100).toFixed(2)} estimated cost
+                    £{(route.estimatedCostPence / 100).toFixed(2)} estimated cost
                   </span>
                 ))}
               </div>
@@ -576,10 +576,10 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusChip tone={item.priority === "stat" ? "danger" : "neutral"} label={item.reference} />
                       <span className="text-sm font-bold text-text-primary">
-                        {item.driverName} Ã‚Â· {item.registration}
+                        {item.driverName} · {item.registration}
                       </span>
                       <span className="text-xs text-text-secondary">
-                        +{item.detourKm} km Ã‚Â· +{item.addedMinutes} min Ã‚Â· Ã‚Â£
+                        +{item.detourKm} km · +{item.addedMinutes} min · £
                         {(item.addedCostPence / 100).toFixed(2)} incremental
                       </span>
                     </div>
