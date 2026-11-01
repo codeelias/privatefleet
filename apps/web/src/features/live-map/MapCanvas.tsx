@@ -929,7 +929,7 @@ export function MapCanvas({
       <div className="absolute inset-0 flex items-center justify-center">
         <div
           data-testid="map-card"
-          className={"pf-map-card relative h-[94%] w-[97%] overflow-hidden rounded-[26px] border border-[#27272A] bg-[#09090B] shadow-[0_18px_50px_rgba(0,0,0,0.45)] " + (mapStyle === "light" ? "pf-map-light" : "")}
+          className={"pf-map-card relative h-full w-full overflow-hidden rounded-[26px] border border-[#27272A] bg-[#09090B] shadow-[0_18px_50px_rgba(0,0,0,0.45)] " + (mapStyle === "light" ? "pf-map-light" : "")}
         >
           <div
             className="absolute inset-0 opacity-20"
@@ -1109,6 +1109,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 

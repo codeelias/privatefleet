@@ -29,7 +29,7 @@ export function JobCard({
         ref={setNodeRef}
         type="button"
         onClick={onSelect}
-        className="group flex w-full items-center gap-2 rounded-xl border border-command-border bg-command-raised px-2.5 py-2 text-left transition-colors hover:border-brand-primary/50"
+        className="group flex w-full items-center gap-2 rounded-xl border border-command-border bg-command-raised px-2.5 py-1.5 text-left transition-colors hover:border-brand-primary/50"
         style={{
           transform: transform
             ? `translate3d(${transform.x}px, ${transform.y}px, 0)`

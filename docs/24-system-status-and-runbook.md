@@ -56,7 +56,7 @@ Dispatcher web: `https://app.privatefleet.home.arpa`.
 | Native nearest-stop ordering + paging | Deployed | arrived pinned, pending sorted by GPS distance, 3/6 per page |
 | Native encrypted session/queue/evidence | Deployed | Android Keystore AES/GCM, FLAG_SECURE |
 | Native offline evidence queue | Deployed | signature/photo survive network loss and sync on reconnect |
-| Dispatcher map HUD/dock | Deployed | inset vehicle HUD, centred 72 px dock, 460 px popover, bounded assignment sheet |
+| Dispatcher map HUD/dock | Deployed | inset vehicle HUD, centred 46 px taskbar icon, 3-up pager, 440 px popover, bounded assignment sheet |
 | POD evidence + durable queue | Deployed | duplicate upload treated as success `69ee6eb` |
 | External access via Tailscale Serve | Deployed | `{"status":"ok"}` from mobile data |
 | Local DNS via dnsmasq | Deployed | app/api resolve to 192.168.1.128 |

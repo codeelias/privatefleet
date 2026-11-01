@@ -97,6 +97,7 @@ function Dashboard({
     "compact",
   );
   const [queueOpen, setQueueOpen] = useState(false);
+  const [queuePage, setQueuePage] = useState(0);
   const [socketConnected, setSocketConnected] = useState(false);
   const telemetryTrackRef = useRef<TrackMap>({});
   const pendingPositionsRef = useRef<Map<string, VehiclePosition>>(new Map());
@@ -276,6 +277,13 @@ function Dashboard({
   const onRoute = state.vehicles.filter((v) => v.status === "on_route").length;
   const inProgress = state.jobs.filter((j) => j.status !== "unassigned").length;
   const unassigned = state.jobs.filter((j) => j.status === "unassigned");
+  const queuePageSize = 3;
+  const queuePageCount = Math.max(1, Math.ceil(unassigned.length / queuePageSize));
+  const queuePageSafe = Math.min(queuePage, queuePageCount - 1);
+  const queueJobs = unassigned.slice(
+    queuePageSafe * queuePageSize,
+    queuePageSafe * queuePageSize + queuePageSize,
+  );
   const urgent = unassigned.filter((j) => j.priority === "stat" || j.priority === "urgent").length;
   const atRisk = openAlerts.length;
   const selectedVehicle =
@@ -476,7 +484,7 @@ function Dashboard({
                   )}
                 </div>
 
-                <div className="relative flex min-h-0 flex-1 overflow-hidden px-4 pb-2">
+                <div className="relative flex min-h-0 flex-1 overflow-hidden p-3">
                   <MapCanvas
                     state={state}
                     gpsSeenAt={gpsSeenRef.current}
@@ -486,7 +494,7 @@ function Dashboard({
 
                   {/* Inset map HUD: selected vehicle stays inside the map edge. */}
                 {vehiclePanel !== "closed" ? (
-                  <aside className="pointer-events-none absolute left-5 top-5 z-30 hidden w-[268px] max-w-[calc(100%-1.5rem)] md:block">
+                  <aside className="pointer-events-none absolute left-8 top-8 z-30 hidden w-[250px] max-w-[calc(100%-1.5rem)] md:block">
                     <div className="pf-map-hud pointer-events-auto overflow-hidden">
                       <div className="pf-map-hud__header">
                         <div className="flex min-w-0 items-center gap-2">
@@ -616,7 +624,7 @@ function Dashboard({
                   <button
                     type="button"
                     onClick={() => setVehiclePanel("compact")}
-                    className="pf-map-hud absolute left-5 top-5 z-30 hidden min-h-8 items-center gap-2 rounded-full px-2.5 text-[10px] font-semibold text-text-secondary shadow-sm md:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                    className="pf-map-hud absolute left-8 top-8 z-30 hidden min-h-8 items-center gap-2 rounded-full px-2.5 text-[10px] font-semibold text-text-secondary shadow-sm md:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                     aria-label="Open selected vehicle panel"
                     title="Show selected vehicle"
                   >
@@ -630,11 +638,14 @@ function Dashboard({
                 )}
 
                 {/* Bottom dock: a centred taskbar icon when minimised, a bounded popover when open. */}
-                <div className="pointer-events-none absolute inset-x-0 bottom-3 z-30 flex justify-center px-3">
+                <div className="pointer-events-none absolute inset-x-0 bottom-7 z-30 flex justify-center px-3">
                   <div className={"pf-map-dock " + (queueOpen ? "pf-map-dock--open" : "")}>
                     <button
                       type="button"
-                      onClick={() => setQueueOpen((value) => !value)}
+                      onClick={() => {
+                        setQueueOpen((value) => !value);
+                        setQueuePage(0);
+                      }}
                       aria-expanded={queueOpen}
                       aria-controls="unassigned-drawer"
                       aria-label={queueOpen ? "Close unassigned jobs" : "Open unassigned jobs"}
@@ -668,27 +679,60 @@ function Dashboard({
                       )}
                     </button>
                     {queueOpen && (
-                      <div id="unassigned-drawer" className="pf-map-dock__body p-3">
-                        <div className="pf-scroll flex flex-col gap-2">
-                          {unassigned.map((job) => (
-                            <JobCard
-                              key={job.id}
-                              job={job}
-                              dense
-                              onSelect={() => openAssignment(job.id)}
-                            />
-                          ))}
-                          {unassigned.length === 0 && (
-                            <p className="py-2 text-xs text-text-secondary">
-                              {state.demoMode
-                                ? "Queue clear. Reset a scenario to seed new jobs."
-                                : "No unassigned jobs. Dispatch is clear."}
-                            </p>
-                          )}
+                      <>
+                        <div id="unassigned-drawer" className="pf-map-dock__body p-2.5">
+                          <div className="flex flex-col gap-1.5">
+                            {queueJobs.map((job) => (
+                              <JobCard
+                                key={job.id}
+                                job={job}
+                                dense
+                                onSelect={() => openAssignment(job.id)}
+                              />
+                            ))}
+                            {unassigned.length === 0 && (
+                              <p className="py-2 text-xs text-text-secondary">
+                                {state.demoMode
+                                  ? "Queue clear. Reset a scenario to seed new jobs."
+                                  : "No unassigned jobs. Dispatch is clear."}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                        {unassigned.length > 0 && (
+                          <div className="pf-map-dock__pager">
+                            <span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-text-secondary">
+                              {queuePageSafe * queuePageSize + 1}-
+                              {Math.min((queuePageSafe + 1) * queuePageSize, unassigned.length)} of {unassigned.length}
+                            </span>
+                            <div className="flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                disabled={queuePageSafe === 0}
+                                onClick={() => setQueuePage((page) => Math.max(0, page - 1))}
+                                aria-label="Previous unassigned jobs"
+                                className="pf-icon-button disabled:cursor-not-allowed disabled:opacity-35"
+                              >
+                                <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                                  <path d="M7.5 2.5 4 6l3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={queuePageSafe >= queuePageCount - 1}
+                                onClick={() => setQueuePage((page) => Math.min(queuePageCount - 1, page + 1))}
+                                aria-label="Next unassigned jobs"
+                                className="pf-icon-button disabled:cursor-not-allowed disabled:opacity-35"
+                              >
+                                <svg viewBox="0 0 12 12" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                                  <path d="M4.5 2.5 8 6l-3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}                  </div>
                 </div>
 
                 </div>
@@ -866,6 +910,7 @@ export function App() {
     />
   );
 }
+
 
 
 
