@@ -13,7 +13,8 @@ WebView or JavaScript runtime.
 - durable access/refresh session in SharedPreferences
 - Start shift / shift status
 - Request more jobs (durable dispatcher request)
-- Refresh queue count
+- Refresh queue and render jobs/stops
+- Native Arrive / Complete actions with recipient proof
 - Foreground location service (`TelemetryService`) using Android
   `LocationManager`:
   - GPS + network providers
@@ -35,6 +36,10 @@ shift: on_route · 19 jobs
 foreground service: isForeground=true
 screen-off test: 17 → 25 location_points rows in ~80 s
 latest point captured while screen was off
+native Arrive: PASS
+dropoff status changed pending → arrived
+native Complete: PASS (recipient name)
+dropoff status changed arrived → completed
 ```
 
 Build:
@@ -59,8 +64,11 @@ configuration is required before distribution.
 
 ## Known limitations
 
-- No arrive/complete/skip or POD/evidence UI yet; those remain in the Expo
-  client until native parity is built.
+- No native photo/signature evidence capture yet; the current tenant policy
+  requires only a recipient name, which the native client supports.
+- No native skip/failed-delivery flow yet.
+- Native actions use one-shot HTTP; the durable offline command queue is not
+  implemented in this client.
 - No offline command queue or durable local evidence store.
 - Battery impact of time-based updates must be measured over a full shift;
   switch to distance-based updates once movement testing is complete.

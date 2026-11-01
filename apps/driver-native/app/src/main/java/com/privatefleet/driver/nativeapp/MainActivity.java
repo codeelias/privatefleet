@@ -2,6 +2,7 @@ package com.privatefleet.driver.nativeapp;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -14,6 +15,10 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -27,6 +32,7 @@ public class MainActivity extends Activity {
     private Session session;
     private TextView statusView;
     private LinearLayout root;
+    private LinearLayout jobsContainer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -170,16 +176,13 @@ public class MainActivity extends Activity {
 
         Button refresh = new Button(this);
         refresh.setText("Refresh queue");
-        refresh.setOnClickListener(v -> executor.execute(() -> {
-            try {
-                int count = new ApiClient(this).queueCount();
-                runOnUiThread(() -> statusView.setText(
-                        "Status: " + session.driverStatus + " · " + count + " jobs"));
-            } catch (Exception error) {
-                runOnUiThread(() -> toast(error.getMessage()));
-            }
-        }));
+        refresh.setOnClickListener(v -> refreshQueue());
         root.addView(refresh);
+
+        jobsContainer = new LinearLayout(this);
+        jobsContainer.setOrientation(LinearLayout.VERTICAL);
+        root.addView(jobsContainer);
+        refreshQueue();
 
         Button signOut = new Button(this);
         signOut.setText("Sign out");
@@ -207,6 +210,116 @@ public class MainActivity extends Activity {
                 // the status label already shows the session state
             }
         });
+    }
+
+
+    private void refreshQueue() {
+        executor.execute(() -> {
+            try {
+                JSONObject queue = new ApiClient(this).queue();
+                runOnUiThread(() -> renderQueue(queue));
+            } catch (Exception error) {
+                runOnUiThread(() -> toast(error.getMessage()));
+            }
+        });
+    }
+
+    private void renderQueue(JSONObject queue) {
+        if (jobsContainer == null) return;
+        jobsContainer.removeAllViews();
+        JSONArray jobs = queue.optJSONArray("jobs");
+        if (jobs == null || jobs.length() == 0) {
+            TextView empty = new TextView(this);
+            empty.setText("No jobs assigned.");
+            jobsContainer.addView(empty);
+            return;
+        }
+        for (int i = 0; i < jobs.length(); i++) {
+            JSONObject job = jobs.optJSONObject(i);
+            if (job == null) continue;
+            if ("completed".equals(job.optString("status"))) continue;
+            TextView header = new TextView(this);
+            header.setText(job.optString("reference", "Job") + " · "
+                    + job.optString("status", ""));
+            header.setTextSize(16);
+            header.setPadding(0, 18, 0, 6);
+            jobsContainer.addView(header);
+
+            JSONArray stops = job.optJSONArray("stops");
+            if (stops == null) continue;
+            for (int s = 0; s < stops.length(); s++) {
+                JSONObject stop = stops.optJSONObject(s);
+                if (stop == null) continue;
+                String jobId = job.optString("id");
+                String stopId = stop.optString("id");
+                String status = stop.optString("status", "pending");
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setPadding(0, 4, 0, 4);
+
+                TextView label = new TextView(this);
+                label.setText(stop.optString("stopType", "stop") + ": "
+                        + stop.optString("address", "") + "\n" + status);
+                label.setTextSize(13);
+                label.setLayoutParams(new LinearLayout.LayoutParams(
+                        0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+                row.addView(label);
+
+                if ("pending".equals(status)) {
+                    Button arrive = new Button(this);
+                    arrive.setText("Arrive");
+                    arrive.setOnClickListener(v -> executor.execute(() -> {
+                        try {
+                            new ApiClient(this).arrive(jobId, stopId, session.driverId,
+                                    UUID.randomUUID().toString());
+                            runOnUiThread(() -> {
+                                toast("Arrived");
+                                refreshQueue();
+                            });
+                        } catch (Exception error) {
+                            runOnUiThread(() -> toast(error.getMessage()));
+                        }
+                    }));
+                    row.addView(arrive);
+                } else if ("arrived".equals(status)) {
+                    Button complete = new Button(this);
+                    complete.setText("Complete");
+                    complete.setOnClickListener(v -> promptRecipient(jobId, stopId));
+                    row.addView(complete);
+                }
+                jobsContainer.addView(row);
+            }
+        }
+    }
+
+    private void promptRecipient(String jobId, String stopId) {
+        EditText input = new EditText(this);
+        input.setHint("Recipient name");
+        new AlertDialog.Builder(this)
+                .setTitle("Complete delivery")
+                .setMessage("Enter the recipient name (required by proof policy).")
+                .setView(input)
+                .setPositiveButton("Complete", (dialog, which) -> {
+                    String recipient = input.getText().toString().trim();
+                    if (recipient.isEmpty()) {
+                        toast("Recipient name is required");
+                        return;
+                    }
+                    executor.execute(() -> {
+                        try {
+                            new ApiClient(this).complete(jobId, stopId, session.driverId,
+                                    recipient, UUID.randomUUID().toString());
+                            runOnUiThread(() -> {
+                                toast("Stop completed");
+                                refreshQueue();
+                            });
+                        } catch (Exception error) {
+                            runOnUiThread(() -> toast(error.getMessage()));
+                        }
+                    });
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private TextView statusLabel(String text) {

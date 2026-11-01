@@ -37,7 +37,7 @@ public final class ApiClient {
         body.put("tenantSlug", tenant);
         body.put("driverId", driverId);
         body.put("pin", pin);
-        Response response = raw("POST", "/v1/auth/driver-login", body.toString(), null);
+        Response response = raw("POST", "/v1/auth/driver-login", body.toString(), null, null);
         if (response.status != 200) {
             throw new ApiException(response.status, message(response.body));
         }
@@ -87,6 +87,47 @@ public final class ApiClient {
         return jobs == null ? 0 : jobs.length();
     }
 
+    public JSONObject queue() throws Exception {
+        Session session = Session.load(context);
+        Response response = auth("GET", "/v1/driver/queue", null, session);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+        return new JSONObject(response.body);
+    }
+
+    public void arrive(String jobId, String stopId, String driverId, String commandId)
+            throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("driverId", driverId);
+        Session session = Session.load(context);
+        Response response = command("POST",
+                "/v1/jobs/" + jobId + "/stops/" + stopId + "/arrive",
+                body.toString(), commandId, session);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+    }
+
+    public void complete(String jobId, String stopId, String driverId,
+                         String recipientName, String commandId) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("driverId", driverId);
+        body.put("recipientName", recipientName);
+        Session session = Session.load(context);
+        Response response = command("POST",
+                "/v1/jobs/" + jobId + "/stops/" + stopId + "/complete",
+                body.toString(), commandId, session);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+    }
+
+    private Response command(String method, String path, String body, String commandId,
+                             Session session) throws Exception {
+        Response response = raw(method, path, body, session.accessToken, commandId);
+        if (response.status == 401) {
+            String refreshed = refresh(session);
+            if (refreshed != null) {
+                response = raw(method, path, body, refreshed, commandId);
+            }
+        }
+        return response;
+    }
     public void telemetry(JSONArray samples) throws Exception {
         Session session = Session.load(context);
         JSONObject body = new JSONObject();
@@ -99,11 +140,11 @@ public final class ApiClient {
 
     private Response auth(String method, String path, String body, Session session)
             throws Exception {
-        Response response = raw(method, path, body, session.accessToken);
+        Response response = raw(method, path, body, session.accessToken, null);
         if (response.status == 401) {
             String refreshed = refresh(session);
             if (refreshed != null) {
-                response = raw(method, path, body, refreshed);
+                response = raw(method, path, body, refreshed, null);
             }
         }
         return response;
@@ -112,7 +153,7 @@ public final class ApiClient {
     private String refresh(Session session) throws Exception {
         JSONObject body = new JSONObject();
         body.put("refreshToken", session.refreshToken);
-        Response response = raw("POST", "/v1/auth/refresh", body.toString(), null);
+        Response response = raw("POST", "/v1/auth/refresh", body.toString(), null, null);
         if (response.status != 200) return null;
         JSONObject tokens = new JSONObject(response.body);
         session.accessToken = tokens.getString("accessToken");
@@ -133,8 +174,8 @@ public final class ApiClient {
         }
     }
 
-    private Response raw(String method, String path, String body, String token)
-            throws Exception {
+    private Response raw(String method, String path, String body, String token,
+                        String commandId) throws Exception {
         HttpURLConnection connection = (HttpURLConnection) new URL(BASE + path).openConnection();
         connection.setRequestMethod(method);
         connection.setConnectTimeout(15000);
@@ -142,6 +183,9 @@ public final class ApiClient {
         connection.setRequestProperty("Accept", "application/json");
         if (token != null && !token.isEmpty()) {
             connection.setRequestProperty("Authorization", "Bearer " + token);
+        }
+        if (commandId != null && !commandId.isEmpty()) {
+            connection.setRequestProperty("idempotency-key", commandId);
         }
         if (body != null) {
             connection.setDoOutput(true);
@@ -173,4 +217,5 @@ public final class ApiClient {
         }
     }
 }
+
 
