@@ -10,6 +10,7 @@ import type { DbHandle } from "../../db/client.js";
 import { RoutingError, type RoutingClients } from "../routing/types.js";
 import { approveProposal, createProposal, OptimizationError } from "./service.js";
 import { approveFleetProposal, createFleetProposal } from "./fleet-service.js";
+import { closeRoute, RouteCloseError } from "./route-close.js";
 import {
   DispatchPolicyConflict,
   getDispatchPolicy,
@@ -382,7 +383,44 @@ export function registerOptimizationRoutes(
       throw err;
     }
   });
-}
+
+  app.post("/v1/fleet/routes/close", { preHandler: guard }, async (request, reply) => {
+    if (!requireDispatcher(request, reply)) return reply;
+    const body = z
+      .object({
+        vehicleId: z.string().uuid(),
+        version: z.number().int().nonnegative(),
+        reason: z.string().max(300).optional(),
+      })
+      .parse(request.body);
+    const tenantId = request.auth?.tenantId ?? "";
+    try {
+      return await closeRoute(
+        handle,
+        tenantId,
+        body.vehicleId,
+        body.version,
+        body.reason,
+      );
+    } catch (err) {
+      if (err instanceof RouteCloseError) {
+        const status = err.code === "ROUTE_NOT_FOUND" ? 404 : 409;
+        return reply.status(status).send({
+          type: "https://privatefleet.example/errors/route-close",
+          title: "Route cannot be closed",
+          status,
+          code: err.code,
+          detail: err.message,
+          uiMessage:
+            err.code === "ROUTE_NOT_FOUND"
+              ? "That route no longer exists. Refresh the board."
+              : "This route is already closed.",
+        });
+      }
+      throw err;
+    }
+  });}
+
 
 
 

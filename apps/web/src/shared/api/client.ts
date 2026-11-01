@@ -265,6 +265,14 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
+  closeFleetRoute: (vehicleId: string, version: number) =>
+    request<{ routeId: string; freedJobs: number; status: string }>(
+      "/v1/fleet/routes/close",
+      {
+        method: "POST",
+        body: JSON.stringify({ vehicleId, version }),
+      },
+    ),
   runFleetOptimization: () =>
     request<FleetOptimizationProposal>("/v1/optimization/fleet-run", {
       method: "POST",
@@ -307,6 +315,7 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 
 

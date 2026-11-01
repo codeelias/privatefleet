@@ -536,12 +536,29 @@ function Dashboard({
                                 const route = state.routes.find(
                                   (candidate) => candidate.vehicleId === selectedVehicle?.id,
                                 );
-                                if (!route?.legs?.length) return null;
+                                if (!route) return null;
                                 return (
-                                  <span className="mt-1 block text-[10px] text-text-secondary">
-                                    Route v{route.version} {"\u00b7"} {route.waypoints?.length ?? 0} waypoints {"\u00b7"}{" "}
-                                    {route.legs.length} legs
-                                  </span>
+                                  <>
+                                    {route.legs?.length ? (
+                                      <span className="mt-1 block text-[10px] text-text-secondary">
+                                        Route v{route.version} {"\u00b7"} {route.waypoints?.length ?? 0} waypoints {"\u00b7"}{" "}
+                                        {route.legs.length} legs
+                                      </span>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!window.confirm("Close this route and return unfinished work to the unassigned queue?")) return;
+                                        void api
+                                          .closeFleetRoute(route.vehicleId, route.version)
+                                          .then(() => queryClient.invalidateQueries({ queryKey: ["fleet"] }))
+                                          .catch((err) => window.alert(err instanceof Error ? err.message : "Route close failed"));
+                                      }}
+                                      className="mt-2 rounded-lg border border-status-warning/50 px-2 py-1 text-[10px] font-bold text-status-warning"
+                                    >
+                                      Close route and release work
+                                    </button>
+                                  </>
                                 );
                               })()}
                               {openAlerts[0] && (
@@ -828,6 +845,7 @@ export function App() {
     />
   );
 }
+
 
 
 
