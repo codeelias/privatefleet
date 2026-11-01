@@ -140,8 +140,11 @@ risk. It cannot be closed by engineering.
 
 1. **Phase 0 customer validation** — a named operator, metrics and scope.
 2. **Background GPS** — screen-off tracking is not implemented.
-3. **Duplicate job/driver cleanup** — duplicate references were previously
-   possible; a unique `(tenant_id, reference)` constraint is not yet applied.
+3. **Cross-tenant demo-data cleanup** — a unique `(tenant_id, reference)`
+   index already exists and is enforced. Duplicate-looking references such as
+   `J-191` are in different tenants, not integrity violations. Remaining work
+   is retiring the load/E2E tenants and cleaning duplicate driver names before
+   demonstrations.
 4. **Load-test tenant isolation/cleanup** — global route versions up to 237
    from `load-8d0a3a98` confuse version history and baselines.
 5. **E2E/soak rerun** on latest code; earlier evidence predates policy/gate/map
@@ -171,7 +174,7 @@ risk. It cannot be closed by engineering.
 
 ### Next 1 — Data integrity and demo isolation (recommended first)
 
-- deduplicate job references and add a tenant-scoped unique constraint,
+- confirm the existing `(tenant_id, reference)` unique index in CI,
 - archive or delete the load-test tenant through an audited reset,
 - close historical published routes that are neither active nor completed,
 - add an invariant test that `assigned` jobs must have a route stop.
@@ -202,7 +205,8 @@ LIVE/STALE/DEPOT map states.
 Policy:          local, revision 42, 120 km / 30 visits
 Published:       v121, 3 routes, 30 stops each
 Jobs:            assigned 45, completed 14, unassigned 15
-Orphan assigned: 0  (repaired)
+Orphan assigned: 0  (approval invariant + repair)
+Unique jobs:     (tenant_id, reference) index enforced live
 VROOM:           ghcr.io/vroom-project/vroom-docker@sha256:247d5683... (healthy)
 API:             200
 Web:             200
