@@ -1076,8 +1076,9 @@ export function MapCanvas({
           </p>
           {routeGeometryMissing && (
             <p className="absolute bottom-9 left-3 z-30 rounded-md border border-status-warning/50 bg-status-warning/10 px-2 py-1 text-[10px] text-status-warning">
-              Route geometry unavailable - showing vehicle positions only. Demo
-              routes require the seeded scenario.
+              {state.demoMode
+                ? "Route geometry unavailable - demo routes require the seeded scenario."
+                : "No published route for this driver. Assign or optimise work to create one."}
             </p>
           )}
           {routeQualityWarning && (
@@ -1108,6 +1109,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 
