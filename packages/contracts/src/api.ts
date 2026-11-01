@@ -366,6 +366,7 @@ export const FleetOptimizationProposalSchema = z.object({
       distanceMetres: z.number().nonnegative(),
       durationSeconds: z.number().nonnegative(),
       unassignedJobs: z.number().int().nonnegative(),
+      jobIds: z.array(IdSchema).optional(),
     })
     .optional(),
   policy: z

@@ -68,6 +68,7 @@ interface FleetStoredResult {
     distanceMetres: number;
     durationSeconds: number;
     unassignedJobs: number;
+    jobIds: string[];
   };
   gate?: { allowed: boolean; reasons: string[] };
   policy?: {
@@ -328,7 +329,7 @@ export async function createFleetProposal(
       datasetVersion: DATASET_VERSION,
       // Bump when persisted fleet-result semantics change; old cached results
       // must never be served as valid proposals.
-      resultSchemaVersion: 10,
+      resultSchemaVersion: 11,
       scope: selected ? "subset" : "fleet",
       expectedRouteVersion,
       policyRevision: policySnapshot.revision,
@@ -498,13 +499,21 @@ export async function createFleetProposal(
         (SELECT coalesce(sum(planned_duration_s), 0)::float FROM routes
           WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress') AND version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})) AS duration,
         (SELECT count(*)::int FROM jobs
-          WHERE tenant_id = ${tenantId} AND status = 'unassigned') AS unassigned_jobs
+          WHERE tenant_id = ${tenantId} AND status = 'unassigned') AS unassigned_jobs,
+        (SELECT coalesce(jsonb_agg(DISTINCT js.job_id), '[]'::jsonb)
+          FROM route_stops rs
+          JOIN routes r ON r.id = rs.route_id
+          JOIN job_stops js ON js.id = rs.job_stop_id
+          WHERE r.tenant_id = ${tenantId}
+            AND r.status IN ('published', 'in_progress')
+            AND r.version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})) AS job_ids
     `)) as unknown as Array<{
       route_count: number;
       assigned_stops: number;
       distance: number;
       duration: number;
       unassigned_jobs: number;
+      job_ids: string[] | null;
     }>;
     const base = baselineRows[0] ?? {
       route_count: 0,
@@ -512,15 +521,24 @@ export async function createFleetProposal(
       distance: 0,
       duration: 0,
       unassigned_jobs: 0,
+      job_ids: [],
     };
     const proposalStops = routes.reduce((sum, route) => sum + route.stops.length, 0);
+    const proposalJobIds = new Set(routes.flatMap((route) => route.jobIds));
+    const baselineJobIds = new Set(base.job_ids ?? []);
+    const sameScope =
+      proposalJobIds.size === baselineJobIds.size &&
+      [...proposalJobIds].every((jobId) => baselineJobIds.has(jobId));
     const reasons: string[] = [];
-    if (proposalStops < Number(base.assigned_stops)) {
+    // Baseline regression only makes sense for the same job set. New work
+    // legitimately increases distance and may deliberately leave jobs
+    // unassigned when the selected policy cannot cover everything.
+    if (sameScope && proposalStops < Number(base.assigned_stops)) {
       reasons.push(
         `Proposal assigns ${proposalStops} stops, fewer than the current ${base.assigned_stops}.`,
       );
     }
-    if (stored.unassigned.length > Number(base.unassigned_jobs)) {
+    if (sameScope && stored.unassigned.length > Number(base.unassigned_jobs)) {
       reasons.push(
         `Proposal leaves ${stored.unassigned.length} jobs unassigned; baseline has ${base.unassigned_jobs}.`,
       );
@@ -550,7 +568,7 @@ export async function createFleetProposal(
       }
     }
     if (
-      stored.shipmentCount <= Number(base.assigned_stops) &&
+      sameScope &&
       stored.totalDistanceMetres > Number(base.distance) * 1.02
     ) {
       reasons.push(
@@ -563,6 +581,7 @@ export async function createFleetProposal(
       distanceMetres: Number(base.distance),
       durationSeconds: Number(base.duration),
       unassignedJobs: Number(base.unassigned_jobs),
+      jobIds: (base.job_ids ?? []) as string[],
     };
     stored.gate = { allowed: reasons.length === 0, reasons };
 
@@ -885,6 +904,7 @@ export async function approveFleetProposal(
 
 // Keep the type import referenced for consumers of this module.
 export type { FleetStoredResult };
+
 
 
 
