@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Expo driver API client: device PIN session, refresh and queue access
  * against the real API. API base is EXPO_PUBLIC_API_URL (Expo inlines
  * EXPO_PUBLIC_* at build time).
@@ -210,11 +210,25 @@ export interface EvidenceUpload {
 }
 
 export const api = {
-  uploadEvidence: (jobId: string, stopId: string, input: EvidenceUpload) =>
-    request(`/v1/jobs/${jobId}/stops/${stopId}/evidence`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
+  uploadEvidence: async (jobId: string, stopId: string, input: EvidenceUpload) => {
+    try {
+      return await request(`/v1/jobs/${jobId}/stops/${stopId}/evidence`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+    } catch (err) {
+      // Evidence is append-only and unique per stop/kind. A retry after a
+      // successful upload must be treated as success, not as a failed save.
+      if (
+        err instanceof HttpError &&
+        err.status === 409 &&
+        /already|recorded|exists/i.test(err.message)
+      ) {
+        return;
+      }
+      throw err;
+    }
+  },
   driverQueue: () => request<DriverQueue>("/v1/driver/queue"),
   telemetry: (samples: Array<{
     latitude: number;
@@ -261,6 +275,7 @@ export const api = {
       body: JSON.stringify({ driverId, reasonCode, note }),
     }),
 };
+
 
 
 
