@@ -886,6 +886,23 @@ export async function approveFleetProposal(
       `);
     }
 
+    // Invariant: an assigned job must belong to a published/in-progress route.
+    // Jobs left assigned but unrouted (manual assignment, superseded plan or
+    // dropped solver work) return to the unassigned queue.
+    await db.execute(sql`
+      UPDATE jobs j
+      SET status = 'unassigned', assigned_driver_id = NULL, assigned_vehicle_id = NULL
+      WHERE j.tenant_id = ${tenantId}
+        AND j.status = 'assigned'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM job_stops js
+          JOIN route_stops rs ON rs.job_stop_id = js.id
+          JOIN routes r ON r.id = rs.route_id
+          WHERE js.job_id = j.id
+            AND r.status IN ('published', 'in_progress')
+        )
+    `);
     const publishedResult: FleetStoredResult = {
       ...stored,
       published: { version: nextVersion, routeIds, publishedAt },
@@ -904,6 +921,7 @@ export async function approveFleetProposal(
 
 // Keep the type import referenced for consumers of this module.
 export type { FleetStoredResult };
+
 
 
 
