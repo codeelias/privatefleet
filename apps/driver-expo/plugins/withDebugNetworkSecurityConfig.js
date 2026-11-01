@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Debug-only Android network security config for the LAN pilot.
  *
  * Android does not trust user-installed CAs for app traffic by default. This
@@ -37,6 +37,7 @@ const CONFIG_XML = (bundledCa) => `<?xml version="1.0" encoding="utf-8"?>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
+            ${bundledCa ? '<certificates src="@raw/caddy_root" />' : ""}
         </trust-anchors>
     </base-config>
     <domain-config cleartextTrafficPermitted="true">
@@ -118,6 +119,7 @@ module.exports = function withDebugNetworkSecurityConfig(config) {
     },
   ]);
 };
+
 
 
 
