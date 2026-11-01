@@ -87,6 +87,31 @@ public final class ApiClient {
         return jobs == null ? 0 : jobs.length();
     }
 
+    public void skip(String jobId, String stopId, String driverId,
+                     String reasonCode, String note, String commandId) throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("driverId", driverId);
+        body.put("reasonCode", reasonCode);
+        if (note != null && !note.isEmpty()) body.put("note", note);
+        Session session = Session.load(context);
+        Response response = command("POST",
+                "/v1/jobs/" + jobId + "/stops/" + stopId + "/skip",
+                body.toString(), commandId, session);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+    }
+
+    public void uploadSignature(String jobId, String stopId, String pathData)
+            throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("kind", "signature");
+        body.put("pathData", pathData);
+        body.put("capturedAt", java.time.Instant.now().toString());
+        Session session = Session.load(context);
+        Response response = auth("POST",
+                "/v1/jobs/" + jobId + "/stops/" + stopId + "/evidence",
+                body.toString(), session);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+    }
     public JSONObject queue() throws Exception {
         Session session = Session.load(context);
         Response response = auth("GET", "/v1/driver/queue", null, session);
@@ -217,5 +242,6 @@ public final class ApiClient {
         }
     }
 }
+
 
 

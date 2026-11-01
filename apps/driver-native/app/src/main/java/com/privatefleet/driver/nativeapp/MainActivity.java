@@ -3,6 +3,7 @@ package com.privatefleet.driver.nativeapp;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -64,7 +65,7 @@ public class MainActivity extends Activity {
         root.addView(brand);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("Driver sign in · native Android client");
+        subtitle.setText("Driver sign in Â· native Android client");
         subtitle.setTextSize(14);
         subtitle.setPadding(0, 8, 0, 32);
         subtitle.setGravity(Gravity.CENTER);
@@ -128,7 +129,7 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView driver = new TextView(this);
-        driver.setText(session.driverName + " · " + session.tenantSlug);
+        driver.setText(session.driverName + " Â· " + session.tenantSlug);
         driver.setTextSize(15);
         driver.setPadding(0, 4, 0, 20);
         root.addView(driver);
@@ -138,7 +139,7 @@ public class MainActivity extends Activity {
 
         Button start = new Button(this);
         start.setText("on_route".equals(session.driverStatus)
-                ? "Shift active — background tracking on"
+                ? "Shift active â€” background tracking on"
                 : "Start shift");
         start.setEnabled(!"on_route".equals(session.driverStatus));
         start.setOnClickListener(v -> {
@@ -150,7 +151,7 @@ public class MainActivity extends Activity {
                         TelemetryService.start(this);
                         requestPermissions();
                         showMain();
-                        toast("Shift started — background tracking on");
+                        toast("Shift started â€” background tracking on");
                     });
                 } catch (Exception error) {
                     runOnUiThread(() -> toast(error.getMessage()));
@@ -205,7 +206,7 @@ public class MainActivity extends Activity {
             try {
                 int count = new ApiClient(this).queueCount();
                 runOnUiThread(() -> statusView.setText("Status: "
-                        + session.driverStatus + " · " + count + " jobs"));
+                        + session.driverStatus + " Â· " + count + " jobs"));
             } catch (Exception ignored) {
                 // the status label already shows the session state
             }
@@ -239,7 +240,7 @@ public class MainActivity extends Activity {
             if (job == null) continue;
             if ("completed".equals(job.optString("status"))) continue;
             TextView header = new TextView(this);
-            header.setText(job.optString("reference", "Job") + " · "
+            header.setText(job.optString("reference", "Job") + " Â· "
                     + job.optString("status", ""));
             header.setTextSize(16);
             header.setPadding(0, 18, 0, 6);
@@ -265,6 +266,8 @@ public class MainActivity extends Activity {
                         0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
                 row.addView(label);
 
+                LinearLayout actions = new LinearLayout(this);
+                actions.setOrientation(LinearLayout.VERTICAL);
                 if ("pending".equals(status)) {
                     Button arrive = new Button(this);
                     arrive.setText("Arrive");
@@ -280,16 +283,100 @@ public class MainActivity extends Activity {
                             runOnUiThread(() -> toast(error.getMessage()));
                         }
                     }));
-                    row.addView(arrive);
+                    actions.addView(arrive);
+                    Button fail = new Button(this);
+                    fail.setText("Fail");
+                    fail.setOnClickListener(v -> promptSkip(jobId, stopId));
+                    actions.addView(fail);
                 } else if ("arrived".equals(status)) {
+                    Button sign = new Button(this);
+                    sign.setText("Sign");
+                    sign.setOnClickListener(v -> promptSignature(jobId, stopId));
+                    actions.addView(sign);
                     Button complete = new Button(this);
                     complete.setText("Complete");
                     complete.setOnClickListener(v -> promptRecipient(jobId, stopId));
-                    row.addView(complete);
+                    actions.addView(complete);
+                    Button fail = new Button(this);
+                    fail.setText("Fail");
+                    fail.setOnClickListener(v -> promptSkip(jobId, stopId));
+                    actions.addView(fail);
                 }
+                row.addView(actions);
                 jobsContainer.addView(row);
             }
         }
+    }
+
+
+    private void promptSignature(String jobId, String stopId) {
+        Dialog dialog = new Dialog(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(32, 32, 32, 32);
+
+        TextView title = new TextView(this);
+        title.setText("Recipient signature");
+        title.setTextSize(20);
+        layout.addView(title);
+
+        SignatureView pad = new SignatureView(this);
+        pad.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, 600));
+        layout.addView(pad);
+
+        Button save = new Button(this);
+        save.setText("Save signature");
+        save.setOnClickListener(v -> {
+            String pathData = pad.getPathData();
+            if (pathData.isEmpty()) {
+                toast("Signature is empty");
+                return;
+            }
+            executor.execute(() -> {
+                try {
+                    new ApiClient(this).uploadSignature(jobId, stopId, pathData);
+                    runOnUiThread(() -> {
+                        toast("Signature saved");
+                        dialog.dismiss();
+                    });
+                } catch (Exception error) {
+                    runOnUiThread(() -> toast(error.getMessage()));
+                }
+            });
+        });
+        layout.addView(save);
+
+        Button cancel = new Button(this);
+        cancel.setText("Cancel");
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        layout.addView(cancel);
+
+        dialog.setContentView(layout);
+        dialog.show();
+    }
+
+    private void promptSkip(String jobId, String stopId) {
+        String[] labels = {"Recipient unavailable", "Delivery refused",
+                "Address or access problem", "Item damaged", "Vehicle problem", "Other"};
+        String[] codes = {"RECIPIENT_UNAVAILABLE", "DELIVERY_REFUSED",
+                "ADDRESS_ACCESS_PROBLEM", "ITEM_DAMAGED",
+                "VEHICLE_OPERATIONAL_PROBLEM", "OTHER"};
+        new AlertDialog.Builder(this)
+                .setTitle("Report failed delivery")
+                .setItems(labels, (dialog, which) -> executor.execute(() -> {
+                    try {
+                        new ApiClient(this).skip(jobId, stopId, session.driverId,
+                                codes[which], null, UUID.randomUUID().toString());
+                        runOnUiThread(() -> {
+                            toast("Failure recorded");
+                            refreshQueue();
+                        });
+                    } catch (Exception error) {
+                        runOnUiThread(() -> toast(error.getMessage()));
+                    }
+                }))
+                .show();
     }
 
     private void promptRecipient(String jobId, String stopId) {
@@ -363,7 +450,7 @@ public class MainActivity extends Activity {
         }
         if (requestCode == 11 && results.length > 0
                 && results[0] != PackageManager.PERMISSION_GRANTED) {
-            toast("Background location denied — tracking works only while the app is visible");
+            toast("Background location denied â€” tracking works only while the app is visible");
         }
     }
 
@@ -372,3 +459,4 @@ public class MainActivity extends Activity {
                 Toast.LENGTH_LONG).show();
     }
 }
+

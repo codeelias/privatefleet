@@ -15,6 +15,8 @@ WebView or JavaScript runtime.
 - Request more jobs (durable dispatcher request)
 - Refresh queue and render jobs/stops
 - Native Arrive / Complete actions with recipient proof
+- Native signature capture and upload
+- Native failed-delivery reporting (reason code)
 - Foreground location service (`TelemetryService`) using Android
   `LocationManager`:
   - GPS + network providers
@@ -40,6 +42,7 @@ native Arrive: PASS
 dropoff status changed pending → arrived
 native Complete: PASS (recipient name)
 dropoff status changed arrived → completed
+native signature upload: PASS (stop_evidence kind=signature)
 ```
 
 Build:
@@ -64,9 +67,9 @@ configuration is required before distribution.
 
 ## Known limitations
 
-- No native photo/signature evidence capture yet; the current tenant policy
-  requires only a recipient name, which the native client supports.
-- No native skip/failed-delivery flow yet.
+- No native camera/photo evidence capture yet; signature and recipient are
+  supported.
+- Failed-delivery reporting uses a reason picker but no failure photo.
 - Native actions use one-shot HTTP; the durable offline command queue is not
   implemented in this client.
 - No offline command queue or durable local evidence store.
