@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tenant dispatch policy persistence. One revision per tenant covers the
  * preset, advanced limits and every vehicle override; all writes increment
  * it atomically so optimisation and approval can compare one number.
