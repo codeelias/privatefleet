@@ -17,6 +17,8 @@ WebView or JavaScript runtime.
 - Native Arrive / Complete actions with recipient proof
 - Native signature capture and upload
 - Native failed-delivery reporting (reason code)
+- Native camera/photo evidence (MediaStore capture, resize, JPEG upload)
+- Durable offline command queue with idempotent retry
 - Foreground location service (`TelemetryService`) using Android
   `LocationManager`:
   - GPS + network providers
@@ -43,6 +45,9 @@ dropoff status changed pending → arrived
 native Complete: PASS (recipient name)
 dropoff status changed arrived → completed
 native signature upload: PASS (stop_evidence kind=signature)
+native photo upload: PASS (stop_evidence kind=photo)
+offline arrive: queued with network disabled
+offline queue sync: PASS (queue [] and server stop arrived)
 ```
 
 Build:
@@ -67,12 +72,13 @@ configuration is required before distribution.
 
 ## Known limitations
 
-- No native camera/photo evidence capture yet; signature and recipient are
-  supported.
 - Failed-delivery reporting uses a reason picker but no failure photo.
+- Evidence uploads are immediate; only arrive/complete/skip commands are queued
+  offline. A signature/photo captured while offline is not yet persisted for retry.
 - Native actions use one-shot HTTP; the durable offline command queue is not
   implemented in this client.
-- No offline command queue or durable local evidence store.
+- No offline evidence store yet (commands only).
+- Offline queue lives in SharedPreferences, not encrypted storage.
 - Battery impact of time-based updates must be measured over a full shift;
   switch to distance-based updates once movement testing is complete.
 - Force-stop by the user still prevents tracking; Android does not restart a

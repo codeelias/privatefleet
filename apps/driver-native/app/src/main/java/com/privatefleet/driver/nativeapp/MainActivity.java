@@ -4,6 +4,13 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.content.ContentValues;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.net.Uri;
+import android.provider.MediaStore;
+import android.util.Base64;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -19,6 +26,8 @@ import android.widget.Toast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,6 +43,9 @@ public class MainActivity extends Activity {
     private TextView statusView;
     private LinearLayout root;
     private LinearLayout jobsContainer;
+    private Uri pendingPhotoUri;
+    private String pendingPhotoJobId;
+    private String pendingPhotoStopId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -214,6 +226,42 @@ public class MainActivity extends Activity {
     }
 
 
+
+    private void queueCommand(String kind, String jobId, String stopId,
+                              String recipient, String reasonCode) {
+        try {
+            JSONObject command = new JSONObject();
+            command.put("kind", kind);
+            command.put("jobId", jobId);
+            command.put("stopId", stopId);
+            command.put("driverId", session.driverId);
+            command.put("commandId", UUID.randomUUID().toString());
+            if (recipient != null) command.put("recipient", recipient);
+            if (reasonCode != null) command.put("reasonCode", reasonCode);
+            command.put("createdAt", java.time.Instant.now().toString());
+            CommandQueue.enqueue(this, command);
+            flushQueue();
+        } catch (Exception error) {
+            toast(error.getMessage());
+        }
+    }
+
+    private void flushQueue() {
+        executor.execute(() -> {
+            CommandQueue.Result result = CommandQueue.flush(this);
+            runOnUiThread(() -> {
+                if (result.conflicts > 0) {
+                    toast(result.conflicts + " action(s) need attention");
+                } else if (result.remaining > 0) {
+                    toast(result.remaining + " action(s) saved offline; will retry");
+                } else if (result.sent > 0) {
+                    toast("Action synced");
+                }
+                refreshQueue();
+            });
+        });
+    }
+
     private void refreshQueue() {
         executor.execute(() -> {
             try {
@@ -271,19 +319,13 @@ public class MainActivity extends Activity {
                 if ("pending".equals(status)) {
                     Button arrive = new Button(this);
                     arrive.setText("Arrive");
-                    arrive.setOnClickListener(v -> executor.execute(() -> {
-                        try {
-                            new ApiClient(this).arrive(jobId, stopId, session.driverId,
-                                    UUID.randomUUID().toString());
-                            runOnUiThread(() -> {
-                                toast("Arrived");
-                                refreshQueue();
-                            });
-                        } catch (Exception error) {
-                            runOnUiThread(() -> toast(error.getMessage()));
-                        }
-                    }));
+                    arrive.setOnClickListener(v -> queueCommand("arrive", jobId, stopId,
+                            null, null));
                     actions.addView(arrive);
+                    Button photo = new Button(this);
+                    photo.setText("Photo");
+                    photo.setOnClickListener(v -> promptPhoto(jobId, stopId));
+                    actions.addView(photo);
                     Button fail = new Button(this);
                     fail.setText("Fail");
                     fail.setOnClickListener(v -> promptSkip(jobId, stopId));
@@ -297,6 +339,10 @@ public class MainActivity extends Activity {
                     complete.setText("Complete");
                     complete.setOnClickListener(v -> promptRecipient(jobId, stopId));
                     actions.addView(complete);
+                    Button photo = new Button(this);
+                    photo.setText("Photo");
+                    photo.setOnClickListener(v -> promptPhoto(jobId, stopId));
+                    actions.addView(photo);
                     Button fail = new Button(this);
                     fail.setText("Fail");
                     fail.setOnClickListener(v -> promptSkip(jobId, stopId));
@@ -308,6 +354,54 @@ public class MainActivity extends Activity {
         }
     }
 
+
+
+    private void promptPhoto(String jobId, String stopId) {
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME,
+                "privatefleet-" + System.currentTimeMillis() + ".jpg");
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        pendingPhotoUri = getContentResolver().insert(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        pendingPhotoJobId = jobId;
+        pendingPhotoStopId = stopId;
+        Intent capture = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        capture.putExtra(MediaStore.EXTRA_OUTPUT, pendingPhotoUri);
+        startActivityForResult(capture, 200);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != 200 || resultCode != RESULT_OK || pendingPhotoUri == null) {
+            return;
+        }
+        Uri uri = pendingPhotoUri;
+        String jobId = pendingPhotoJobId;
+        String stopId = pendingPhotoStopId;
+        pendingPhotoUri = null;
+        executor.execute(() -> {
+            try (InputStream stream = getContentResolver().openInputStream(uri)) {
+                Bitmap bitmap = BitmapFactory.decodeStream(stream);
+                if (bitmap == null) throw new IllegalStateException("Could not read photo");
+                int max = 1280;
+                int width = bitmap.getWidth();
+                int height = bitmap.getHeight();
+                float scale = Math.min(1f, Math.min((float) max / width, (float) max / height));
+                Bitmap scaled = scale < 1f
+                        ? Bitmap.createScaledBitmap(bitmap,
+                            Math.round(width * scale), Math.round(height * scale), true)
+                        : bitmap;
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                scaled.compress(Bitmap.CompressFormat.JPEG, 80, output);
+                String base64 = Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP);
+                new ApiClient(this).uploadPhoto(jobId, stopId, base64);
+                runOnUiThread(() -> toast("Photo evidence saved"));
+            } catch (Exception error) {
+                runOnUiThread(() -> toast("Photo failed: " + error.getMessage()));
+            }
+        });
+    }
 
     private void promptSignature(String jobId, String stopId) {
         Dialog dialog = new Dialog(this);
@@ -364,18 +458,8 @@ public class MainActivity extends Activity {
                 "VEHICLE_OPERATIONAL_PROBLEM", "OTHER"};
         new AlertDialog.Builder(this)
                 .setTitle("Report failed delivery")
-                .setItems(labels, (dialog, which) -> executor.execute(() -> {
-                    try {
-                        new ApiClient(this).skip(jobId, stopId, session.driverId,
-                                codes[which], null, UUID.randomUUID().toString());
-                        runOnUiThread(() -> {
-                            toast("Failure recorded");
-                            refreshQueue();
-                        });
-                    } catch (Exception error) {
-                        runOnUiThread(() -> toast(error.getMessage()));
-                    }
-                }))
+                .setItems(labels, (dialog, which) ->
+                        queueCommand("skip", jobId, stopId, null, codes[which]))
                 .show();
     }
 
@@ -392,18 +476,7 @@ public class MainActivity extends Activity {
                         toast("Recipient name is required");
                         return;
                     }
-                    executor.execute(() -> {
-                        try {
-                            new ApiClient(this).complete(jobId, stopId, session.driverId,
-                                    recipient, UUID.randomUUID().toString());
-                            runOnUiThread(() -> {
-                                toast("Stop completed");
-                                refreshQueue();
-                            });
-                        } catch (Exception error) {
-                            runOnUiThread(() -> toast(error.getMessage()));
-                        }
-                    });
+                    queueCommand("complete", jobId, stopId, recipient, null);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();

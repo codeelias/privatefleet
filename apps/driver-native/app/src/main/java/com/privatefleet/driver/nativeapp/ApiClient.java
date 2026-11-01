@@ -112,6 +112,18 @@ public final class ApiClient {
                 body.toString(), session);
         if (response.status != 200) throw new ApiException(response.status, message(response.body));
     }
+    public void uploadPhoto(String jobId, String stopId, String base64)
+            throws Exception {
+        JSONObject body = new JSONObject();
+        body.put("kind", "photo");
+        body.put("dataBase64", base64);
+        body.put("capturedAt", java.time.Instant.now().toString());
+        Session session = Session.load(context);
+        Response response = auth("POST",
+                "/v1/jobs/" + jobId + "/stops/" + stopId + "/evidence",
+                body.toString(), session);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+    }
     public JSONObject queue() throws Exception {
         Session session = Session.load(context);
         Response response = auth("GET", "/v1/driver/queue", null, session);
@@ -242,6 +254,7 @@ public final class ApiClient {
         }
     }
 }
+
 
 
 
