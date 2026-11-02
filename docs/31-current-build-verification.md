@@ -159,7 +159,17 @@ native client checks the manifest on launch and shows a user-approved update
 prompt. A test manifest (`versionCode 999`) produced the prompt on the physical
 phone; the real manifest (`versionCode 5`, `1.0.4`) was restored afterwards.
 
-## 6. Stage A status
+## 6. Battery soak
+
+Started on R5CWB0BR3BP at 2026-11-02 03:11 UTC for eight hours. The collector
+records battery level, temperature, charge status, USB/AC state and whether the
+foreground tracking service is alive every five minutes.
+
+First sample: level 73%, 28.1 C, USB charging, service foreground=true.
+
+CSV: `C:\privatefleet\logs\battery-soak-<stamp>.csv`.
+
+## 7. Stage A status
 
 | Item | State |
 |---|---|
@@ -169,6 +179,8 @@ phone; the real manifest (`versionCode 5`, `1.0.4`) was restored afterwards.
 | 2× DPR marker latency | Pass (184 ms; 1× backing store above 150 vehicles) |
 | Caddy auto-recovery | Complete and tested |
 | External alert destination | Webhook delivery mechanism tested; owner URL not configured |
+| Internal native update channel | Complete and prompt-tested |
+| 8-hour battery soak | Running from 03:11 UTC |
 | Physical release install | Complete on R5CWB0BR3BP, app 1.0.4 |
 | 120-second rehearsal / operator baseline | Not done |
 
