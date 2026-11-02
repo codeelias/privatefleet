@@ -1,3 +1,8 @@
+### v1.66 - Positioning stability fix (2026-11-02)
+- Fixed EKF covariance propagation (F P F^T cross-terms were wrong), added analytic regression test.
+- Velocity only fed above 2 m/s; stationary speed noise no longer wanders the pin.
+- Dead reckoning capped at 15 s after the last GNSS fix; telemetry cadence 1050 ms to stay under the API rate limit.
+- 1.0.9 (versionCode 10) published and installed on RFCW10QT5ZE; Phone 2 install pending reconnection.
 ### v1.64 - Both pilot phones on fixed 1.0.8 with remembered sessions (2026-11-02)
 - Phone 1 RFCW10QT5ZE replaced with the fixed 1.0.8, Tom Cole signed in; session persisted after cold restart; JNI bridge ready.
 - Tom's stored PIN did not match the seeded 1234 and could not be recovered, so it was reset to the pilot PIN 1234 and verified through the login API.

@@ -79,6 +79,29 @@ APK signature: unchanged PrivateFleet release key
 emulator install/launch: passed
 ```
 
+## Stability corrections (1.0.9)
+
+A field regression showed pins wandering and deviating unrealistically.
+Root causes, all introduced with the fused engine:
+
+1. `Ekf2D` propagated covariance with hand-derived cross-terms that were
+   wrong for several off-diagonal entries. Incorrect covariance inflated the
+   velocity gains, so noisy GNSS velocity bent the state between fixes.
+   Replaced with a general `F P F^T` matrix product plus symmetrisation, and
+   a unit test asserts the analytic values.
+2. GNSS velocity (speed/bearing) was injected even when nearly stationary;
+   stopped vehicles reported 0-1.5 m/s with random bearing, which the filter
+   then integrated. Velocity is now fed only above 2 m/s and the initial
+   state starts at rest below that threshold.
+3. Dead reckoning ran indefinitely during GNSS outages, so IMU noise drifted
+   the pin for minutes. Emission now stops after 15 s without a GNSS fix;
+   the web treats the vehicle as stale instead of moving it.
+4. Accelerometer gravity was seeded from zero, injecting a ~9.8 m/s^2 step;
+   the low-pass is now seeded from the first reading, and IMU integration
+   waits for a valid rotation matrix.
+5. Telemetry cadence of 900 ms exceeded the 10-per-10 s API limit and hit
+   429s; now 1050 ms.
+
 ## Honest gaps
 
 - RTK correction transport exists (NTRIP client, 1.0.7) but no fixed solver is integrated; sub-metre is still not delivered.

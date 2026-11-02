@@ -52,4 +52,18 @@ public class Ekf2DTest {
         assertEquals(100, filter.east(), 0.4);
         assertEquals(100, filter.north(), 0.4);
     }
+
+    @Test
+    public void covariancePropagationCrossTermsMatchAnalyticFpFt() {
+        Ekf2D filter = new Ekf2D();
+        filter.initialize(0, 0, 0, 0, 10); // P00=P11=100, P22=P33=4
+        filter.predict(0.1, 0, 0);
+        // F P F^T: P02' = P02 + dt*P22 = 0.4, symmetric with P20'.
+        assertEquals(0.4, filter.covariance(0, 2), 0.01);
+        assertEquals(filter.covariance(0, 2), filter.covariance(2, 0), 1e-9);
+        // P00' = 100 + 2*dt*P02 + dt^2*P22 + qPosition = 100 + 0.04 + 0.008
+        assertEquals(100.048, filter.covariance(0, 0), 0.01);
+        // P22' = P22 + qVelocity = 4 + 0.12
+        assertEquals(4.12, filter.covariance(2, 2), 0.01);
+    }
 }

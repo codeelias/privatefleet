@@ -17,8 +17,8 @@ android {
         applicationId "com.privatefleet.driver.nativeapp"
         minSdk 26
         targetSdk 36
-        versionCode 9
-        versionName "1.0.8"
+        versionCode 10
+        versionName "1.0.9"
         buildConfigField "String", "API_BASE", "\"https://pf-node.tail060a86.ts.net\""
         externalNativeBuild {
             cmake {
@@ -71,6 +71,7 @@ tasks.withType(JavaCompile).configureEach {
 dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
+
 
 
 

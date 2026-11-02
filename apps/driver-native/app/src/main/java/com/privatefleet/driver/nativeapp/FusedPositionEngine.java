@@ -159,7 +159,7 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
             anchorLatitude = location.getLatitude();
             anchorLongitude = location.getLongitude();
             anchorCosLat = Math.cos(Math.toRadians(anchorLatitude));
-            double speed = location.hasSpeed() ? location.getSpeed() : 0;
+            double speed = location.hasSpeed() && location.getSpeed() > 2.0 ? location.getSpeed() : 0;
             double bearing = location.hasBearing() ? location.getBearing() : 0;
             ekf.initialize(
                     0,
@@ -174,7 +174,10 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
             east = (location.getLongitude() - anchorLongitude) * 111_320 * anchorCosLat;
             north = (location.getLatitude() - anchorLatitude) * 110_540;
             ekf.updatePosition(east, north, accuracy);
-            if (location.hasSpeed() && location.hasBearing() && location.getSpeed() > 1.0) {
+            // Only feed GNSS velocity when genuinely moving; stationary
+            // fixes report noisy speed/bearing that would inject random
+            // velocity into the filter and wander the pin.
+            if (location.hasSpeed() && location.hasBearing() && location.getSpeed() > 2.0) {
                 double bearing = Math.toRadians(location.getBearing());
                 ekf.updateVelocity(
                         location.getSpeed() * Math.sin(bearing),
@@ -190,8 +193,9 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
 
     private void emit(long capturedAt) {
         if (!initialized) return;
-        GnssQualityMonitor.Quality quality = qualityMonitor.snapshot();
         long age = lastGnssAt == 0 ? 0 : capturedAt - lastGnssAt;
+        if (age > 15_000L) return; // never dead-reckon beyond 15 s without GNSS
+        GnssQualityMonitor.Quality quality = qualityMonitor.snapshot();
         double accuracy = Math.max(2.0, Math.round(ekf.accuracyMetres() * 10) / 10.0);
         String confidence;
         if (age > 15_000 || accuracy > 50) confidence = "low";
@@ -218,6 +222,7 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
             return;
         }
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+            if (!hasRotation) return;
             accelerationEast = rotationMatrix[0] * event.values[0]
                     + rotationMatrix[1] * event.values[1]
                     + rotationMatrix[2] * event.values[2];
@@ -227,6 +232,15 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
             return;
         }
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            if (!hasRotation) return;
+            // Seed the gravity low-pass with the first reading instead of
+            // treating a full 9.8 m/s² step as horizontal acceleration.
+            if (gravity[0] == 0f && gravity[1] == 0f && gravity[2] == 0f) {
+                gravity[0] = event.values[0];
+                gravity[1] = event.values[1];
+                gravity[2] = event.values[2];
+                return;
+            }
             gravity[0] = 0.8f * gravity[0] + 0.2f * event.values[0];
             gravity[1] = 0.8f * gravity[1] + 0.2f * event.values[1];
             gravity[2] = 0.8f * gravity[2] + 0.2f * event.values[2];

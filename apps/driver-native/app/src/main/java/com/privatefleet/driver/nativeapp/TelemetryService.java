@@ -213,7 +213,7 @@ public class TelemetryService extends Service {
                 rtkSolver.hasFloatSolution(), rtkSolver.hasFixedSolution());
         rtkState = PrecisionState.contract(level);
         long now = System.currentTimeMillis();
-        if (now - lastSentAt < 900L) return;
+        if (now - lastSentAt < 1050L) return; // <= 9 posts per 10 s, under the rate limit
         if (!sending.compareAndSet(false, true)) return;
         lastSentAt = now;
         executor.execute(() -> {

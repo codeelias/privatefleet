@@ -70,28 +70,68 @@ final class Ekf2D {
         }
         state[0] += state[2] * dt + 0.5 * ax * dt * dt;
         state[1] += state[3] * dt + 0.5 * ay * dt * dt;
+        double vx = Math.max(-45, Math.min(45, state[2]));
+        double vy = Math.max(-45, Math.min(45, state[3]));
+        state[2] = vx;
+        state[3] = vy;
 
-        double[][] next = new double[4][4];
-        for (int row = 0; row < 4; row += 1) {
-            for (int column = 0; column < 4; column += 1) {
-                // F P F^T with F = [I dtI; 0 I], computed directly.
-                double value = covariance[row][column];
-                if (row < 2 && column >= 2) value += dt * covariance[row][column];
-                if (row >= 2 && column < 2) value += dt * covariance[row][column];
-                if (row >= 2 && column >= 2) value += dt * dt * covariance[row - 2][column - 2]
-                        + dt * covariance[row][column - 2]
-                        + dt * covariance[row - 2][column];
-                next[row][column] = value;
-            }
-        }
+        // P = F P F^T with F = [I dtI; 0 I], computed as a general matrix
+        // product so the cross-terms stay correct.
+        double[][] f = {
+                {1, 0, dt, 0},
+                {0, 1, 0, dt},
+                {0, 0, 1, 0},
+                {0, 0, 0, 1},
+        };
+        double[][] fp = multiply(f, covariance);
+        double[][] next = multiplyTransposed(fp, f);
         double qPosition = 0.8 * dt * dt;
         double qVelocity = 1.2 * dt;
         next[0][0] += qPosition;
         next[1][1] += qPosition;
         next[2][2] += qVelocity;
         next[3][3] += qVelocity;
+        symmetrize(next);
         for (int row = 0; row < 4; row += 1) {
             System.arraycopy(next[row], 0, covariance[row], 0, 4);
+        }
+    }
+
+    private static double[][] multiply(double[][] left, double[][] right) {
+        double[][] result = new double[4][4];
+        for (int row = 0; row < 4; row += 1) {
+            for (int column = 0; column < 4; column += 1) {
+                double value = 0;
+                for (int k = 0; k < 4; k += 1) {
+                    value += left[row][k] * right[k][column];
+                }
+                result[row][column] = value;
+            }
+        }
+        return result;
+    }
+
+    private static double[][] multiplyTransposed(double[][] left, double[][] right) {
+        double[][] result = new double[4][4];
+        for (int row = 0; row < 4; row += 1) {
+            for (int column = 0; column < 4; column += 1) {
+                double value = 0;
+                for (int k = 0; k < 4; k += 1) {
+                    value += left[row][k] * right[column][k];
+                }
+                result[row][column] = value;
+            }
+        }
+        return result;
+    }
+
+    private static void symmetrize(double[][] matrix) {
+        for (int row = 0; row < 4; row += 1) {
+            for (int column = row + 1; column < 4; column += 1) {
+                double average = (matrix[row][column] + matrix[column][row]) / 2;
+                matrix[row][column] = average;
+                matrix[column][row] = average;
+            }
         }
     }
 
@@ -158,6 +198,7 @@ final class Ekf2D {
                 next[row][column] = value;
             }
         }
+        symmetrize(next);
         for (int row = 0; row < 4; row += 1) {
             System.arraycopy(next[row], 0, covariance[row], 0, 4);
         }
@@ -172,5 +213,13 @@ final class Ekf2D {
         state[3] += kNorth * (measuredNorth - state[3]);
         covariance[2][2] *= (1 - kEast);
         covariance[3][3] *= (1 - kNorth);
+    }
+
+    double covariance(int row, int column) {
+        return covariance[row][column];
+    }
+
+    double state(int index) {
+        return state[index];
     }
 }
