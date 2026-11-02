@@ -15,7 +15,7 @@ LAN-first multi-tenant courier dispatch platform. Synthetic data only.
 [`docs/30-data-retirement-and-release-signing.md`](docs/30-data-retirement-and-release-signing.md)
 
 **Current-build verification and recovery:**
-[`docs/31-current-build-verification.md`](docs/31-current-build-verification.md)
+[`docs/31-current-build-verification.md`](docs/31-current-build-verification.md)\n\n**Pilot baseline and 120-second rehearsal kit:**\n[`docs/32-pilot-baseline-and-rehearsal-kit.md`](docs/32-pilot-baseline-and-rehearsal-kit.md)
 
 These documents list exactly what is deployed, what is still pending, known
 data issues, operations commands and the relevant commits. Read them before
@@ -24,10 +24,10 @@ changing dispatch behaviour or demonstrating the system.
 ## Topology
 
 ```text
-Driver Android app Ã¢â€â‚¬Ã¢â€â‚¬ HTTPS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº Caddy Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº API :4000 Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€“Âº PostgreSQL :5432
-                                     Ã¢â€â€Ã¢â€â‚¬Ã¢â€â‚¬ OSRM :5000 / VROOM :3000
-Dispatcher web Ã¢â€â‚¬Ã¢â€â‚¬ https://app.privatefleet.home.arpa
-External access Ã¢â€â‚¬Ã¢â€â‚¬ Tailscale Serve (tailnet only)
+Driver Android app ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ HTTPS ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âº Caddy ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âº API :4000 ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬â€œÃ‚Âº PostgreSQL :5432
+                                     ÃƒÂ¢Ã¢â‚¬ÂÃ¢â‚¬ÂÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ OSRM :5000 / VROOM :3000
+Dispatcher web ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ https://app.privatefleet.home.arpa
+External access ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Tailscale Serve (tailnet only)
 ```
 
 ## Local development
@@ -50,5 +50,6 @@ pnpm --filter @privatefleet/web dev
 
 The live pilot runs on the Windows host at `192.168.1.128`. Restart and rollback
 procedures are in the status/runbook document.
+
 
 
