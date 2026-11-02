@@ -90,7 +90,7 @@ than only the coarse vehicle snapshot.
 The marker shows a confidence dot; the follow control shows confidence and
 accuracy. Stale positions remain grey/dashed and never claim a fresh fix.
 
-Tests: 8 positioning tests.
+Tests: 9 positioning tests, including the API timestamp form (`+00`).
 
 ## Stage 4 - camera
 
@@ -182,9 +182,10 @@ Stop 1/30 | Remaining 16.8 km | ETA 12:29
 
 - API tests: 99 passed
 - Route/instruction tests: 14 passed
-- Web map engine tests: 41 passed
+- Web map engine tests: 42 passed
 - Map camera Playwright test: pass
 - Full dispatcher/driver E2E: 20 passed / 20 skipped (3.5 min)
+- Production HUD after backfill: turn instruction, distance, stop progress, remaining distance and ETA verified
 - Desktop and 390 px map: no page overflow
 
 ## Remaining honest gaps

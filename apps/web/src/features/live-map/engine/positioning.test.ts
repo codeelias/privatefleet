@@ -81,6 +81,17 @@ describe("displayed fix", () => {
     expect(fix!.location.latitude).toBeCloseTo(51.5, 4);
   });
 
+  it("accepts the API timestamp form with a short UTC offset", () => {
+    const fix = resolveVehicleFix(
+      vehicle({ lastSeenAt: "2026-11-02 11:27:23+00" }),
+      route,
+      undefined,
+      Date.parse("2026-11-02T11:27:30Z"),
+    );
+    expect(fix?.ageMs).toBe(7000);
+    expect(fix?.confidence).not.toBe("unknown");
+  });
+
   it("rejects an implausible jump and marks the retained fix low confidence", () => {
     const previous = resolveVehicleFix(
       vehicle({ location: { latitude: 51.5, longitude: -0.12 }, lastSeenAt: new Date(now - 1_000).toISOString() }),
