@@ -232,7 +232,7 @@ next.
 | Duplicate job-reference constraint | **Already enforced**; cross-tenant only |
 | Demo/load tenant isolation and audited reset | Load tenant retired; reset procedure still to be written |
 | Current-build E2E / restore | Complete: 16 passed, 243.5 s restore |
-| 2x-DPR 250-vehicle performance | Open: p95 1.54 s |
+| 2x-DPR marker latency | Pass: p95 184 ms; 1x backing store above 150 vehicles |
 | Restore drill on current schema | Not started; pre-retirement dump retained |
 | Tailscale ACL/MFA hardening | Not started |
 | External health alert channel | Not started; local watchdog + auto-recovery deployed |
@@ -244,7 +244,7 @@ next.
 - Restore drill on the pre-retirement backup: **243.5 s, exit 0**, 1,109
   geometry stops, 24 RLS tables.
 - 250-vehicle load at standard DPR: **p95 123 ms**.
-- 250-vehicle load at 2x DPR: **p95 1,538 ms** - open performance defect.
+- 250-vehicle load at 2x DPR: **p95 184 ms** after capping the large-fleet backing store at 1x; marker sharpness is deliberately softer above 150 vehicles.
 - Last full API suite: 90/90 pass before the latest native/web-only changes; it
   should be rerun in the next assurance pass.
 - Visit-order regression, policy resolver and 30-job VROOM regression pass.
