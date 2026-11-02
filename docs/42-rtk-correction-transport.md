@@ -56,11 +56,17 @@ native release build:    1.0.7 / versionCode 8 (passed)
 
 ## Next to reach RTK_FIXED
 
-1. Install the NDK + CMake toolchain.
-2. Vendor RTKLIB (BSD) or a commercial RTK engine.
-3. Bridge Android raw measurements (GnssMeasurement) into RTKLIB observation
-   data; feed RTCM corrections from `NtripClient`.
-4. Only report float/fixed through `RtkSolver` once the solver produces them.
+Implemented in 1.0.8 and documented in
+[`docs/43-rtk-solver-integration.md`](43-rtk-solver-integration.md):
+
+1. ~~Install the NDK + CMake toolchain.~~
+2. ~~Vendor RTKLIB (BSD) or a commercial RTK engine.~~
+3. ~~Bridge Android raw measurements (GnssMeasurement) into RTKLIB observation
+   data; feed RTCM corrections from `NtripClient`.~~
+4. ~~Only report float/fixed through `RtkSolver` once the solver produces them.~~
+
+Remaining:
+
 5. Add a corrections screen for endpoint/mountpoint management.
 6. Ground-truth validation:
    - surveyed reference points

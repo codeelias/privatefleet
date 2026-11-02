@@ -23,6 +23,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class NtripClient {
     public interface Listener {
         void onStatus(Status status);
+
+        /** Raw stream bytes; the caller feeds them to the RTK solver decoder. */
+        default void onCorrections(byte[] buffer, int length) {
+        }
     }
 
     public static final class Status {
@@ -118,6 +122,9 @@ public final class NtripClient {
         Set<Integer> types = new LinkedHashSet<>(status.messageTypes);
         int read;
         while (running.get() && (read = input.read(buffer)) != -1) {
+            byte[] copy = new byte[read];
+            System.arraycopy(buffer, 0, copy, 0, read);
+            listener.onCorrections(copy, read);
             for (int index = 0; index < read; index += 1) {
                 int value = buffer[index] & 0xFF;
                 if (headerIndex < 3) {

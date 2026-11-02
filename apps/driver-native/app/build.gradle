@@ -11,14 +11,20 @@ if (keystorePropertiesFile.exists()) {
 android {
     namespace 'com.privatefleet.driver.nativeapp'
     compileSdk 36
+    ndkVersion '27.1.12297006'
 
     defaultConfig {
         applicationId "com.privatefleet.driver.nativeapp"
         minSdk 26
         targetSdk 36
-        versionCode 8
-        versionName "1.0.7"
+        versionCode 9
+        versionName "1.0.8"
         buildConfigField "String", "API_BASE", "\"https://pf-node.tail060a86.ts.net\""
+        externalNativeBuild {
+            cmake {
+                cppFlags ""
+            }
+        }
     }
 
     signingConfigs {
@@ -45,6 +51,13 @@ android {
         buildConfig true
     }
 
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -58,6 +71,7 @@ tasks.withType(JavaCompile).configureEach {
 dependencies {
     testImplementation 'junit:junit:4.13.2'
 }
+
 
 
 

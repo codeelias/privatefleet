@@ -1,3 +1,7 @@
+### v1.61 - RTKLIB solver compiled into the native app (2026-11-02)
+- Native 1.0.8: RTKLIB 2.4.3 vendored and compiled via NDK 27.1/CMake into libpf_rtk.so (all ABIs).
+- JNI bridge feeds Android raw observations + RTCM corrections into rtkpos (kinematic RTK); TelemetryService publishes rtk_fixed positions only from actual solver output.
+- Not yet validated against a live base station; the 0.10 m fixed-mode accuracy is nominal until the ground-truth campaign.
 ### v1.60 - RTK correction transport and precision gate (2026-11-02)
 - Native 1.0.7: NTRIP RTCM stream client, local correction config, PrecisionState machine and an RtkSolver boundary whose default implementation can never claim float/fixed.
 - Telemetry/vehicles now carry rtkState and correctionAgeMs (migration 0016); dispatcher HUD labels the precision state honestly.

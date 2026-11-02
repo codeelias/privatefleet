@@ -34,11 +34,20 @@ public final class GnssQualityMonitor {
         }
     }
 
+    public interface RawListener {
+        void onMeasurements(GnssMeasurementsEvent event);
+    }
+
     private final Context context;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private LocationManager locationManager;
     private GnssStatus.Callback statusCallback;
     private GnssMeasurementsEvent.Callback measurementsCallback;
+    private volatile RawListener rawListener;
+
+    public void setRawListener(RawListener listener) {
+        rawListener = listener;
+    }
 
     private volatile int satellitesUsed = 0;
     private volatile boolean dualFrequency = false;
@@ -106,6 +115,8 @@ public final class GnssQualityMonitor {
                     }
                     if (phase) carrierPhase = true;
                     if (l1 && l5) dualFrequency = true;
+                    RawListener listener = rawListener;
+                    if (listener != null) listener.onMeasurements(event);
                 }
             };
             try {

@@ -257,6 +257,10 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
         worker.quitSafely();
     }
 
+    public void setRawGnssListener(GnssQualityMonitor.RawListener listener) {
+        qualityMonitor.setRawListener(listener);
+    }
+
     public boolean isRunning() {
         return running;
     }
