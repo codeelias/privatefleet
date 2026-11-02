@@ -41,7 +41,20 @@ interface FleetRouteRecord {
   distanceMetres: number;
   durationSeconds: number;
   jobIds: string[];
-  legs?: Array<{ points: GeoPoint[]; distanceMetres: number; durationSeconds: number }>;
+  legs?: Array<{
+    points: GeoPoint[];
+    distanceMetres: number;
+    durationSeconds: number;
+    steps?: Array<{
+      instruction: string;
+      maneuver: string;
+      modifier?: string;
+      roadName?: string;
+      distanceMetres: number;
+      durationSeconds: number;
+      location?: GeoPoint;
+    }>;
+  }>;
   stopArrivals?: Array<number | undefined>;
 }
 

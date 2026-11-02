@@ -27,10 +27,22 @@ export interface OsrmMatrix {
   distances: number[][];
 }
 
+export interface OsrmStep {
+  instruction: string;
+  maneuver: string;
+  modifier?: string;
+  exit?: number;
+  roadName?: string;
+  distanceMetres: number;
+  durationSeconds: number;
+  location?: GeoPoint;
+}
+
 export interface OsrmLeg {
   points: GeoPoint[];
   distanceMetres: number;
   durationSeconds: number;
+  steps?: OsrmStep[];
 }
 
 export interface OsrmRoute {

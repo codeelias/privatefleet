@@ -124,6 +124,12 @@ export const VehicleDtoSchema = z.object({
   /** Explicit location provenance; stale is never treated as live. */
   locationStatus: z.enum(["live", "stale", "unknown"]).optional(),
   lastSeenAt: z.string().datetime().optional(),
+  /** Device-reported horizontal accuracy in metres, when available. */
+  accuracyMetres: z.number().nonnegative().max(5000).optional(),
+  /** Device-reported heading in degrees clockwise from north. */
+  headingDeg: z.number().min(0).max(360).optional(),
+  /** Device-reported ground speed in metres per second. */
+  speedMps: z.number().nonnegative().max(120).optional(),
 });
 export type VehicleDto = z.infer<typeof VehicleDtoSchema>;
 

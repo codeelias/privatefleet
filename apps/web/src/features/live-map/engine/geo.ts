@@ -30,6 +30,16 @@ export interface RoutePathLike {
     points: GeoPoint[];
     distanceM: number;
     estimatedDurationS: number;
+    steps?: Array<{
+      instruction: string;
+      maneuver: string;
+      modifier?: string;
+      exit?: number;
+      roadName?: string;
+      distanceM: number;
+      durationS: number;
+      location?: GeoPoint;
+    }>;
   }>;
 }
 
@@ -124,4 +134,5 @@ export function formatMetres(metres: number): string {
   }
   return `${Math.round(metres)} m`;
 }
+
 

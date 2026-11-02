@@ -74,7 +74,12 @@ export interface PlannedVehicle {
     role: "pickup" | "delivery" | "job";
   }>;
   /** Waypoint-bounded legs from the routing engine (one per adjacent stop). */
-  legs?: Array<{ points: GeoPoint[]; distanceMetres: number; durationSeconds: number }>;
+  legs?: Array<{
+    points: GeoPoint[];
+    distanceMetres: number;
+    durationSeconds: number;
+    steps?: import("./types.js").OsrmStep[];
+  }>;
 }
 
 export interface PlanResult {

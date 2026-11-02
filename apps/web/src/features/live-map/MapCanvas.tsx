@@ -22,6 +22,9 @@ import type { FleetState, GeoPoint, VehicleDto } from "@privatefleet/contracts";
 import { reconcileRoutes, routesChanged } from "./engine/routes";
 import { toLeafletLatLngs } from "./engine/projection";
 import { routeLegFeatures, type StopStatusMap } from "./engine/route-progress";
+import { resolveVehicleFix, type FixConfidence, type PositioningResult } from "./engine/positioning";
+import { formatNavigationDistance, formatNavigationEta, navigationFor } from "./engine/navigation";
+import { planFollowCamera } from "./engine/camera";
 import { markPainted } from "./engine/benchmark";
 import {
   isActive,
@@ -150,6 +153,7 @@ function VehiclePin({
   onSelect,
   animate = true,
   heading,
+  confidence,
 }: {
   vehicle: VehicleDto;
   driverName: string;
@@ -160,11 +164,17 @@ function VehiclePin({
   onSelect: () => void;
   animate?: boolean;
   heading?: number | undefined;
+  confidence?: FixConfidence | undefined;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `pin-${vehicle.id}`,
     data: { driverId: vehicle.driverId, vehicleId: vehicle.id },
   });
+  const confidenceLabel =
+    confidence === "high" ? "GPS confidence high" :
+    confidence === "medium" ? "GPS confidence medium" :
+    confidence === "low" ? "GPS confidence low" :
+    "GPS confidence unknown";
   const gpsLabel = vehicle.stale
     ? lastGpsAt
       ? `GPS stale (last known, updated ${Math.max(1, Math.round((Date.now() - lastGpsAt) / 60_000))}m ago)`
@@ -199,11 +209,19 @@ function VehiclePin({
         // lag behind and appear to vanish off the card.
         transition: animate ? "left 1.8s linear, top 1.8s linear" : "none",
       }}
-      title={`${driverName} - ${vehicle.registration} - ${gpsLabel}`}
+      title={`${driverName} - ${vehicle.registration} - ${gpsLabel} - ${confidenceLabel}`}
+      data-confidence={confidence ?? "unknown"}
     >
       <span className="relative flex h-10 w-10 items-center justify-center">
         {vehicle.stale && (
           <span className="absolute -right-1 -top-1 z-10 h-2.5 w-2.5 rounded-full border-2 border-white bg-amber-400" />
+        )}
+        {!vehicle.stale && confidence && confidence !== "unknown" && (
+          <span
+            aria-hidden="true"
+            title={confidenceLabel}
+            className={`absolute -right-1 -top-1 z-10 h-2.5 w-2.5 rounded-full border-2 border-white ${confidence === "high" ? "bg-emerald-400" : confidence === "medium" ? "bg-sky-400" : "bg-amber-400"}`}
+          />
         )}
         {vehicle.status === "on_route" && !vehicle.stale && (
           <span
@@ -254,6 +272,8 @@ export function MapCanvas({
   const polylinesRef = useRef<L.Polyline[]>([]);
   const [vectorFailed, setVectorFailed] = useState(false);
   const [mapMoving, setMapMoving] = useState(false);
+  const [cameraMode, setCameraMode] = useState<"overview" | "follow">("overview");
+  const [bearingUp, setBearingUp] = useState(false);
   const [mapStyle, setMapStyle] = useState<"dark" | "light">(() => {
     try {
       return window.localStorage.getItem("pf.map.style") === "light" ? "light" : "dark";
@@ -337,6 +357,7 @@ export function MapCanvas({
   // verified geometry (docs/17). Static geometry is only pushed to the map
   // source when its signature changes, not on every GPS update.
   const lastValidRoutesRef = useRef<RoutePathLike[]>([]);
+  const fixesRef = useRef<Map<string, PositioningResult>>(new Map());
   const routeSet = useMemo(
     () => reconcileRoutes(lastValidRoutesRef.current, state.routes as RoutePathLike[]),
     [state.routes],
@@ -351,6 +372,29 @@ export function MapCanvas({
       onSelectDriver(preferred);
     }
   }, [routeSet, selectedDriverId, state.vehicles, onSelectDriver]);
+
+  // Positioning gate: map-match, filter outliers and smooth accepted fixes.
+  // The raw device location remains authoritative; this only decides what is
+  // safe to draw and what confidence the dispatcher should see.
+  const displayVehicles = useMemo(() => {
+    const now = Date.now();
+    const nextFixes = new Map<string, PositioningResult>();
+    const vehicles = state.vehicles.map((vehicle) => {
+      const route = routeSet.routes.find((candidate) => candidate.vehicleId === vehicle.id);
+      const fix = resolveVehicleFix(vehicle, route, fixesRef.current.get(vehicle.id), now);
+      if (!fix) return vehicle;
+      nextFixes.set(vehicle.id, fix);
+      return {
+        ...vehicle,
+        location: fix.location,
+        stale: fix.stale,
+        ...(fix.headingDeg !== null ? { headingDeg: fix.headingDeg } : {}),
+        ...(fix.accuracyMetres !== null ? { accuracyMetres: fix.accuracyMetres } : {}),
+      };
+    });
+    fixesRef.current = nextFixes;
+    return vehicles;
+  }, [state.vehicles, routeSet]);
 
   const selectedRoute = selectedDriverId
     ? routeSet.routes.find((route) => route.driverId === selectedDriverId)
@@ -368,7 +412,7 @@ export function MapCanvas({
   );
   useEffect(() => {
     const next = new Map(headingsRef.current);
-    for (const vehicle of state.vehicles) {
+    for (const vehicle of displayVehicles) {
       const location = vehicle.location;
       if (!location) continue;
       const previous = next.get(vehicle.id);
@@ -387,12 +431,53 @@ export function MapCanvas({
       }
     }
     headingsRef.current = next;
-  }, [state.vehicles]);
+  }, [displayVehicles]);
   useEffect(() => {
     if (routeSet.routes.length > 0 && !routeSet.usedFallback) {
       lastValidRoutesRef.current = routeSet.routes;
     }
   }, [routeSet]);
+
+  const selectedVehicle = selectedDriverId
+    ? displayVehicles.find((vehicle) => vehicle.driverId === selectedDriverId)
+    : undefined;
+  const selectedFix = selectedVehicle ? fixesRef.current.get(selectedVehicle.id) : undefined;
+  const navigation =
+    selectedRoute && selectedFix ? navigationFor(selectedRoute, selectedFix, Date.now()) : null;
+  const nextSelectedStop = nextStopIndex >= 0 ? selectedRouteStops[nextStopIndex] : undefined;
+
+  function showOverview(): void {
+    const points = routeSet.routes.flatMap((route) => route.points);
+    if (points.length === 0) return;
+    const vector = vectorRef.current;
+    const leaflet = leafletRef.current;
+    if (vector) {
+      const bounds = new maplibregl.LngLatBounds();
+      for (const point of points) bounds.extend([point.longitude, point.latitude]);
+      vector.fitBounds(bounds, { padding: 70, duration: 650, maxZoom: 15 });
+    } else if (leaflet) {
+      const bounds = L.latLngBounds(points.map((point) => [point.latitude, point.longitude] as [number, number]));
+      leaflet.fitBounds(bounds, { padding: [50, 50], maxZoom: 15, animate: true, duration: 0.65 });
+    }
+    setCameraMode("overview");
+  }
+
+  useEffect(() => {
+    if (cameraMode !== "follow" || !ready) return;
+    const point = selectedVehicle?.location ?? (selectedVehicle ? routeStartByVehicle.get(selectedVehicle.id) : undefined);
+    if (!point) return;
+    const speed = selectedVehicle?.speedMps ?? 0;
+    const heading = selectedFix?.headingDeg ?? selectedVehicle?.headingDeg ?? 0;
+    const plan = planFollowCamera(point, heading, speed, bearingUp);
+    const vector = vectorRef.current;
+    const leaflet = leafletRef.current;
+    if (vector) {
+      vector.easeTo({ center: [plan.center.longitude, plan.center.latitude], zoom: plan.zoom, bearing: plan.bearing, duration: 650 });
+    } else if (leaflet) {
+      // Leaflet has no native bearing; follow and adaptive zoom still work.
+      leaflet.setView([plan.center.latitude, plan.center.longitude], plan.zoom, { animate: true, duration: 0.65 });
+    }
+  }, [cameraMode, bearingUp, ready, selectedDriverId, selectedVehicle, selectedFix, routeStartByVehicle]);
 
   // --- Raster engine (Leaflet, default) ---------------------------------
   useEffect(() => {
@@ -478,6 +563,8 @@ export function MapCanvas({
     const raf = requestAnimationFrame(() => map.invalidateSize());
     const observer = new ResizeObserver(() => map.invalidateSize());
     observer.observe(container);
+    const onUserDrag = () => setCameraMode("overview");
+    map.on("dragstart", onUserDrag);
     map.on("move zoom", () => setRevision((r) => r + 1));
     const onMoveStart = () => setMapMoving(true);
     const onMoveEnd = () => setMapMoving(false);
@@ -492,6 +579,7 @@ export function MapCanvas({
       observer.disconnect();
       map.off("movestart", onMoveStart);
       map.off("moveend", onMoveEnd);
+      map.off("dragstart", onUserDrag);
       polylinesRef.current = [];
       map.remove();
       leafletRef.current = null;
@@ -500,35 +588,55 @@ export function MapCanvas({
   }, [useVector]);
 
 
-  // Route polylines for the raster engine; the selected driver's route
-  // is highlighted while the others stay dimmed.
+  // Route polylines for the raster engine. Each leg keeps the same
+  // completed / exception / next / remaining hierarchy as the vector engine;
+  // selection adds a casing rather than replacing the status colour.
   useEffect(() => {
     const map = leafletRef.current;
-    if (!map || useVector) {
+    if (!map || useVector || !ready) {
       return;
     }
     polylinesRef.current.forEach((line) => line.remove());
     const next: L.Polyline[] = [];
-    for (const route of routeSet.routes) {
-      const selected = selectedDriverId !== null && route.driverId === selectedDriverId;
-      const points = toLeafletLatLngs(route.points);
+    const features = routeLegFeatures(routeSet.routes, stopStatusById);
+    const lineColour = (status: string): string => {
+      if (status === "completed") return "#94A3B8";
+      if (status === "exception") return "#B45309";
+      if (status === "next") return "#1D4ED8";
+      if (status === "remaining") return "#3B82F6";
+      return "#276EF1";
+    };
+    const dash = (status: string): string | undefined => {
+      if (status === "completed") return "7 6";
+      if (status === "exception") return "2 5";
+      return undefined;
+    };
+    for (const feature of features) {
+      const status = feature.properties.status;
+      const driverId = feature.properties.driverId;
+      const selected = selectedDriverId !== null && driverId === selectedDriverId;
+      const dimmed = selectedDriverId !== null && !selected;
+      const points = toLeafletLatLngs(
+        feature.geometry.coordinates.map(([longitude, latitude]) => ({ latitude, longitude })),
+      );
       const casing = L.polyline(points, {
-        color: "#FFFFFF",
-        weight: selected ? 10 : 7.5,
-        opacity: 0.9,
+        color: selected ? "#FFFFFF" : "#F8FAFC",
+        weight: selected ? 10 : status === "route" ? 7.5 : 6,
+        opacity: selected ? 0.95 : dimmed ? 0.25 : 0.7,
         interactive: false,
         className: "pf-route-casing",
       }).addTo(map);
       const line = L.polyline(points, {
-        color: selected ? "#60A5FA" : selectedDriverId !== null ? "#64748B" : "#276EF1",
-        weight: selected ? 6 : 4,
-        opacity: selected ? 1 : selectedDriverId !== null ? 0.72 : 0.95,
+        color: lineColour(status),
+        weight: selected ? 6 : status === "route" ? 4 : status === "next" ? 5 : 3.5,
+        opacity: selected ? 1 : dimmed ? 0.22 : 0.92,
+        dashArray: dash(status),
         className: "pf-route-line",
       }).addTo(map);
       next.push(casing, line);
     }
     polylinesRef.current = next;
-  }, [routeSet, useVector, ready, selectedDriverId, mapStyle]);
+  }, [routeSet, useVector, ready, selectedDriverId, mapStyle, stopStatusById]);
 
   // --- Vector engine (MapLibre) ----------------------------------------
   useEffect(() => {
@@ -629,12 +737,14 @@ export function MapCanvas({
         filter: ["==", ["get", "driverId"], ""],
         paint: {
           "line-color": mapStyle === "dark" ? "#60A5FA" : "#1D4ED8",
-          "line-width": 6,
-          "line-opacity": 1,
+          "line-width": 11,
+          "line-opacity": 0.28,
         },
-      });
+      }, "vehicle-routes-line");
       setReady(true);
     });
+    const onUserDrag = () => setCameraMode("overview");
+    map.on("dragstart", onUserDrag);
     map.on("move zoom", () => setRevision((r) => r + 1));
     const onMoveStart = () => setMapMoving(true);
     const onMoveEnd = () => setMapMoving(false);
@@ -649,6 +759,7 @@ export function MapCanvas({
       observer.disconnect();
       map.off("movestart", onMoveStart);
       map.off("moveend", onMoveEnd);
+      map.off("dragstart", onUserDrag);
       map.remove();
       vectorRef.current = null;
       setReady(false);
@@ -788,7 +899,7 @@ export function MapCanvas({
     }
     const duration = prefersReducedMotion() ? 0 : 1_800;
     const startedAt = performance.now();
-    const vehiclesById = new Map(state.vehicles.map((vehicle) => [vehicle.id, vehicle]));
+    const vehiclesById = new Map(displayVehicles.map((vehicle) => [vehicle.id, vehicle]));
     const targets: Array<{
       id: string;
       driverId: string | null;
@@ -798,7 +909,7 @@ export function MapCanvas({
       selected: boolean;
     }> = [];
 
-    for (const vehicle of state.vehicles) {
+    for (const vehicle of displayVehicles) {
       const point = vehicle.location ?? routeStartByVehicle.get(vehicle.id);
       if (!point) {
         continue;
@@ -897,7 +1008,7 @@ export function MapCanvas({
       }
       map.off("move zoom resize", reposition);
     };
-  }, [state.vehicles, state.routes, selectedDriverId, ready, useCanvasPins, useVector, driversById, routeStartByVehicle]);
+  }, [displayVehicles, state.routes, selectedDriverId, ready, useCanvasPins, useVector, driversById, routeStartByVehicle]);
 
   // revision forces a re-projection after pan/zoom; ready gates overlays.
   void revision;
@@ -1029,7 +1140,7 @@ export function MapCanvas({
               }}
             />
           )}
-          {!useCanvasPins && state.vehicles.map((vehicle) => {
+          {!useCanvasPins && displayVehicles.map((vehicle) => {
             const pos = project(vehicle.location ?? routeStartByVehicle.get(vehicle.id));
             if (!pos) {
               return null;
@@ -1048,11 +1159,48 @@ export function MapCanvas({
                 selected={selectedDriverId !== null && vehicle.driverId === selectedDriverId}
                 lastGpsAt={gpsSeenAt?.get(vehicle.id)}
                 animate={!mapMoving}
-                heading={headingsRef.current.get(vehicle.id)?.heading}
+                heading={fixesRef.current.get(vehicle.id)?.headingDeg ?? headingsRef.current.get(vehicle.id)?.heading}
+                confidence={fixesRef.current.get(vehicle.id)?.confidence}
                 onSelect={() => toggleSelect(vehicle.driverId ?? null)}
               />
             );
           })}
+
+          <div className="absolute left-1/2 top-3 z-40 flex -translate-x-1/2 flex-wrap items-center gap-1 rounded-full border border-command-border bg-command-surface/95 p-1 shadow-sm backdrop-blur" data-testid="map-camera-controls">
+            <button
+              type="button"
+              onClick={() => setCameraMode("follow")}
+              disabled={!selectedDriverId}
+              aria-pressed={cameraMode === "follow"}
+              className={`min-h-8 rounded-full px-2.5 text-[10px] font-semibold ${cameraMode === "follow" ? "bg-brand-primary text-on-brand" : "text-text-secondary hover:text-text-primary"}`}
+            >
+              Follow
+            </button>
+            <button
+              type="button"
+              onClick={showOverview}
+              aria-pressed={cameraMode === "overview"}
+              className={`min-h-8 rounded-full px-2.5 text-[10px] font-semibold ${cameraMode === "overview" ? "bg-command-raised text-text-primary" : "text-text-secondary hover:text-text-primary"}`}
+            >
+              Overview
+            </button>
+            <button
+              type="button"
+              onClick={() => setBearingUp((value) => !value)}
+              disabled={!useVector}
+              aria-pressed={bearingUp}
+              title={useVector ? "Rotate the map to the vehicle heading" : "Bearing is unavailable in the raster fallback"}
+              className={`min-h-8 rounded-full px-2.5 text-[10px] font-semibold disabled:opacity-35 ${bearingUp ? "bg-brand-primary/15 text-brand-ink" : "text-text-secondary hover:text-text-primary"}`}
+            >
+              {bearingUp ? "Heading up" : "North up"}
+            </button>
+            {cameraMode === "follow" && selectedFix && (
+              <span className="px-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-text-secondary" data-testid="map-confidence">
+                {selectedFix.confidence}
+                {selectedFix.accuracyMetres !== null ? " \u00b1" + Math.round(selectedFix.accuracyMetres) + "m" : ""}
+              </span>
+            )}
+          </div>
           <button
             type="button"
             onClick={() => setMapStyle((value) => (value === "dark" ? "light" : "dark"))}
@@ -1071,6 +1219,35 @@ export function MapCanvas({
             )}
             {mapStyle === "dark" ? "Light map" : "Dark map"}
           </button>
+
+          {navigation && selectedFix && (
+            <section
+              data-testid="map-navigation"
+              className="absolute bottom-16 left-3 z-30 w-[290px] max-w-[calc(100%-1.5rem)] rounded-lg border border-command-border bg-command-surface/95 p-3 shadow-lg backdrop-blur"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[8px] font-bold uppercase tracking-[0.14em] text-text-secondary">Navigation</p>
+                <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase ${selectedFix.stale ? "bg-status-warning/15 text-status-warning" : selectedFix.confidence === "low" ? "bg-status-warning/15 text-status-warning" : "bg-status-success/15 text-status-success"}`}>
+                  {selectedFix.stale ? "stale" : selectedFix.confidence}
+                </span>
+              </div>
+              <p className="mt-1 text-[13px] font-semibold leading-snug text-text-primary">
+                {navigation.nextManeuver?.instruction ?? (navigation.hasInstructions ? "Continue on route" : "No turn instructions for this route")}
+              </p>
+              {navigation.nextManeuver && (
+                <p className="mt-0.5 text-[11px] font-medium text-brand-ink">
+                  in {formatNavigationDistance(navigation.nextManeuver.distanceM)}
+                </p>
+              )}
+              <dl className="mt-2 grid grid-cols-3 gap-1 border-t border-command-border/70 pt-2 text-[9px] text-text-secondary">
+                <div><dt>Stop</dt><dd className="mt-0.5 text-[10px] font-semibold text-text-primary">{nextSelectedStop ? `${nextStopIndex + 1}/${selectedRouteStops.length}` : "Ã¢â‚¬â€"}</dd></div>
+                <div><dt>Remaining</dt><dd className="mt-0.5 text-[10px] font-semibold text-text-primary">{formatNavigationDistance(navigation.remainingDistanceM)}</dd></div>
+                <div><dt>ETA</dt><dd className="mt-0.5 text-[10px] font-semibold text-text-primary">{formatNavigationEta(navigation.etaIso)}</dd></div>
+              </dl>
+              {selectedFix.stale && <p className="mt-1 text-[9px] text-status-warning">Last known position; ETA is advisory.</p>}
+              {selectedFix.outlier && <p className="mt-1 text-[9px] text-status-warning">GPS jump rejected; showing last accepted fix.</p>}
+            </section>
+          )}
           <p className="absolute bottom-2 right-3 z-30 rounded-full bg-command-surface/90 px-2 py-1 text-[10px] text-text-secondary">
             Grey ghost pins show last known position - never imply a fresh GPS fix.
           </p>
@@ -1109,6 +1286,10 @@ export function MapCanvas({
     </section>
   );
 }
+
+
+
+
 
 
 

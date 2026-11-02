@@ -52,6 +52,12 @@ const CARTO_ATTRIBUTION =
  * vector tiles only (`/planet/*.png` is an empty wildcard), so raster must
  * use a real raster provider.
  */
+export const OSM_RASTER: RasterSource = {
+  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  name: "OpenStreetMap",
+};
+
 export const CARTO_RASTER: RasterSource = {
   url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
   attribution: CARTO_ATTRIBUTION,
@@ -99,10 +105,10 @@ const configuredVector = vectorStylesFromEnv();
 
 /** Primary raster source: explicit config > MapTiler (key present) > CARTO. */
 export const PRIMARY_RASTER: RasterSource =
-  configuredRaster ?? (MAPTILER_KEY ? MAPTILER_RASTER : CARTO_RASTER);
+  configuredRaster ?? (MAPTILER_KEY ? MAPTILER_RASTER : OSM_RASTER);
 
 /** Raster fallback for sessions without WebGL; keyless and working. */
-export const RASTER_FALLBACK: RasterSource = CARTO_RASTER;
+export const RASTER_FALLBACK: RasterSource = OSM_RASTER;
 
 /**
  * Vector style chain: explicit config first, then the approved B2

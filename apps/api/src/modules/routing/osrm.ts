@@ -3,6 +3,7 @@
  * geometry. Every response is validated before it can influence a plan.
  */
 import type { GeoPoint } from "@privatefleet/contracts";
+import { formatManeuver } from "./instruction.js";
 import {
   isValidPoint,
   RoutingError,
@@ -27,7 +28,18 @@ interface RouteResponse {
     legs?: Array<{
       distance?: number;
       duration?: number;
-      steps?: Array<{ geometry?: { coordinates?: Array<[number, number]> } }>;
+      steps?: Array<{
+        distance?: number;
+        duration?: number;
+        name?: string;
+        maneuver?: {
+          type?: string;
+          modifier?: string;
+          exit?: number;
+          location?: [number, number];
+        };
+        geometry?: { coordinates?: Array<[number, number]> };
+      }>;
     }>;
   }>;
 }
@@ -120,6 +132,24 @@ export class OsrmClient {
     const geometry = coordinates.map(([longitude, latitude]) => ({ latitude, longitude }));
     const legs = (route.legs ?? []).map((leg) => {
       const points: Array<{ latitude: number; longitude: number }> = [];
+      const steps = (leg.steps ?? []).map((step) => {
+        const type = step.maneuver?.type ?? "continue";
+        const modifier = step.maneuver?.modifier;
+        const name = step.name?.trim();
+        const exit = step.maneuver?.exit;
+        const instruction = formatManeuver({ type, ...(modifier ? { modifier } : {}), ...(name ? { name } : {}), ...(exit !== undefined ? { exit } : {}) });
+        const location = step.maneuver?.location;
+        return {
+          instruction: instruction.charAt(0).toUpperCase() + instruction.slice(1),
+          maneuver: type,
+          ...(modifier ? { modifier } : {}),
+          ...(exit !== undefined ? { exit } : {}),
+          ...(name ? { roadName: name } : {}),
+          distanceMetres: Number(step.distance ?? 0),
+          durationSeconds: Number(step.duration ?? 0),
+          ...(location ? { location: { latitude: location[1], longitude: location[0] } } : {}),
+        };
+      });
       for (const step of leg.steps ?? []) {
         for (const [longitude, latitude] of step.geometry?.coordinates ?? []) {
           const last = points[points.length - 1];
@@ -132,6 +162,7 @@ export class OsrmClient {
         points,
         distanceMetres: Number(leg.distance ?? 0),
         durationSeconds: Number(leg.duration ?? 0),
+        ...(steps.length > 0 ? { steps } : {}),
       };
     });
     if (legs.length !== points.length - 1) {

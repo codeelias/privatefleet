@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildRoutePlan, RoutePlanError } from "./route-plan.js";
+import { buildRoutePlan, RoutePlanError, type RouterLegInput } from "./route-plan.js";
 
 const p = (latitude: number, longitude: number) => ({ latitude, longitude });
 
-function legsFor(points: Array<{ latitude: number; longitude: number }>) {
+function legsFor(points: Array<{ latitude: number; longitude: number }>): RouterLegInput[] {
   return points.slice(0, -1).map((from, index) => ({
     points: [from, points[index + 1]!],
     distanceMetres: 100,
@@ -76,6 +76,64 @@ describe("route plan builder", () => {
     expect(plan.legs[1]!.toWaypointId).toBe(plan.waypoints[2]!.id);
   });
 
+  it("preserves OSRM turn steps on the versioned leg", () => {
+    const geometry = [p(51.5, -0.12), p(51.51, -0.11)];
+    const legs = legsFor(geometry);
+    legs[0] = {
+      ...legs[0]!,
+      steps: [
+        {
+          instruction: "Turn left onto Main Street",
+          maneuver: "turn",
+          modifier: "left",
+          roadName: "Main Street",
+          distanceMetres: 120,
+          durationSeconds: 20,
+          location: p(51.51, -0.11),
+        },
+      ],
+    };
+    const plan = buildRoutePlan({ routeId: "route-steps", geometry, legs, stops: [{ stopId: "stop-1" }] });
+    expect(plan.legs[0]?.steps?.[0]).toMatchObject({
+      instruction: "Turn left onto Main Street",
+      distanceM: 120,
+      durationS: 20,
+    });
+  });
+  it("rejects a disconnected leg instead of accepting a plausible count", () => {
+    const geometry = [p(51.5, -0.12), p(51.51, -0.11), p(51.52, -0.1)];
+    const legs = legsFor(geometry);
+    legs[1] = { ...legs[1]!, points: [p(51.6, -0.2), p(51.52, -0.1)] };
+    expect(() =>
+      buildRoutePlan({
+        routeId: "route-gap",
+        geometry,
+        legs,
+        stops: [{ stopId: "stop-1" }, { stopId: "stop-2" }],
+      }),
+    ).toThrow(RoutePlanError);
+  });
+
+  it("rejects non-finite leg metrics", () => {
+    const geometry = [p(51.5, -0.12), p(51.51, -0.11)];
+    const legs = legsFor(geometry);
+    legs[0] = { ...legs[0]!, distanceMetres: Number.NaN };
+    expect(() =>
+      buildRoutePlan({ routeId: "route-nan", geometry, legs, stops: [{ stopId: "stop-1" }] }),
+    ).toThrow(RoutePlanError);
+  });
+
+  it("rejects duplicate stop identities", () => {
+    const geometry = [p(51.5, -0.12), p(51.51, -0.11), p(51.52, -0.1)];
+    expect(() =>
+      buildRoutePlan({
+        routeId: "route-dup",
+        geometry,
+        legs: legsFor(geometry),
+        stops: [{ stopId: "same" }, { stopId: "same" }],
+      }),
+    ).toThrow(RoutePlanError);
+  });
   it("supports co-located stops and keeps distinct leg identities", () => {
     const geometry = [p(51.5, -0.12), p(51.5, -0.12), p(51.5, -0.12)];
     const plan = buildRoutePlan({
@@ -88,6 +146,9 @@ describe("route plan builder", () => {
     expect(plan.legs[0]!.id).not.toBe(plan.legs[1]!.id);
   });
 });
+
+
+
 
 
 

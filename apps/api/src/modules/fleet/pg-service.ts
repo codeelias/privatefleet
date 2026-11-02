@@ -111,6 +111,9 @@ interface VehicleRow {
   latitude: number | null;
   longitude: number | null;
   captured_at: Date | string | null;
+  accuracy_metres: number | null;
+  heading_deg: number | null;
+  speed_mps: number | null;
 }
 
 interface RouteRow {
@@ -177,8 +180,17 @@ export class PgFleetService {
         sql`SELECT id, full_name, status, vehicle_id, last_ping_at FROM drivers ORDER BY full_name`,
       )) as unknown as DriverRow[];
       const vehicles = (await db.execute(
-        sql`SELECT id, registration, vehicle_type, status, driver_id, latitude, longitude, captured_at
-            FROM vehicles ORDER BY registration`,
+        sql`SELECT v.id, v.registration, v.vehicle_type, v.status, v.driver_id, v.latitude, v.longitude, v.captured_at,
+                   lp.accuracy_metres, lp.heading_deg, lp.speed_mps
+            FROM vehicles v
+            LEFT JOIN LATERAL (
+              SELECT accuracy_metres, heading_deg, speed_mps
+              FROM location_points
+              WHERE vehicle_id = v.id
+              ORDER BY captured_at DESC
+              LIMIT 1
+            ) lp ON true
+            ORDER BY v.registration`,
       )) as unknown as VehicleRow[];
       const alerts = (await db.execute(
         sql`SELECT id, severity, status, title, entity, location, freshness,
@@ -270,6 +282,9 @@ export class PgFleetService {
                 ? "stale"
                 : "live",
           ...(iso(vehicle.captured_at) ? { lastSeenAt: iso(vehicle.captured_at) } : {}),
+          ...(vehicle.accuracy_metres !== null ? { accuracyMetres: vehicle.accuracy_metres } : {}),
+          ...(vehicle.heading_deg !== null ? { headingDeg: vehicle.heading_deg } : {}),
+          ...(vehicle.speed_mps !== null ? { speedMps: vehicle.speed_mps } : {}),
         })),
         jobs: jobs.map((job) => ({
           id: job.id,

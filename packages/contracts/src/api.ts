@@ -408,6 +408,19 @@ export const RouteWaypointSchema = z.object({
 });
 export type RouteWaypoint = z.infer<typeof RouteWaypointSchema>;
 
+export const RouteStepSchema = z.object({
+  /** Human-readable instruction derived from the OSRM manoeuvre. */
+  instruction: z.string().min(1),
+  maneuver: z.string().min(1),
+  modifier: z.string().optional(),
+  exit: z.number().int().nonnegative().optional(),
+  roadName: z.string().optional(),
+  distanceM: z.number().nonnegative(),
+  durationS: z.number().nonnegative(),
+  location: GeoPointSchema.optional(),
+});
+export type RouteStep = z.infer<typeof RouteStepSchema>;
+
 export const RouteLegSchema = z.object({
   /** Stable within a route version: routeId:leg:<sequence>. */
   id: z.string().min(1),
@@ -418,6 +431,8 @@ export const RouteLegSchema = z.object({
   points: z.array(GeoPointSchema).min(2),
   distanceM: z.number().nonnegative(),
   estimatedDurationS: z.number().nonnegative(),
+  /** OSRM turn-by-turn steps, ordered within the leg. */
+  steps: z.array(RouteStepSchema).optional(),
 });
 export type RouteLeg = z.infer<typeof RouteLegSchema>;
 

@@ -46,6 +46,7 @@ const fakeClients: RoutingClients = {
       points: [from, points[index + 1]!],
       distanceMetres: 100,
       durationSeconds: 20,
+      steps: [{ instruction: "Continue to next stop", maneuver: "continue", distanceMetres: 100, durationSeconds: 20, location: points[index + 1]! }],
     })),
     distanceMetres: 1_000,
     durationSeconds: 300,
@@ -193,11 +194,12 @@ describe("fleet optimisation", () => {
       expect(route.points.length).toBeGreaterThanOrEqual(2);
       const typed = route as unknown as {
         waypoints?: Array<{ id: string }>;
-        legs?: Array<{ id: string; fromWaypointId: string; toWaypointId: string }>;
+        legs?: Array<{ id: string; fromWaypointId: string; toWaypointId: string; steps?: Array<{ instruction: string }> }>;
       };
       expect(typed.waypoints?.length).toBeGreaterThanOrEqual(2);
       expect(typed.legs?.length).toBe((typed.waypoints?.length ?? 0) - 1);
       allLegIds.push(...(typed.legs ?? []).map((leg) => leg.id));
+      expect((typed.legs ?? []).every((leg) => leg.steps?.length === 1)).toBe(true);
     }
     expect(new Set(allLegIds).size).toBe(allLegIds.length);
 
@@ -416,6 +418,7 @@ describe("fleet optimisation", () => {
     expect(fleetB.routes).toHaveLength(0);
   });
 });
+
 
 
 

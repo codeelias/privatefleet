@@ -16,6 +16,16 @@ export interface RouterLegInput {
   points: GeoPoint[];
   distanceMetres: number;
   durationSeconds: number;
+  steps?: Array<{
+    instruction: string;
+    maneuver: string;
+    modifier?: string;
+    exit?: number;
+    roadName?: string;
+    distanceMetres: number;
+    durationSeconds: number;
+    location?: GeoPoint;
+  }>;
 }
 
 export class RoutePlanError extends Error {}
@@ -25,6 +35,33 @@ function samePoint(a: GeoPoint, b: GeoPoint, tolerance = 0.00002): boolean {
     Math.abs(a.latitude - b.latitude) <= tolerance &&
     Math.abs(a.longitude - b.longitude) <= tolerance
   );
+}
+
+function assertFinitePoint(point: GeoPoint, context: string): void {
+  if (
+    !point ||
+    !Number.isFinite(point.latitude) ||
+    !Number.isFinite(point.longitude) ||
+    point.latitude < -90 ||
+    point.latitude > 90 ||
+    point.longitude < -180 ||
+    point.longitude > 180
+  ) {
+    throw new RoutePlanError(`${context} has invalid coordinates`);
+  }
+}
+
+function assertLeg(leg: RouterLegInput | undefined, index: number): void {
+  if (!leg || !Array.isArray(leg.points) || leg.points.length < 2) {
+    throw new RoutePlanError(`router leg ${index} is incomplete`);
+  }
+  for (const point of leg.points) assertFinitePoint(point, `router leg ${index}`);
+  if (!Number.isFinite(leg.distanceMetres) || leg.distanceMetres < 0) {
+    throw new RoutePlanError(`router leg ${index} has an invalid distance`);
+  }
+  if (!Number.isFinite(leg.durationSeconds) || leg.durationSeconds < 0) {
+    throw new RoutePlanError(`router leg ${index} has an invalid duration`);
+  }
 }
 
 function arrivalIso(absoluteEpochSeconds: number | undefined): string | null {
@@ -53,6 +90,13 @@ export function buildRoutePlan(input: {
       `expected at least ${input.stops.length} router legs, got ${legs?.length ?? 0}`,
     );
   }
+  const stopIds = new Set<string>();
+  for (const stop of input.stops) {
+    if (stopIds.has(stop.stopId)) {
+      throw new RoutePlanError(`duplicate stop id ${stop.stopId}`);
+    }
+    stopIds.add(stop.stopId);
+  }
   const lastStopEnd = input.stops.length
     ? legs[input.stops.length - 1]?.points.at(-1)
     : undefined;
@@ -63,8 +107,16 @@ export function buildRoutePlan(input: {
     throw new RoutePlanError(`expected ${expectedLegs} router legs, got ${legs.length}`);
   }
 
+  for (let index = 0; index < expectedLegs; index += 1) {
+    assertLeg(legs[index], index);
+  }
   const waypoints: RouteWaypoint[] = [];
   const origin = geometry[0]!;
+  assertFinitePoint(origin, "route origin");
+  assertFinitePoint(geometry[geometry.length - 1]!, "route destination");
+  if (!samePoint(legs[0]!.points[0]!, origin, 0.0001)) {
+    throw new RoutePlanError("first router leg does not start at the route origin");
+  }
   waypoints.push({
     id: `${routeId}:waypoint:0`,
     sequence: 0,
@@ -73,9 +125,9 @@ export function buildRoutePlan(input: {
   });
 
   for (const [index, stop] of input.stops.entries()) {
-    const leg = legs[index];
-    if (!leg || leg.points.length < 2) {
-      throw new RoutePlanError(`router leg ${index} is incomplete`);
+    const leg = legs[index]!;
+    if (index > 0 && !samePoint(legs[index - 1]!.points.at(-1)!, leg.points[0]!, 0.0001)) {
+      throw new RoutePlanError(`router leg ${index} does not start at the previous leg`);
     }
     const location = leg.points[leg.points.length - 1]!;
     waypoints.push({
@@ -105,6 +157,9 @@ export function buildRoutePlan(input: {
     if (!samePoint(leg.points[leg.points.length - 1]!, to.location, 0.0001)) {
       throw new RoutePlanError(`router leg ${index} does not end at waypoint ${to.sequence}`);
     }
+    if (!samePoint(leg.points[0]!, from.location, 0.0001)) {
+      throw new RoutePlanError(`router leg ${index} does not start at waypoint ${from.sequence}`);
+    }
     return {
       id: `${routeId}:leg:${index}`,
       sequence: index,
@@ -113,9 +168,24 @@ export function buildRoutePlan(input: {
       points: leg.points,
       distanceM: leg.distanceMetres,
       estimatedDurationS: leg.durationSeconds,
+      ...(leg.steps && leg.steps.length > 0
+        ? {
+            steps: leg.steps.map((step) => ({
+              instruction: step.instruction,
+              maneuver: step.maneuver,
+              ...(step.modifier ? { modifier: step.modifier } : {}),
+              ...(step.exit !== undefined ? { exit: step.exit } : {}),
+              ...(step.roadName ? { roadName: step.roadName } : {}),
+              distanceM: step.distanceMetres,
+              durationS: step.durationSeconds,
+              ...(step.location ? { location: step.location } : {}),
+            })),
+          }
+        : {}),
     };
   });
 
   return { routeId, waypoints, legs: builtLegs };
 }
+
 

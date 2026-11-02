@@ -854,6 +854,8 @@ export class DemoStore {
         ...record.dto,
         location: point ? { latitude: point.latitude, longitude: point.longitude } : undefined,
         stale,
+        lastSeenAt: new Date(record.lastCapturedAt).toISOString(),
+        accuracyMetres: 12,
       };
     });
     const routes = [...this.vehicles.entries()].map(([vehicleId, record]) => ({
@@ -879,6 +881,7 @@ export class DemoStore {
     };
   }
 }
+
 
 
 
