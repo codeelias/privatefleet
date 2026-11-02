@@ -272,406 +272,37 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold">Make the plan measurably better.</h1>
-          <p className="text-sm text-text-secondary">
-            Compare baseline to a constraint-checked proposal before publishing.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {!live && (
-            <>
-              <label htmlFor="optimize-driver" className="text-[10px] font-bold uppercase tracking-widest text-text-secondary">
-                Route for
-              </label>
-              <select
-                id="optimize-driver"
-                value={driverId}
-                onChange={(event) => setDriverId(event.target.value)}
-                className="rounded-lg border border-command-border bg-command-surface px-3 py-1.5 text-sm text-text-primary"
-              >
-                {state.drivers.map((driver) => (
-                  <option key={driver.id} value={driver.id}>
-                    {driver.fullName}
-                  </option>
-                ))}
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-command-border/70 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-text-secondary">Route optimisation</p>
+            <h1 className="mt-0.5 text-[22px] font-semibold tracking-[-0.02em] text-text-primary">Plan work against policy</h1>
+            <p className="mt-1 text-[11px] text-text-secondary">Solve the fleet, compare the baseline, then approve a route version.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {policy && (
+              <StatusChip tone="success" label={`${policy.preset} | rev ${policy.revision}`} />
+            )}
+            {!live && (
+              <select aria-label="Route for driver" value={driverId} onChange={(event) => setDriverId(event.target.value)} className="h-9 rounded-lg border border-command-border bg-command-surface px-2 text-[11px] text-text-primary">
+                {state.drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.fullName}</option>)}
               </select>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={() => void optimise()}
-            disabled={busy || (!live && !driverId) || (live && !hasPendingWork)}
-            className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy && !run && !liveRun
-              ? "Optimising..."
-              : live
-                ? hasPendingWork
-                  ? "Optimise fleet"
-                  : "No jobs to optimise"
-                : "Optimise routes"}
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <p className="rounded-lg border border-status-danger/40 bg-status-danger/10 px-3 py-2 text-sm text-status-danger">
-          {error}
-        </p>
-      )}
-
-      {live && (
-        <Panel
-          title="Dispatch policy"
-          action={
-            <StatusChip
-              tone={policy ? "success" : "warning"}
-              label={
-                policy
-                  ? `${policy.preset} - revision ${policy.revision}`
-                  : "not loaded"
-              }
-            />
-          }
-        >
-          <p className="text-sm text-text-secondary">
-            The company sets the operating limits once; optimisation and approval
-            both use this same policy revision.
-          </p>
-          {policyError && (
-            <p className="mt-2 text-sm text-status-danger">{policyError}</p>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {(["local", "balanced", "extended"] as const).map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                disabled={savingPolicy || !policy}
-                onClick={() => void savePolicy({ preset })}
-                className={
-                  "rounded-xl px-3 py-2 text-sm font-bold " +
-                  (policy?.preset === preset
-                    ? "bg-brand-primary text-on-brand"
-                    : "border border-command-border bg-command-surface text-text-primary")
-                }
-              >
-                {preset === "local"
-                  ? "Local"
-                  : preset === "balanced"
-                    ? "Balanced Urban"
-                    : "Extended"}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setAdvanced((value) => !value)}
-              className="rounded-xl border border-command-border px-3 py-2 text-sm font-bold text-text-primary"
-            >
-              {advanced ? "Hide advanced" : "Advanced"}
+            )}
+            <button type="button" onClick={() => void optimise()} disabled={busy || (!live && !driverId) || (live && !hasPendingWork)} className="min-h-9 rounded-lg bg-brand-primary px-4 text-[12px] font-bold text-on-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">
+              {busy && !run && !liveRun ? "Optimising..." : live ? (hasPendingWork ? "Optimise fleet" : "No jobs to optimise") : "Optimise routes"}
             </button>
           </div>
-          {policy && !advanced && (
-            <p className="mt-3 text-xs text-text-secondary">
-              Max {Math.round(policy.maxDistanceM / 1000)} km -{" "}
-              {Math.round(policy.maxTravelTimeS / 3600)} h travel -{" "}
-              {Math.round(policy.maxWorkingDurationS / 3600)} h working -{" "}
-              {policy.maxVisits} visits per route. Minimum route utilisation is a
-              soft balancing target, never a reason to add empty driving.
-            </p>
-          )}
-          {policy && advanced && (
-            <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-              <label className="block text-xs text-text-secondary">
-                Max km
-                <input
-                  type="number"
-                  min={1}
-                  value={draft.km}
-                  onChange={(event) => setDraft({ ...draft, km: Number(event.target.value) })}
-                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
-                />
-              </label>
-              <label className="block text-xs text-text-secondary">
-                Travel hours
-                <input
-                  type="number"
-                  min={1}
-                  value={draft.travelHours}
-                  onChange={(event) =>
-                    setDraft({ ...draft, travelHours: Number(event.target.value) })
-                  }
-                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
-                />
-              </label>
-              <label className="block text-xs text-text-secondary">
-                Working hours
-                <input
-                  type="number"
-                  min={1}
-                  value={draft.workingHours}
-                  onChange={(event) =>
-                    setDraft({ ...draft, workingHours: Number(event.target.value) })
-                  }
-                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
-                />
-              </label>
-              <label className="block text-xs text-text-secondary">
-                Visits
-                <input
-                  type="number"
-                  min={1}
-                  value={draft.visits}
-                  onChange={(event) =>
-                    setDraft({ ...draft, visits: Number(event.target.value) })
-                  }
-                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
-                />
-              </label>
+        </div>
+      </header>
 
-              <div className="col-span-2 flex items-end gap-2 md:col-span-4">
-                <button
-                  type="button"
-                  disabled={savingPolicy}
-                  onClick={() =>
-                    void savePolicy({
-                      maxDistanceM: draft.km * 1000,
-                      maxTravelTimeS: draft.travelHours * 3600,
-                      maxWorkingDurationS: draft.workingHours * 3600,
-                      maxVisits: draft.visits,
-                    })
-                  }
-                  className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand"
-                >
-                  {savingPolicy ? "Saving..." : "Save custom limits"}
-                </button>
-              </div>
-              <div className="col-span-2 mt-4 border-t border-command-border pt-3 md:col-span-4">
-                <h4 className="text-sm font-bold text-text-primary">Vehicle overrides</h4>
-                <p className="mb-2 text-xs text-text-secondary">
-                  Leave a field blank to inherit the company limits. Changes increment the same policy revision.
-                </p>
-                <div className="space-y-2">
-                  {state.vehicles.map((vehicle) => {
-                    const driverName =
-                      state.drivers.find((driver) => driver.id === vehicle.driverId)?.fullName ??
-                      "Unassigned";
-                    const entry = overrideDraft[vehicle.id] ?? { km: "", visits: "" };
-                    return (
-                      <div key={vehicle.id} className="grid grid-cols-2 items-end gap-2 md:grid-cols-4">
-                        <span className="text-xs text-text-secondary">
-                          {vehicle.registration} · {driverName}
-                        </span>
-                        <label className="text-xs text-text-secondary">
-                          Max km
-                          <input
-                            type="number"
-                            min={1}
-                            value={entry.km}
-                            onChange={(event) =>
-                              setOverrideDraft({
-                                ...overrideDraft,
-                                [vehicle.id]: { ...entry, km: event.target.value },
-                              })
-                            }
-                            className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
-                          />
-                        </label>
-                        <label className="text-xs text-text-secondary">
-                          Visits
-                          <input
-                            type="number"
-                            min={1}
-                            value={entry.visits}
-                            onChange={(event) =>
-                              setOverrideDraft({
-                                ...overrideDraft,
-                                [vehicle.id]: { ...entry, visits: event.target.value },
-                              })
-                            }
-                            className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
-                          />
-                        </label>
-                        <span className="text-[11px] text-text-secondary">
-                          {entry.km || entry.visits
-                            ? `Override: ${entry.km || "inherit"} km / ${entry.visits || "inherit"} visits`
-                            : "Inherits company limits"}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <button
-                  type="button"
-                  disabled={savingPolicy}
-                  onClick={() => {
-                    if (!policy) return;
-                    void api
-                      .updateDispatchPolicy({
-                        expectedRevision: policy.revision,
-                        overrides: Object.entries(overrideDraft)
-                          .filter(([, value]) => value.km || value.visits)
-                          .map(([vehicleId, value]) => ({
-                            vehicleId,
-                            ...(value.km ? { maxDistanceM: Number(value.km) * 1000 } : {}),
-                            ...(value.visits ? { maxVisits: Number(value.visits) } : {}),
-                          })),
-                      })
-                      .then((next) => setPolicy(next))
-                      .catch((err) =>
-                        setPolicyError(err instanceof Error ? err.message : "Override save failed"),
-                      );
-                  }}
-                  className="mt-3 rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand"
-                >
-                  Save vehicle overrides
-                </button>
-              </div>
-            </div>
-          )}
-        </Panel>
+      {error && (
+        <p className="mx-4 mt-3 rounded-lg border border-status-danger/40 bg-status-danger/10 px-3 py-2 text-[11px] text-status-danger">{error}</p>
       )}
 
-      {live && (
-        <Panel
-          title="Cost-aware recommendations"
-          action={<StatusChip tone="success" label="advisory only" />}
-        >
-          <p className="text-sm text-text-secondary">
-            Fuel, vehicle running cost and driver wage are estimated per route.
-            Recommendations are suggestions for the dispatcher; nothing is assigned automatically.
-          </p>
-          {recommendationError && (
-            <p className="mt-2 text-sm text-status-danger">{recommendationError}</p>
-          )}
-          {recommendations && (
-            <>
-              <p className="mt-2 text-xs text-text-secondary">
-                Rates: fuel £{(recommendations.economics.fuelPencePerKm / 100).toFixed(2)}/km,
-                vehicle £{(recommendations.economics.vehiclePencePerKm / 100).toFixed(2)}/km,
-                driver £{(recommendations.economics.driverPencePerHour / 100).toFixed(2)}/h,
-                max detour {recommendations.economics.maxDetourKm} km.
-              </p>
-              <div className="mt-2 grid grid-cols-1 gap-1 text-xs md:grid-cols-3">
-                {recommendations.routes.map((route) => (
-                  <span key={route.driverId} className="rounded-lg bg-command-raised px-2 py-1">
-                    {route.driverName}: {(route.distanceMetres / 1000).toFixed(1)} km,{" "}
-                    £{(route.estimatedCostPence / 100).toFixed(2)} estimated cost
-                  </span>
-                ))}
-              </div>
-              <ul className="mt-3 space-y-2">
-                {recommendations.recommendations.length === 0 && (
-                  <li className="text-sm text-text-secondary">
-                    No unassigned job is close enough to an existing route under the current policy.
-                  </li>
-                )}
-                {recommendations.recommendations.map((item) => (
-                  <li
-                    key={`${item.jobId}:${item.driverId}`}
-                    className="rounded-lg border border-command-border bg-command-surface px-3 py-2"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <StatusChip tone={item.priority === "stat" ? "danger" : "neutral"} label={item.reference} />
-                      <span className="text-sm font-bold text-text-primary">
-                        {item.driverName} · {item.registration}
-                      </span>
-                      <span className="text-xs text-text-secondary">
-                        +{item.detourKm} km · +{item.addedMinutes} min · £
-                        {(item.addedCostPence / 100).toFixed(2)} incremental
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-text-secondary">{item.reason}</p>
-                  </li>
-                ))}
-              </ul>
-              <button
-                type="button"
-                onClick={() =>
-                  void api
-                    .getRecommendations()
-                    .then(setRecommendations)
-                    .catch((err) =>
-                      setRecommendationError(
-                        err instanceof Error ? err.message : "Recommendations failed",
-                      ),
-                    )
-                }
-                className="mt-3 rounded-xl border border-command-border px-3 py-2 text-sm font-bold text-text-primary"
-              >
-                Refresh recommendations
-              </button>
-            </>
-          )}
-        </Panel>
-      )}
-      {live && (
-        <Panel
-          title="Driver work requests"
-          action={<StatusChip tone={workRequests.some((r) => r.status === "pending") ? "warning" : "success"} label={`${workRequests.filter((r) => r.status === "pending").length} pending`} />}
-        >
-          <p className="text-sm text-text-secondary">
-            A request is the driver asking for more work. Approval records the decision;
-            assigning jobs still happens through optimisation so the route stays valid.
-          </p>
-          {workRequestError && (
-            <p className="mt-2 text-sm text-status-danger">{workRequestError}</p>
-          )}
-          <ul className="mt-3 space-y-2">
-            {workRequests.length === 0 && (
-              <li className="text-sm text-text-secondary">No work requests yet.</li>
-            )}
-            {workRequests.map((request) => (
-              <li
-                key={request.id}
-                className="rounded-lg border border-command-border bg-command-surface px-3 py-2"
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <StatusChip
-                    tone={request.status === "pending" ? "warning" : request.status === "approved" ? "success" : "neutral"}
-                    label={request.status}
-                  />
-                  <span className="text-sm font-bold text-text-primary">
-                    {request.driverName} · {request.registration ?? "no vehicle"}
-                  </span>
-                  <span className="text-xs text-text-secondary">
-                    route v{request.routeVersion ?? "?"} · policy rev {request.policyRevision ?? "?"}
-                    {request.gpsAgeSeconds !== null
-                      ? ` · GPS ${Math.round(request.gpsAgeSeconds / 60)}m old`
-                      : " · no GPS"}
-                  </span>
-                </div>
-                {request.note && (
-                  <p className="mt-1 text-xs text-text-secondary">“{request.note}”</p>
-                )}
-                {request.status === "pending" && (
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void decideWorkRequest(request.id, "approved")}
-                      className="rounded-lg bg-status-success px-2 py-1 text-[11px] font-bold text-on-brand"
-                    >
-                      Approve request
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void decideWorkRequest(request.id, "declined")}
-                      className="rounded-lg border border-command-border px-2 py-1 text-[11px] font-bold text-text-primary"
-                    >
-                      Decline
-                    </button>
-                  </div>
-                )}
-                {request.decisionNote && (
-                  <p className="mt-1 text-xs text-text-secondary">{request.decisionNote}</p>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      )}
+      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0 space-y-3">
       {live && liveRun && (
         <>
           <div className="rounded-xl border border-brand-primary/40 bg-brand-primary/10 px-4 py-3">
@@ -856,7 +487,6 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
           </div>
         </>
       )}
-
       {run && (
         <>
           <div className="rounded-xl border border-brand-primary/40 bg-brand-primary/10 px-4 py-3">
@@ -921,28 +551,381 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
           </div>
         </>
       )}
+            {(live && !liveRun && !busy) || (!live && !run && !busy) ? (
+              <section className="rounded-xl border border-command-border bg-command-surface p-4">
+                <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-text-secondary">Ready</p>
+                <h2 className="mt-1 text-[17px] font-semibold text-text-primary">Nothing is published until you approve</h2>
+                <p className="mt-1 text-[11px] text-text-secondary">
+                  {state.jobs.filter((job) => job.status !== "completed" && job.status !== "cancelled").length} pending jobs | {state.drivers.length} drivers | {state.vehicles.length} vehicles under the current policy revision.
+                </p>
+                <ol className="mt-3 space-y-2 text-[11px] text-text-secondary">
+                  <li><span className="font-semibold text-text-primary">1. Optimise the fleet.</span> OSRM travel and VROOM solve all eligible work together.</li>
+                  <li><span className="font-semibold text-text-primary">2. Review the baseline and proposal.</span> Check every route, unassigned job and gate result.</li>
+                  <li><span className="font-semibold text-text-primary">3. Approve.</span> One atomic transaction publishes the fleet version; stale versions are rejected.</li>
+                </ol>
+              </section>
+            ) : null}
+          </div>
 
-      {live && !liveRun && !busy && (
-        <div className="flex flex-1 items-center justify-center">
-          <p className="max-w-xl text-center text-sm text-text-secondary">
-            Live routing is enabled. Run fleet optimisation to solve all eligible
-            vehicles and pending work together; review every route, the unassigned
-            panel and totals before approving. Nothing publishes without approval.
-          </p>
-        </div>
-      )}
-
-      {!live && !run && !busy && (
-        <div className="flex flex-1 items-center justify-center">
+          <aside className="space-y-3">
+      {live && (
+        <Panel
+          title="Dispatch policy"
+          action={
+            <StatusChip
+              tone={policy ? "success" : "warning"}
+              label={
+                policy
+                  ? `${policy.preset} - revision ${policy.revision}`
+                  : "not loaded"
+              }
+            />
+          }
+        >
           <p className="text-sm text-text-secondary">
-            Pick a driver and optimise. The proposal compares the current plan to a
-            reordered, constraint-checked sequence.
+            The company sets the operating limits once; optimisation and approval
+            both use this same policy revision.
           </p>
-        </div>
+          {policyError && (
+            <p className="mt-2 text-sm text-status-danger">{policyError}</p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(["local", "balanced", "extended"] as const).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                disabled={savingPolicy || !policy}
+                onClick={() => void savePolicy({ preset })}
+                className={
+                  "rounded-xl px-3 py-2 text-sm font-bold " +
+                  (policy?.preset === preset
+                    ? "bg-brand-primary text-on-brand"
+                    : "border border-command-border bg-command-surface text-text-primary")
+                }
+              >
+                {preset === "local"
+                  ? "Local"
+                  : preset === "balanced"
+                    ? "Balanced Urban"
+                    : "Extended"}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setAdvanced((value) => !value)}
+              className="rounded-xl border border-command-border px-3 py-2 text-sm font-bold text-text-primary"
+            >
+              {advanced ? "Hide advanced" : "Advanced"}
+            </button>
+          </div>
+          {policy && !advanced && (
+            <p className="mt-3 text-xs text-text-secondary">
+              Max {Math.round(policy.maxDistanceM / 1000)} km -{" "}
+              {Math.round(policy.maxTravelTimeS / 3600)} h travel -{" "}
+              {Math.round(policy.maxWorkingDurationS / 3600)} h working -{" "}
+              {policy.maxVisits} visits per route. Minimum route utilisation is a
+              soft balancing target, never a reason to add empty driving.
+            </p>
+          )}
+          {policy && advanced && (
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <label className="block text-xs text-text-secondary">
+                Max km
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.km}
+                  onChange={(event) => setDraft({ ...draft, km: Number(event.target.value) })}
+                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                />
+              </label>
+              <label className="block text-xs text-text-secondary">
+                Travel hours
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.travelHours}
+                  onChange={(event) =>
+                    setDraft({ ...draft, travelHours: Number(event.target.value) })
+                  }
+                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                />
+              </label>
+              <label className="block text-xs text-text-secondary">
+                Working hours
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.workingHours}
+                  onChange={(event) =>
+                    setDraft({ ...draft, workingHours: Number(event.target.value) })
+                  }
+                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                />
+              </label>
+              <label className="block text-xs text-text-secondary">
+                Visits
+                <input
+                  type="number"
+                  min={1}
+                  value={draft.visits}
+                  onChange={(event) =>
+                    setDraft({ ...draft, visits: Number(event.target.value) })
+                  }
+                  className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                />
+              </label>
+
+              <div className="col-span-2 flex items-end gap-2">
+                <button
+                  type="button"
+                  disabled={savingPolicy}
+                  onClick={() =>
+                    void savePolicy({
+                      maxDistanceM: draft.km * 1000,
+                      maxTravelTimeS: draft.travelHours * 3600,
+                      maxWorkingDurationS: draft.workingHours * 3600,
+                      maxVisits: draft.visits,
+                    })
+                  }
+                  className="rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand"
+                >
+                  {savingPolicy ? "Saving..." : "Save custom limits"}
+                </button>
+              </div>
+              <div className="col-span-2 mt-4 border-t border-command-border pt-3">
+                <h4 className="text-sm font-bold text-text-primary">Vehicle overrides</h4>
+                <p className="mb-2 text-xs text-text-secondary">
+                  Leave a field blank to inherit the company limits. Changes increment the same policy revision.
+                </p>
+                <div className="space-y-2">
+                  {state.vehicles.map((vehicle) => {
+                    const driverName =
+                      state.drivers.find((driver) => driver.id === vehicle.driverId)?.fullName ??
+                      "Unassigned";
+                    const entry = overrideDraft[vehicle.id] ?? { km: "", visits: "" };
+                    return (
+                      <div key={vehicle.id} className="rounded-lg border border-command-border p-2">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <span className="text-[11px] font-semibold text-text-primary">{vehicle.registration}</span>
+                          <span className="text-[10px] text-text-secondary">{driverName}</span>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                        <label className="text-xs text-text-secondary">
+                          Max km
+                          <input
+                            type="number"
+                            min={1}
+                            value={entry.km}
+                            onChange={(event) =>
+                              setOverrideDraft({
+                                ...overrideDraft,
+                                [vehicle.id]: { ...entry, km: event.target.value },
+                              })
+                            }
+                            className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                          />
+                        </label>
+                        <label className="text-xs text-text-secondary">
+                          Visits
+                          <input
+                            type="number"
+                            min={1}
+                            value={entry.visits}
+                            onChange={(event) =>
+                              setOverrideDraft({
+                                ...overrideDraft,
+                                [vehicle.id]: { ...entry, visits: event.target.value },
+                              })
+                            }
+                            className="mt-1 w-full rounded-lg border border-command-border bg-command-surface px-2 py-1 text-text-primary"
+                          />
+                        </label>
+                        </div>
+                        <span className="mt-1 block text-[10px] text-text-secondary">
+                          {entry.km || entry.visits
+                            ? `Override: ${entry.km || "inherit"} km / ${entry.visits || "inherit"} visits`
+                            : "Inherits company limits"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  disabled={savingPolicy}
+                  onClick={() => {
+                    if (!policy) return;
+                    void api
+                      .updateDispatchPolicy({
+                        expectedRevision: policy.revision,
+                        overrides: Object.entries(overrideDraft)
+                          .filter(([, value]) => value.km || value.visits)
+                          .map(([vehicleId, value]) => ({
+                            vehicleId,
+                            ...(value.km ? { maxDistanceM: Number(value.km) * 1000 } : {}),
+                            ...(value.visits ? { maxVisits: Number(value.visits) } : {}),
+                          })),
+                      })
+                      .then((next) => setPolicy(next))
+                      .catch((err) =>
+                        setPolicyError(err instanceof Error ? err.message : "Override save failed"),
+                      );
+                  }}
+                  className="mt-3 rounded-xl bg-brand-primary px-4 py-2 text-sm font-bold text-on-brand"
+                >
+                  Save vehicle overrides
+                </button>
+              </div>
+            </div>
+          )}
+        </Panel>
       )}
+      {live && (
+        <Panel
+          title="Cost-aware recommendations"
+          action={<StatusChip tone="success" label="advisory only" />}
+        >
+          <p className="text-sm text-text-secondary">
+            Fuel, vehicle running cost and driver wage are estimated per route.
+            Recommendations are suggestions for the dispatcher; nothing is assigned automatically.
+          </p>
+          {recommendationError && (
+            <p className="mt-2 text-sm text-status-danger">{recommendationError}</p>
+          )}
+          {recommendations && (
+            <>
+              <p className="mt-2 text-xs text-text-secondary">
+                Rates: fuel £{(recommendations.economics.fuelPencePerKm / 100).toFixed(2)}/km,
+                vehicle £{(recommendations.economics.vehiclePencePerKm / 100).toFixed(2)}/km,
+                driver £{(recommendations.economics.driverPencePerHour / 100).toFixed(2)}/h,
+                max detour {recommendations.economics.maxDetourKm} km.
+              </p>
+              <div className="mt-2 grid grid-cols-1 gap-1 text-xs md:grid-cols-3">
+                {recommendations.routes.map((route) => (
+                  <span key={route.driverId} className="rounded-lg bg-command-raised px-2 py-1">
+                    {route.driverName}: {(route.distanceMetres / 1000).toFixed(1)} km,{" "}
+                    £{(route.estimatedCostPence / 100).toFixed(2)} estimated cost
+                  </span>
+                ))}
+              </div>
+              <ul className="mt-3 space-y-2">
+                {recommendations.recommendations.length === 0 && (
+                  <li className="text-sm text-text-secondary">
+                    No unassigned job is close enough to an existing route under the current policy.
+                  </li>
+                )}
+                {recommendations.recommendations.map((item) => (
+                  <li
+                    key={`${item.jobId}:${item.driverId}`}
+                    className="rounded-lg border border-command-border bg-command-surface px-3 py-2"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusChip tone={item.priority === "stat" ? "danger" : "neutral"} label={item.reference} />
+                      <span className="text-sm font-bold text-text-primary">
+                        {item.driverName}  |  {item.registration}
+                      </span>
+                      <span className="text-xs text-text-secondary">
+                        +{item.detourKm} km  |  +{item.addedMinutes} min  |  £
+                        {(item.addedCostPence / 100).toFixed(2)} incremental
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-text-secondary">{item.reason}</p>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() =>
+                  void api
+                    .getRecommendations()
+                    .then(setRecommendations)
+                    .catch((err) =>
+                      setRecommendationError(
+                        err instanceof Error ? err.message : "Recommendations failed",
+                      ),
+                    )
+                }
+                className="mt-3 rounded-xl border border-command-border px-3 py-2 text-sm font-bold text-text-primary"
+              >
+                Refresh recommendations
+              </button>
+            </>
+          )}
+        </Panel>
+      )}
+      {live && (
+        <Panel
+          title="Driver work requests"
+          action={<StatusChip tone={workRequests.some((r) => r.status === "pending") ? "warning" : "success"} label={`${workRequests.filter((r) => r.status === "pending").length} pending`} />}
+        >
+          <p className="text-sm text-text-secondary">
+            A request is the driver asking for more work. Approval records the decision;
+            assigning jobs still happens through optimisation so the route stays valid.
+          </p>
+          {workRequestError && (
+            <p className="mt-2 text-sm text-status-danger">{workRequestError}</p>
+          )}
+          <ul className="mt-3 space-y-2">
+            {workRequests.length === 0 && (
+              <li className="text-sm text-text-secondary">No work requests yet.</li>
+            )}
+            {workRequests.map((request) => (
+              <li
+                key={request.id}
+                className="rounded-lg border border-command-border bg-command-surface px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusChip
+                    tone={request.status === "pending" ? "warning" : request.status === "approved" ? "success" : "neutral"}
+                    label={request.status}
+                  />
+                  <span className="text-sm font-bold text-text-primary">
+                    {request.driverName}  |  {request.registration ?? "no vehicle"}
+                  </span>
+                  <span className="text-xs text-text-secondary">
+                    route v{request.routeVersion ?? "?"}  |  policy rev {request.policyRevision ?? "?"}
+                    {request.gpsAgeSeconds !== null
+                      ? `  |  GPS ${Math.round(request.gpsAgeSeconds / 60)}m old`
+                      : "  |  no GPS"}
+                  </span>
+                </div>
+                {request.note && (
+                  <p className="mt-1 text-xs text-text-secondary">"{request.note}"</p>
+                )}
+                {request.status === "pending" && (
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void decideWorkRequest(request.id, "approved")}
+                      className="rounded-lg bg-status-success px-2 py-1 text-[11px] font-bold text-on-brand"
+                    >
+                      Approve request
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void decideWorkRequest(request.id, "declined")}
+                      className="rounded-lg border border-command-border px-2 py-1 text-[11px] font-bold text-text-primary"
+                    >
+                      Decline
+                    </button>
+                  </div>
+                )}
+                {request.decisionNote && (
+                  <p className="mt-1 text-xs text-text-secondary">{request.decisionNote}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }
+
 
 
 
