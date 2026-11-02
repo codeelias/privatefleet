@@ -105,7 +105,7 @@ is in exactly one state:
 | Phase 6 hardening | DNS, Tailscale, TLS, backups | Restore drill on current schema, soak/load rerun, monitoring/alerting, release signing |
 | Driver request loop | Request and dispatcher decision | Approval does not assign work or re-optimise the route |
 | Customer tracking | Portal/tracking components and ETA display | Real customer link, branding, proactive delay notification, dispute-ready proof export not proven |
-| Native release | Signed APK produced and verified | Physical-phone release install, update channel, 8-hour battery soak |
+| Native release | Signed 1.0.3 installed on R5CWB0BR3BP; Mo logged in; session/relaunch verified | Update channel, second-phone 8-hour battery soak |
 | High-DPI map performance | 2x-DPR benchmark measured | p95 1.54 s; interactive gate missed |
 | Accessibility | Keyboard, focus, labels, Escape | Screen-reader pass and 200% zoom not done |
 | Map mobile experience | Responsive dock, assignment sheet | Vehicle HUD intentionally hidden below `md`; no mobile detail sheet |

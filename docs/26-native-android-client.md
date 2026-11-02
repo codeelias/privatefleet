@@ -2,6 +2,9 @@
 
 Status: **pilot tracking/ops client**, not yet full POD parity.
 
+Current pilot release: **1.0.3** (`versionCode 4`), signed with the
+PrivateFleet release key.
+
 Package: `com.privatefleet.driver.nativeapp`  
 Path: `apps/driver-native`  
 Language/UI: Java + platform Android widgets. No Expo, Metro, React Native,
@@ -11,6 +14,8 @@ WebView or JavaScript runtime.
 
 - PIN driver login against `https://pf-node.tail060a86.ts.net`
 - durable access/refresh session encrypted with Android Keystore AES/GCM
+- cold relaunch stays signed in without re-entering the PIN
+- sign-out keeps only the last workspace/driver encrypted for prefill; the PIN is never stored
 - Start shift / shift status
 - Request more jobs (durable dispatcher request)
 - Nearest-stop ordering (arrived pinned first, completed/skipped/failed excluded)
@@ -36,6 +41,14 @@ WebView or JavaScript runtime.
 Physical Galaxy S22, Android 16, Tailscale connected:
 
 ```text
+second phone R5CWB0BR3BP (SM-S901B) installed 1.0.3
+PIN login as Mo Khan succeeded
+25 assigned jobs
+background service isForeground=true
+22 location points; latest 2026-11-02 02:53 UTC
+force-stop + relaunch restored the session without login
+sign-out -> login prefilled tenant + driver; re-login started tracking
+
 native app installed and launched
 PIN login succeeded
 shift: on_route · 19 jobs

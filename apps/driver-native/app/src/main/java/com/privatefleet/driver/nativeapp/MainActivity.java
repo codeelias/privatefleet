@@ -98,8 +98,9 @@ public class MainActivity extends Activity {
         subtitle.setGravity(Gravity.CENTER);
         root.addView(subtitle);
 
-        EditText tenant = field("Workspace", "northstar-couriers-b67e10");
-        EditText driver = field("Driver ID", "");
+        String[] remembered = LoginMemory.load(this);
+        EditText tenant = field("Workspace", remembered[0].isEmpty() ? "northstar-couriers-b67e10" : remembered[0]);
+        EditText driver = field("Driver ID", remembered[1]);
         EditText pin = field("PIN", "");
         pin.setInputType(android.text.InputType.TYPE_CLASS_NUMBER
                 | android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);
@@ -114,8 +115,12 @@ public class MainActivity extends Activity {
             executor.execute(() -> {
                 try {
                     Session next = new ApiClient(this).login(tenantValue, driverValue, pinValue);
+                    LoginMemory.save(this, tenantValue, driverValue);
                     runOnUiThread(() -> {
                         session = next;
+                        if ("on_route".equals(next.driverStatus)) {
+                            TelemetryService.start(this);
+                        }
                         requestPermissions();
                         showMain();
                     });
@@ -717,6 +722,8 @@ public class MainActivity extends Activity {
                 Toast.LENGTH_LONG).show();
     }
 }
+
+
 
 
 

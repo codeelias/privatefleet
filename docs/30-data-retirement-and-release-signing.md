@@ -80,8 +80,8 @@ be distributed.
 Version for this build:
 
 ```text
-versionCode 2
-versionName 1.0.1
+versionCode 4
+versionName 1.0.3
 ```
 
 ### Verified certificate
@@ -134,5 +134,5 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 | Release signing config | Complete |
 | Signed APK produced | Complete |
 | Certificate verified | Complete |
-| Physical-phone release install | Not yet performed; debug build retained |
+| Physical-phone release install | Complete on R5CWB0BR3BP, logged in as Mo Khan |
 | Update channel | Not yet defined |
