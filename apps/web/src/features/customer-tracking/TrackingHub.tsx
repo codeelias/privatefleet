@@ -90,7 +90,7 @@ export function TrackingHub({ state }: { state: FleetState }) {
               >
                 {state.jobs.map((job) => (
                   <option key={job.id} value={job.id}>
-                    {job.reference} · {job.status.replace("_", " ")}
+                    {job.reference} Â· {job.status.replace("_", " ")}
                   </option>
                 ))}
               </select>
@@ -199,6 +199,11 @@ export function TrackingHub({ state }: { state: FleetState }) {
                 brand={TENANT}
                 jobRef={targetJob?.reference ?? "J-198"}
                 eta="14:42"
+                driverName="Mo Khan"
+                vehicleRegistration="VAN-04"
+                delayStatus="on_time"
+                etaMethod="live"
+                remainingStops={3}
               />
             </div>
           </div>
@@ -207,5 +212,6 @@ export function TrackingHub({ state }: { state: FleetState }) {
     </div>
   );
 }
+
 
 

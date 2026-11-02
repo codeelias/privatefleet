@@ -37,7 +37,7 @@ const route = {
 
 describe("navigation read model", () => {
   it("reports the next instruction and distance to the manoeuvre", () => {
-    const navigation = navigationFor(route, { legIndex: 0, legProgressM: 10 }, Date.now());
+    const navigation = navigationFor(route, { legIndex: 0, legProgressM: 10, confidence: "high", stale: false }, Date.now());
     expect(navigation.nextManeuver?.instruction).toBe("Turn left onto Main Street");
     expect(navigation.nextManeuver?.distanceM).toBe(20);
     expect(navigation.hasInstructions).toBe(true);
@@ -45,16 +45,34 @@ describe("navigation read model", () => {
 
   it("reports remaining distance and a finite ETA", () => {
     const now = Date.parse("2026-11-02T10:00:00Z");
-    const navigation = navigationFor(route, { legIndex: 0, legProgressM: 345 }, now);
+    const navigation = navigationFor(route, { legIndex: 0, legProgressM: 345, confidence: "medium", stale: false }, now);
     expect(navigation.remainingDistanceM).toBeGreaterThan(300);
     expect(navigation.remainingDurationS).toBeGreaterThan(30);
     expect(navigation.etaIso).toBe(new Date(now + navigation.remainingDurationS! * 1000).toISOString());
   });
 
+  it("blends live device speed into the ETA only when the fix is trustworthy", () => {
+    const live = navigationFor(
+      route,
+      { legIndex: 0, legProgressM: 345, confidence: "high", stale: false },
+      Date.now(),
+      18,
+    );
+    expect(live.etaMethod).toBe("live");
+    expect(live.remainingDurationS).toBeLessThan(120);
+
+    const planned = navigationFor(
+      route,
+      { legIndex: 0, legProgressM: 345, confidence: "low", stale: false },
+      Date.now(),
+      18,
+    );
+    expect(planned.etaMethod).toBe("planned");
+  });
   it("does not invent turn instructions for a legacy route without steps", () => {
     const { steps: _steps, ...legacyLeg } = route.legs[0]!;
     const legacy = { ...route, legs: [legacyLeg] };
-    const navigation = navigationFor(legacy, { legIndex: 0, legProgressM: 10 }, Date.now());
+    const navigation = navigationFor(legacy, { legIndex: 0, legProgressM: 10, confidence: "high", stale: false }, Date.now());
     expect(navigation.hasInstructions).toBe(false);
     expect(navigation.nextManeuver).toBeNull();
   });
@@ -65,5 +83,7 @@ describe("navigation read model", () => {
     expect(formatNavigationEta(null)).toBe("-");
   });
 });
+
+
 
 

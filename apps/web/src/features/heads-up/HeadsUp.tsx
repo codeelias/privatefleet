@@ -4,7 +4,7 @@
  * reuse the existing assignment and follow flows.
  */
 import { useEffect, useMemo, useState } from "react";
-import type { FleetState } from "@privatefleet/contracts";
+import type { FleetState, LiveOptimizationProposal } from "@privatefleet/contracts";
 import { StatusChip } from "../../shared/ui/StatusChip";
 import { api } from "../../shared/api/client";
 import { buildHeadsUp, type HeadsUpItem } from "./engine/heads-up";
@@ -18,11 +18,13 @@ export function HeadsUp({
   onOpenJob,
   onFocusDriver,
   onOpenAlerts,
+  onPublished,
 }: {
   state: FleetState;
   onOpenJob: (jobId: string) => void;
   onFocusDriver: (driverId: string) => void;
   onOpenAlerts: () => void;
+  onPublished?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [customerUpdate, setCustomerUpdate] = useState<
@@ -30,6 +32,12 @@ export function HeadsUp({
   >(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [reroute, setReroute] = useState<{
+    item: HeadsUpItem;
+    proposal: LiveOptimizationProposal;
+  } | null>(null);
+  const [rerouteBusy, setRerouteBusy] = useState(false);
+  const [rerouteError, setRerouteError] = useState<string | null>(null);
   const result = useMemo(() => buildHeadsUp(state), [state]);
   const { summary } = result;
   const top = result.items[0];
@@ -43,6 +51,39 @@ export function HeadsUp({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
+  async function requestReroute(item: HeadsUpItem): Promise<void> {
+    if (!item.driverId) return;
+    setRerouteBusy(true);
+    setRerouteError(null);
+    try {
+      const proposal = await api.runOptimizationLive(item.driverId);
+      setReroute({ item, proposal });
+    } catch (error) {
+      setRerouteError(error instanceof Error ? error.message : "Re-route failed");
+    } finally {
+      setRerouteBusy(false);
+    }
+  }
+
+  async function publishReroute(): Promise<void> {
+    if (!reroute) return;
+    setRerouteBusy(true);
+    setRerouteError(null);
+    try {
+      const expectedRouteVersion =
+        "expectedRouteVersion" in reroute.proposal && typeof reroute.proposal.expectedRouteVersion === "number"
+          ? reroute.proposal.expectedRouteVersion
+          : state.routeVersion;
+      await api.approveLivePlan(reroute.proposal.runId, expectedRouteVersion);
+      setReroute(null);
+      onPublished?.();
+    } catch (error) {
+      setRerouteError(error instanceof Error ? error.message : "The revised route could not be published");
+    } finally {
+      setRerouteBusy(false);
+    }
+  }
+
   async function prepareCustomerUpdate(item: HeadsUpItem): Promise<void> {
     if (!item.jobId) return;
     setUpdateBusy(true);
@@ -157,6 +198,16 @@ export function HeadsUp({
                         Open assignment
                       </button>
                     )}
+                    {(item.kind === "off_route" || item.kind === "late") && item.driverId && (
+                      <button
+                        type="button"
+                        onClick={() => void requestReroute(item)}
+                        disabled={rerouteBusy}
+                        className="rounded-md border border-brand-primary/50 px-2 py-1 text-[10px] font-semibold text-brand-ink disabled:opacity-40"
+                      >
+                        {rerouteBusy && reroute === null ? "Planning..." : "Re-route driver"}
+                      </button>
+                    )}
                     {item.kind === "late" && item.jobId && (
                       <button
                         type="button"
@@ -216,6 +267,34 @@ export function HeadsUp({
         </div>
       )}
       {updateError && <p className="mt-1 text-[10px] text-status-danger">{updateError}</p>}
+
+      {reroute && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 p-4" role="dialog" aria-modal="true" aria-label="Re-route driver">
+          <div className="w-full max-w-[440px] rounded-xl border border-command-border bg-command-surface p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">Re-route driver</p>
+                <h3 className="mt-0.5 text-[15px] font-semibold text-text-primary">{reroute.item.title}</h3>
+              </div>
+              <button type="button" onClick={() => setReroute(null)} className="rounded-md border border-command-border px-2 py-1 text-[10px] font-semibold text-text-primary">Cancel</button>
+            </div>
+            <p className="mt-2 text-[11px] text-text-secondary">
+              The solver plans from the vehicle's last GPS fix and only pending stops. Review the proposal before publishing; publishing replaces the current route version.
+            </p>
+            <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+              <div className="rounded-lg border border-command-border p-2"><dt className="text-text-secondary">Revised distance</dt><dd className="mt-0.5 font-semibold">{(reroute.proposal.proposal.distanceMetres / 1000).toFixed(1)} km</dd></div>
+              <div className="rounded-lg border border-command-border p-2"><dt className="text-text-secondary">Revised duration</dt><dd className="mt-0.5 font-semibold">{Math.round(reroute.proposal.proposal.durationSeconds / 60)} min</dd></div>
+            </dl>
+            {rerouteError && <p className="mt-2 text-[11px] text-status-danger">{rerouteError}</p>}
+            <div className="mt-3 flex justify-end gap-2">
+              <button type="button" onClick={() => setReroute(null)} className="rounded-md border border-command-border px-3 py-1.5 text-[11px] font-semibold text-text-primary">Cancel</button>
+              <button type="button" onClick={() => void publishReroute()} disabled={rerouteBusy} className="rounded-md bg-brand-primary px-3 py-1.5 text-[11px] font-bold text-on-brand disabled:opacity-40">
+                {rerouteBusy ? "Publishing..." : "Publish revised route"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

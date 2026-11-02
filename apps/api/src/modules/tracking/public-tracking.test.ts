@@ -125,6 +125,10 @@ describe("public customer tracking", () => {
       vehicleRegistration?: string;
       position?: { latitude: number; longitude: number };
       stops: Array<{ address: string; status: string }>;
+      delayStatus?: string;
+      etaConfidence?: string;
+      remainingStops?: number;
+      lastUpdateAt?: string;
     };
     expect(body.jobReference).toBe("TRK-JOB");
     expect(body.status).toBe("in_progress");
@@ -134,6 +138,10 @@ describe("public customer tracking", () => {
     expect(body.position?.latitude).toBeCloseTo(51.505);
     expect(body.stops).toHaveLength(1);
     expect(body.stops[0]?.address).toBe("1 Tracking Way");
+    expect(body.delayStatus).toBe("on_time");
+    expect(body.etaConfidence).toBeDefined();
+    expect(body.remainingStops).toBe(1);
+    expect(body.lastUpdateAt).toBeDefined();
     expect(JSON.stringify(body)).not.toContain("phone");
   });
 
@@ -178,3 +186,5 @@ describe("public customer tracking", () => {
     expect(limited).toBe(true);
   });
 });
+
+

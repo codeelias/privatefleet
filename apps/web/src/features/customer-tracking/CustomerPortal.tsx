@@ -18,6 +18,12 @@ export interface PortalProps {
   jobRef: string;
   eta: string;
   standalone?: boolean;
+  driverName?: string;
+  vehicleRegistration?: string;
+  delayStatus?: "on_time" | "late" | "unknown";
+  etaMethod?: "live" | "planned";
+  remainingStops?: number;
+  lastUpdateAt?: string;
 }
 
 const STEPS = [
@@ -27,7 +33,18 @@ const STEPS = [
   { label: "Delivered", time: "", state: "pending" },
 ] as const;
 
-export function CustomerPortal({ brand, jobRef, eta, standalone = false }: PortalProps) {
+export function CustomerPortal({
+  brand,
+  jobRef,
+  eta,
+  standalone = false,
+  driverName,
+  vehicleRegistration,
+  delayStatus,
+  etaMethod = "planned",
+  remainingStops,
+  lastUpdateAt,
+}: PortalProps) {
   const theme = {
     "--portal-primary": brand.primary,
     "--portal-primary-contrast": brand.primaryContrast,
@@ -72,9 +89,26 @@ export function CustomerPortal({ brand, jobRef, eta, standalone = false }: Porta
               Driver en route
             </p>
             <p className="text-2xl font-bold tabular-nums">{eta}</p>
-            <p className="text-[10px] text-[#756E61]">Estimated arrival</p>
+            <p className="text-[10px] text-[#756E61]">{etaMethod === "live" ? "Live estimate" : "Planned arrival"}</p>
+            {delayStatus && delayStatus !== "unknown" && (
+              <p className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${delayStatus === "late" ? "bg-[#FEE2E2] text-[#B91C1C]" : "bg-[#DCFCE7] text-[#15803D]"}`}>
+                {delayStatus === "late" ? "Running late" : "On time"}
+              </p>
+            )}
           </div>
         </div>
+
+        {(driverName || vehicleRegistration) && (
+          <div className="mt-4 flex items-center gap-3 rounded-xl bg-[#FBF8F1] p-4 shadow-sm">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold" style={{ backgroundColor: "var(--portal-primary)", color: "var(--portal-primary-contrast)" }}>
+              {(driverName ?? "PF").split(" ").map((part) => part[0]).join("").slice(0, 2)}
+            </span>
+            <div>
+              <p className="text-sm font-bold">{driverName ?? "Your driver"}</p>
+              <p className="text-[10px] text-[#756E61]">{vehicleRegistration ?? "Vehicle assigned"}{typeof remainingStops === "number" ? ` - ${remainingStops} stops to go` : ""}</p>
+            </div>
+          </div>
+        )}
 
         <div className="mt-4 rounded-xl bg-[#FBF8F1] p-4 shadow-sm">
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#756E61]">
@@ -127,8 +161,10 @@ export function CustomerPortal({ brand, jobRef, eta, standalone = false }: Porta
         </div>
 
         <p className="mt-4 text-center text-[10px] text-[#756E61]">
-          Last updated 8 sec ago - current location is approximate and updates when
-          the driver's device reports.
+          {lastUpdateAt
+            ? `Last updated ${Math.max(1, Math.round((Date.now() - Date.parse(lastUpdateAt)) / 1000))}s ago - `
+            : "Last updated recently - "}
+          current location is approximate and updates when the driver's device reports.
         </p>
       </main>
 

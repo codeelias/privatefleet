@@ -15,7 +15,10 @@ LAN-first multi-tenant courier dispatch platform. Synthetic data only.
 [`docs/30-data-retirement-and-release-signing.md`](docs/30-data-retirement-and-release-signing.md)
 
 **Current-build verification and recovery:**
-[`docs/31-current-build-verification.md`](docs/31-current-build-verification.md)\n\n**Pilot baseline and 120-second rehearsal kit:**\n[`docs/32-pilot-baseline-and-rehearsal-kit.md`](docs/32-pilot-baseline-and-rehearsal-kit.md)\n\n**Dispatch Board redesign:**\n[`docs/33-dispatch-board-redesign.md`](docs/33-dispatch-board-redesign.md)\n\n**Jobs & Work Orders redesign:**\n[`docs/34-jobs-work-orders-redesign.md`](docs/34-jobs-work-orders-redesign.md)\n\n**Heads-Up predictive operations:**\n[`docs/37-heads-up-predictive-operations.md`](docs/37-heads-up-predictive-operations.md)\n\n**Map positioning, camera and navigation:**\n[`docs/36-map-positioning-camera-navigation.md`](docs/36-map-positioning-camera-navigation.md)\n\n**Route Optimisation workbench:**\n[`docs/35-route-optimisation-workbench.md`](docs/35-route-optimisation-workbench.md)
+[`docs/31-current-build-verification.md`](docs/31-current-build-verification.md)\n\n**Pilot baseline and 120-second rehearsal kit:**\n[`docs/32-pilot-baseline-and-rehearsal-kit.md`](docs/32-pilot-baseline-and-rehearsal-kit.md)\n\n**Dispatch Board redesign:**\n[`docs/33-dispatch-board-redesign.md`](docs/33-dispatch-board-redesign.md)\n\n**Jobs & Work Orders redesign:**\n[`docs/34-jobs-work-orders-redesign.md`](docs/34-jobs-work-orders-redesign.md)\n\n**Customer Edge batch:**
+[`docs/39-customer-edge-navigation-follow-tracking-geofencing.md`](docs/39-customer-edge-navigation-follow-tracking-geofencing.md)
+
+**Heads-Up predictive operations:**\n[`docs/37-heads-up-predictive-operations.md`](docs/37-heads-up-predictive-operations.md)\n\n**Map positioning, camera and navigation:**\n[`docs/36-map-positioning-camera-navigation.md`](docs/36-map-positioning-camera-navigation.md)\n\n**Route Optimisation workbench:**\n[`docs/35-route-optimisation-workbench.md`](docs/35-route-optimisation-workbench.md)
 
 These documents list exactly what is deployed, what is still pending, known
 data issues, operations commands and the relevant commits. Read them before

@@ -489,6 +489,7 @@ function Dashboard({
                     onOpenJob={openAssignment}
                     onFocusDriver={setFocusedDriverId}
                     onOpenAlerts={() => setScreen("alerts")}
+                    onPublished={() => void queryClient.invalidateQueries({ queryKey: ["fleet"] })}
                   />
                 </div>
 
@@ -918,6 +919,8 @@ export function App() {
     />
   );
 }
+
+
 
 
 

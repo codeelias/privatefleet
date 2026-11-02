@@ -174,8 +174,30 @@ export const PublicTrackingResponseSchema = z.object({
     })
     .optional(),
   stops: z.array(PublicTrackingStopSchema),
+  /** Remaining uncompleted stops, for progress copy. */
+  remainingStops: z.number().int().nonnegative().optional(),
+  /** Whether the ETA is a planned schedule or a live-blended estimate. */
+  etaMethod: z.enum(["live", "planned"]).optional(),
+  /** Trust level of the displayed arrival, derived from fix age. */
+  etaConfidence: z.enum(["high", "medium", "low"]).optional(),
+  /** Customer-facing promise state derived from ETA vs drop-off window. */
+  delayStatus: z.enum(["on_time", "late", "unknown"]).optional(),
+  /** Timestamp of the last usable position (null when unavailable). */
+  lastUpdateAt: z.string().datetime().optional(),
 });
 export type PublicTrackingResponse = z.infer<typeof PublicTrackingResponseSchema>;
+
+export const GeofenceDtoSchema = z.object({
+  id: IdSchema,
+  name: z.string(),
+  geojson: z.string(),
+  enabled: z.boolean(),
+  createdAt: z.string().datetime(),
+});
+export type GeofenceDto = z.infer<typeof GeofenceDtoSchema>;
+
+export const GeofenceListSchema = z.object({ geofences: z.array(GeofenceDtoSchema) });
+export type GeofenceList = z.infer<typeof GeofenceListSchema>;
 
 export const AlertDtoSchema = z.object({
   id: IdSchema,

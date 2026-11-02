@@ -274,6 +274,20 @@ export function MapCanvas({
   const [mapMoving, setMapMoving] = useState(false);
   const [cameraMode, setCameraMode] = useState<"overview" | "follow">("overview");
   const [bearingUp, setBearingUp] = useState(false);
+  const [autoFollow, setAutoFollow] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem("pf.map.autofollow") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("pf.map.autofollow", autoFollow ? "1" : "0");
+    } catch {
+      // Storage may be unavailable; the toggle still works for this session.
+    }
+  }, [autoFollow]);
   const [mapStyle, setMapStyle] = useState<"dark" | "light">(() => {
     try {
       return window.localStorage.getItem("pf.map.style") === "light" ? "light" : "dark";
@@ -348,9 +362,11 @@ export function MapCanvas({
   );
   const toggleSelect = useCallback(
     (driverId: string | null) => {
-      onSelectDriver(selectedDriverId === driverId ? null : driverId);
+      const next = selectedDriverId === driverId ? null : driverId;
+      onSelectDriver(next);
+      if (next !== null && autoFollow) setCameraMode("follow");
     },
-    [onSelectDriver, selectedDriverId],
+    [onSelectDriver, selectedDriverId, autoFollow],
   );
 
   // Validated, retained route set: invalid updates never erase the last
@@ -370,8 +386,9 @@ export function MapCanvas({
       : routed[0]?.driverId;
     if (preferred) {
       onSelectDriver(preferred);
+      if (autoFollow) setCameraMode("follow");
     }
-  }, [routeSet, selectedDriverId, state.vehicles, onSelectDriver]);
+  }, [routeSet, selectedDriverId, state.vehicles, onSelectDriver, autoFollow]);
 
   // Positioning gate: map-match, filter outliers and smooth accepted fixes.
   // The raw device location remains authoritative; this only decides what is
@@ -443,7 +460,9 @@ export function MapCanvas({
     : undefined;
   const selectedFix = selectedVehicle ? fixesRef.current.get(selectedVehicle.id) : undefined;
   const navigation =
-    selectedRoute && selectedFix ? navigationFor(selectedRoute, selectedFix, Date.now()) : null;
+    selectedRoute && selectedFix
+      ? navigationFor(selectedRoute, selectedFix, Date.now(), selectedVehicle?.speedMps ?? null)
+      : null;
   const nextSelectedStop = nextStopIndex >= 0 ? selectedRouteStops[nextStopIndex] : undefined;
 
   function showOverview(): void {
@@ -1194,6 +1213,19 @@ export function MapCanvas({
             >
               {bearingUp ? "Heading up" : "North up"}
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !autoFollow;
+                setAutoFollow(next);
+                if (next && selectedDriverId) setCameraMode("follow");
+              }}
+              aria-pressed={autoFollow}
+              title="Follow the selected vehicle automatically on selection"
+              className={`min-h-8 rounded-full px-2.5 text-[10px] font-semibold ${autoFollow ? "bg-brand-primary/15 text-brand-ink" : "text-text-secondary hover:text-text-primary"}`}
+            >
+              Auto-follow
+            </button>
             {cameraMode === "follow" && selectedFix && (
               <span className="px-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-text-secondary" data-testid="map-confidence">
                 {selectedFix.confidence}
@@ -1242,7 +1274,7 @@ export function MapCanvas({
               <dl className="mt-2 grid grid-cols-3 gap-1 border-t border-command-border/70 pt-2 text-[9px] text-text-secondary">
                 <div><dt>Stop</dt><dd className="mt-0.5 text-[10px] font-semibold text-text-primary">{nextSelectedStop ? `${nextStopIndex + 1}/${selectedRouteStops.length}` : "Ã¢â‚¬â€"}</dd></div>
                 <div><dt>Remaining</dt><dd className="mt-0.5 text-[10px] font-semibold text-text-primary">{formatNavigationDistance(navigation.remainingDistanceM)}</dd></div>
-                <div><dt>ETA</dt><dd className="mt-0.5 text-[10px] font-semibold text-text-primary">{formatNavigationEta(navigation.etaIso)}</dd></div>
+                <div><dt>ETA</dt><dd className="mt-0.5 text-[10px] font-semibold text-text-primary" title={navigation.etaMethod === "live" ? "Blended from live device speed and the planned route" : "Published route duration; no live speed used"}>{formatNavigationEta(navigation.etaIso)}{navigation.etaMethod === "live" ? <span className="ml-0.5 text-status-success">live</span> : null}</dd></div>
               </dl>
               {selectedFix.stale && <p className="mt-1 text-[9px] text-status-warning">Last known position; ETA is advisory.</p>}
               {selectedFix.outlier && <p className="mt-1 text-[9px] text-status-warning">GPS jump rejected; showing last accepted fix.</p>}

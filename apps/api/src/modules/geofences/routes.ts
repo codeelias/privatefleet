@@ -60,6 +60,11 @@ export function registerGeofenceRoutes(
     });
   });
 
+  const PatchBodySchema = z.object({
+    name: z.string().min(1).max(120).optional(),
+    enabled: z.boolean().optional(),
+  });
+
   app.get("/v1/geofences", { preHandler: guard }, async (request) => {
     return withTenant(handle, request.auth?.tenantId ?? "", async (db) => {
       const rows = (await db.execute(sql`
@@ -82,6 +87,85 @@ export function registerGeofenceRoutes(
           createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at.toISOString(),
         })),
       };
+    });
+  });
+
+  app.patch("/v1/geofences/:id", { preHandler: guard }, async (request, reply) => {
+    if (request.auth?.role === "driver") {
+      return reply.status(403).send({
+        type: "https://privatefleet.example/errors/geofence_staff_only",
+        title: "Request could not be completed",
+        status: 403,
+        code: "GEOFENCE_STAFF_ONLY",
+        detail: "Geofence configuration requires a staff account",
+        uiMessage: "Ask dispatch to configure geofences.",
+      });
+    }
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = PatchBodySchema.parse(request.body ?? {});
+    const tenantId = request.auth?.tenantId ?? "";
+    return withTenant(handle, tenantId, async (db) => {
+      const rows = (await db.execute(sql`
+        UPDATE geofences SET
+          name = COALESCE(${body.name ?? null}, name),
+          enabled = COALESCE(${body.enabled ?? null}, enabled)
+        WHERE id = ${params.id}
+        RETURNING id, name, geojson, enabled, created_at
+      `)) as unknown as Array<{
+        id: string;
+        name: string;
+        geojson: string;
+        enabled: boolean;
+        created_at: Date | string;
+      }>;
+      const row = rows[0];
+      if (!row) {
+        return reply.status(404).send({
+          type: "https://privatefleet.example/errors/geofence_not_found",
+          title: "Request could not be completed",
+          status: 404,
+          code: "GEOFENCE_NOT_FOUND",
+          detail: "That geofence does not exist",
+          uiMessage: "That geofence no longer exists.",
+        });
+      }
+      return {
+        id: row.id,
+        name: row.name,
+        geojson: row.geojson,
+        enabled: row.enabled,
+        createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at.toISOString(),
+      };
+    });
+  });
+
+  app.delete("/v1/geofences/:id", { preHandler: guard }, async (request, reply) => {
+    if (request.auth?.role === "driver") {
+      return reply.status(403).send({
+        type: "https://privatefleet.example/errors/geofence_staff_only",
+        title: "Request could not be completed",
+        status: 403,
+        code: "GEOFENCE_STAFF_ONLY",
+        detail: "Geofence configuration requires a staff account",
+        uiMessage: "Ask dispatch to configure geofences.",
+      });
+    }
+    const params = z.object({ id: z.string().uuid() }).parse(request.params);
+    return withTenant(handle, request.auth?.tenantId ?? "", async (db) => {
+      const rows = (await db.execute(sql`
+        DELETE FROM geofences WHERE id = ${params.id} RETURNING id
+      `)) as unknown as Array<{ id: string }>;
+      if (rows.length === 0) {
+        return reply.status(404).send({
+          type: "https://privatefleet.example/errors/geofence_not_found",
+          title: "Request could not be completed",
+          status: 404,
+          code: "GEOFENCE_NOT_FOUND",
+          detail: "That geofence does not exist",
+          uiMessage: "That geofence no longer exists.",
+        });
+      }
+      return { deleted: true };
     });
   });
 }

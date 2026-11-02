@@ -24,7 +24,8 @@ test("Live map: follow, overview, confidence and navigation surface", async ({ p
   await headsUp.getByRole("button").first().click();
   await expect(headsUpPanel).toBeHidden();
 
-  const follow = page.getByRole("button", { name: "Follow" });
+  const camera = page.getByTestId("map-camera-controls");
+  const follow = camera.getByRole("button", { name: "Follow", exact: true });
   await expect(follow).toBeEnabled();
   await follow.click();
   await expect(page.getByTestId("map-confidence")).toBeVisible();
@@ -33,10 +34,19 @@ test("Live map: follow, overview, confidence and navigation surface", async ({ p
   // Raster has no native bearing; the control must be disabled, not lie.
   await expect(page.getByRole("button", { name: /North up|Heading up/ })).toBeDisabled();
 
-  const camera = page.getByTestId("map-camera-controls");
+  // Auto-follow persists the intent and switches the camera on selection.
+  const autoFollow = camera.getByRole("button", { name: "Auto-follow" });
+  await autoFollow.click();
+  await expect(autoFollow).toHaveAttribute("aria-pressed", "true");
+  await autoFollow.click();
+  await expect(autoFollow).toHaveAttribute("aria-pressed", "false");
+
   await camera.getByRole("button", { name: "Overview" }).click();
   await expect(camera.getByRole("button", { name: "Overview" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("map-navigation")).toBeVisible();
 });
+
+
+
 
 

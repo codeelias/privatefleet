@@ -162,3 +162,45 @@ describe("geofence evaluation on telemetry ingest", () => {
     expect(states[0]?.inside).toBe(false);
   });
 });
+
+
+describe("geofence lifecycle administration", () => {
+  it("lists, disables and deletes tenant geofences through staff endpoints", async () => {
+    const list = await app.inject({ method: "GET", url: "/v1/geofences", headers: authed(ownerToken) });
+    expect(list.statusCode).toBe(200);
+    const zones = (list.json() as { geofences: Array<{ id: string; name: string; enabled: boolean }> }).geofences;
+    expect(zones.length).toBeGreaterThanOrEqual(1);
+
+    const depot = zones.find((zone) => zone.name === "Depot");
+    expect(depot).toBeDefined();
+
+    const disabled = await app.inject({
+      method: "PATCH",
+      url: "/v1/geofences/" + depot!.id,
+      headers: authed(ownerToken),
+      payload: { enabled: false },
+    });
+    expect(disabled.statusCode).toBe(200);
+    expect((disabled.json() as { enabled: boolean }).enabled).toBe(false);
+
+    const driverPatch = await app.inject({
+      method: "PATCH",
+      url: "/v1/geofences/" + depot!.id,
+      headers: authed(driverToken),
+      payload: { enabled: true },
+    });
+    expect(driverPatch.statusCode).toBe(403);
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: "/v1/geofences/" + depot!.id,
+      headers: authed(ownerToken),
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect((deleted.json() as { deleted: boolean }).deleted).toBe(true);
+
+    const after = await app.inject({ method: "GET", url: "/v1/geofences", headers: authed(ownerToken) });
+    const remaining = (after.json() as { geofences: Array<{ id: string }> }).geofences;
+    expect(remaining.some((zone) => zone.id === depot!.id)).toBe(false);
+  });
+});

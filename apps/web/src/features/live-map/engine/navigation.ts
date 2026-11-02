@@ -22,6 +22,9 @@ export interface NavigationState {
   remainingDurationS: number | null;
   etaIso: string | null;
   hasInstructions: boolean;
+  /** Whether the ETA blended live device speed or used planned duration only. */
+  etaMethod: "live" | "planned";
+  blendedSpeedMps: number | null;
 }
 
 function legDistance(leg: NonNullable<RoutePathLike["legs"]>[number]): number {
@@ -44,8 +47,9 @@ function distanceBetween(a: GeoPoint, b: GeoPoint): number {
 
 export function navigationFor(
   route: RoutePathLike,
-  fix: Pick<PositioningResult, "legIndex" | "legProgressM">,
+  fix: Pick<PositioningResult, "legIndex" | "legProgressM" | "confidence" | "stale">,
   now: number,
+  liveSpeedMps?: number | null,
 ): NavigationState {
   const legs = route.legs ?? [];
   if (legs.length === 0) {
@@ -55,6 +59,8 @@ export function navigationFor(
       remainingDurationS: null,
       etaIso: null,
       hasInstructions: false,
+      etaMethod: "planned",
+      blendedSpeedMps: null,
     };
   }
   const legIndex = Math.min(Math.max(fix.legIndex ?? 0, 0), legs.length - 1);
@@ -118,7 +124,30 @@ export function navigationFor(
   }
 
   const roundedDistanceM = Math.round(remainingDistanceM);
-  const roundedDurationS = Math.round(remainingDurationS);
+  let roundedDurationS = Math.round(remainingDurationS);
+  let etaMethod: "live" | "planned" = "planned";
+  let blendedSpeedMps: number | null = null;
+  const plannedSpeedMps =
+    remainingDurationS > 0 ? remainingDistanceM / remainingDurationS : 0;
+  const speed =
+    liveSpeedMps !== null && liveSpeedMps !== undefined && Number.isFinite(liveSpeedMps)
+      ? Math.max(0, Math.min(40, liveSpeedMps))
+      : 0;
+  const weight =
+    fix.stale || fix.confidence === "low" || fix.confidence === "unknown"
+      ? 0
+      : fix.confidence === "high"
+        ? 0.6
+        : fix.confidence === "medium"
+          ? 0.35
+          : 0;
+  if (weight > 0 && speed > 0.5 && plannedSpeedMps > 0) {
+    blendedSpeedMps = plannedSpeedMps * (1 - weight) + speed * weight;
+    if (blendedSpeedMps > 0.2) {
+      roundedDurationS = Math.round(remainingDistanceM / blendedSpeedMps);
+      etaMethod = "live";
+    }
+  }
   if (!nextManeuver) {
     const nextLeg = legs[legIndex + 1];
     const first = nextLeg?.steps?.[0];
@@ -139,6 +168,8 @@ export function navigationFor(
     remainingDurationS: roundedDurationS,
     etaIso: new Date(now + roundedDurationS * 1000).toISOString(),
     hasInstructions: steps.length > 0,
+    etaMethod,
+    blendedSpeedMps,
   };
 }
 

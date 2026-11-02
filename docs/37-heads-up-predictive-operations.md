@@ -83,6 +83,13 @@ Every item has:
 - Follow vehicle when a driver is involved
 - Open exceptions for the confirmed-event workflow
 
+## Re-route from an off-route or late risk
+
+Items with a driver offer **Re-route driver**: the single-driver live planner
+starts from the vehicle's last fix and pending stops only, shows the revised
+distance/duration, and publishes only after a separate confirmation with the
+server's stale-version guard. After publishing the fleet query is invalidated.
+
 ## Customer update from a late risk
 
 A projected-late item now has **Customer update**:

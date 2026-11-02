@@ -20,6 +20,8 @@ import type {
   JobImportCommitResponse,
   JobImportPreview,
   FleetOptimizationProposal,
+  GeofenceDto,
+  GeofenceList,
   LiveOptimizationProposal,
   OptimizationProposal,
   ScenarioName,
@@ -260,6 +262,19 @@ export const api = {
     request<DeliveryPerformanceReport>(`/v1/reports/delivery-performance${query}`),
   deliveryPerformanceCsv: (query = "") =>
     requestText(`/v1/reports/delivery-performance${query ? `${query}&format=csv` : "?format=csv"}`),
+  listGeofences: () => request<GeofenceList>("/v1/geofences"),
+  createGeofence: (name: string, geojson: string, enabled = true) =>
+    request<GeofenceDto>("/v1/geofences", {
+      method: "POST",
+      body: JSON.stringify({ name, geojson, enabled }),
+    }),
+  updateGeofence: (id: string, patch: { name?: string; enabled?: boolean }) =>
+    request<GeofenceDto>("/v1/geofences/" + id, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deleteGeofence: (id: string) =>
+    request<{ deleted: boolean }>("/v1/geofences/" + id, { method: "DELETE" }),
   createTrackingToken: (jobId: string) =>
     request<TrackingTokenCreate>("/v1/tracking-tokens", {
       method: "POST",
@@ -371,6 +386,7 @@ export const api = {
     request(`/v1/alerts/${alertId}/resolve`, { method: "POST" }),
   sessionFrom: toSession,
 };
+
 
 
 

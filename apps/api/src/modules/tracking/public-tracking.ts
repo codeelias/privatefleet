@@ -106,11 +106,12 @@ export async function publicTracking(
     }>;
 
     const etaRows = (await db.execute(sql`
-      SELECT MIN(rs.planned_arrival_at) AS eta
+      SELECT MIN(rs.planned_arrival_at) AS eta,
+             MIN(s.window_end) FILTER (WHERE s.stop_type = 'dropoff') AS window_end
       FROM route_stops rs
       JOIN job_stops s ON s.id = rs.job_stop_id
       WHERE s.job_id = ${row.job_id} AND s.status IN ('pending', 'arrived')
-    `)) as unknown as Array<{ eta: Date | string | null }>;
+    `)) as unknown as Array<{ eta: Date | string | null; window_end: Date | string | null }>;
 
     const position =
       job.latitude !== null && job.longitude !== null && job.captured_at
@@ -122,10 +123,34 @@ export async function publicTracking(
           }
         : undefined;
 
+    const positionAgeMs = position
+      ? Math.max(0, Date.now() - new Date(position.capturedAt).getTime())
+      : null;
+    const etaConfidence =
+      positionAgeMs === null ? "low" : positionAgeMs <= 15_000 ? "high" : positionAgeMs <= 45_000 ? "medium" : "low";
+    const etaValue = etaRows[0]?.eta ? new Date(etaRows[0]!.eta!).getTime() : null;
+    const windowEndValue = etaRows[0]?.window_end
+      ? new Date(etaRows[0]!.window_end!).getTime()
+      : null;
+    const delayStatus =
+      etaValue === null || windowEndValue === null
+        ? "unknown"
+        : etaValue > windowEndValue
+          ? "late"
+          : "on_time";
+    const remainingStops = stops.filter(
+      (stop) => stop.status === "pending" || stop.status === "arrived",
+    ).length;
+
     return {
       jobReference: job.reference,
       status: job.status,
-      ...(etaRows[0]?.eta ? { eta: new Date(etaRows[0]!.eta!).toISOString() } : {}),
+      ...(etaValue !== null ? { eta: new Date(etaValue).toISOString() } : {}),
+      etaMethod: "planned" as const,
+      etaConfidence,
+      delayStatus,
+      ...(remainingStops > 0 ? { remainingStops } : {}),
+      ...(position?.capturedAt ? { lastUpdateAt: position.capturedAt } : {}),
       ...(job.full_name ? { driverName: job.full_name } : {}),
       ...(job.registration ? { vehicleRegistration: job.registration } : {}),
       ...(position ? { position } : {}),

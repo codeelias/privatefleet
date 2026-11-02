@@ -162,6 +162,11 @@ export function PublicTracking({ token }: { token: string }) {
               })}`
             : "Estimated arrival unavailable"}
         </p>
+        {data.delayStatus && data.delayStatus !== "unknown" && (
+          <p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${data.delayStatus === "late" ? "bg-[#7F1D1D]/40 text-[#FCA5A5]" : "bg-[#14532D]/40 text-[#86EFAC]"}`}>
+            {data.delayStatus === "late" ? "Running late" : "On time"}
+          </p>
+        )}
 
         <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#27272A]">
           <div
@@ -172,6 +177,7 @@ export function PublicTracking({ token }: { token: string }) {
         <div className="mt-2 flex items-center justify-between text-xs text-[#A1A1AA]">
           <span>
             {done} of {data.stops.length} stops completed
+            {typeof data.remainingStops === "number" ? ` - ${data.remainingStops} to go` : ""}
           </span>
           <span>{progress}%</span>
         </div>
@@ -188,6 +194,9 @@ export function PublicTracking({ token }: { token: string }) {
         )}
 
         <p className="mt-4 text-[10px] leading-relaxed text-[#71717A]">
+          {data.lastUpdateAt
+            ? `Last update ${Math.max(1, Math.round((Date.now() - Date.parse(data.lastUpdateAt)) / 1000))}s ago - `
+            : ""}
           This page shows live delivery progress and never shares personal contact
           details. Map &copy; OpenStreetMap contributors &copy; OpenFreeMap.
         </p>

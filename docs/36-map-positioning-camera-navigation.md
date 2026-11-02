@@ -159,6 +159,13 @@ backup:         C:/PrivateFleet/logs/route-legs-backup-2026-11-02T11-43-03.236Z.
 
 No geometry, route version, waypoint order or status changed.
 
+### Live-blended ETA
+
+From 2026-11-02 the HUD ETA blends live device speed into the remaining
+published duration (weight 0.6 high / 0.35 medium confidence) and labels the
+basis as `live`; low-confidence or stale fixes stay on the planned duration.
+This is speed-based adjustment, not a traffic forecast.
+
 ### Wording
 
 Raw OSRM types were not exposed. A formatter maps:

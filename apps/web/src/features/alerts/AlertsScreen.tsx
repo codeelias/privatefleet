@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import type { AlertDto, EvidenceList, FleetState } from "@privatefleet/contracts";
 import { api } from "../../shared/api/client";
 import { Panel } from "../../shared/ui/Panel";
+import { GeofencesPanel } from "./GeofencesPanel";
 import { StatusChip } from "../../shared/ui/StatusChip";
 
 function toneFor(severity: AlertDto["severity"]) {
@@ -175,7 +176,7 @@ export function AlertsScreen({
                             />
                           )}
                           <p className="mt-1 break-all text-[9px] text-text-secondary">
-                            {item.byteSize} bytes · {item.contentHash.slice(0, 12)}
+                            {item.byteSize} bytes Â· {item.contentHash.slice(0, 12)}
                           </p>
                         </div>
                       ))}
@@ -270,8 +271,10 @@ export function AlertsScreen({
           ))}
         </div>
       </Panel>
+      <GeofencesPanel />
     </div>
   );
 }
+
 
 
