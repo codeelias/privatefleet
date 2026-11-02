@@ -1,5 +1,8 @@
 # 38 - Native Android 1.0.5 release
 
+> Superseded by 1.0.8 (`versionCode 9`, 2026-11-02), which is installed on
+> `RFCW10QT5ZE`. The 1.0.5 install instructions below are historical.
+
 Date: 2026-11-02  
 Scope: native driver client, release 1.0.5.
 

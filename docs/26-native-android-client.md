@@ -2,7 +2,7 @@
 
 Status: **pilot tracking/ops client**, not yet full POD parity.
 
-Current pilot release: **1.0.6** (`versionCode 7`), signed with the
+Current pilot release: **1.0.8** (`versionCode 9`), signed with the
 PrivateFleet release key.
 
 Package: `com.privatefleet.driver.nativeapp`  
@@ -18,6 +18,7 @@ WebView or JavaScript runtime.
 - sign-out keeps only the last workspace/driver encrypted for prefill; the PIN is never stored
 - in-app update prompt from the internal release manifest\n- driver Heads-Up banner for the next stop window (1.0.5)
 - raw-GNSS quality + IMU EKF fused positioning at 10 Hz (1.0.6)
+- NTRIP correction transport and RTKLIB/JNI RTK solver (1.0.7, 1.0.8)
 - Start shift / shift status
 - Request more jobs (durable dispatcher request)
 - Nearest-stop ordering (arrived pinned first, completed/skipped/failed excluded)

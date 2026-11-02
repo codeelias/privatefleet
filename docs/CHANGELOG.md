@@ -1,3 +1,7 @@
+### v1.62 - Native 1.0.8 installed on the physical phone (2026-11-02)
+- Tom's phone RFCW10QT5ZE was on a debug-signed 1.0.0, which cannot be updated in place. Uninstalled and clean-installed release-signed 1.0.8 (versionCode 9).
+- Verified: app launches to the driver sign-in screen, no crash. App data was cleared by the signature migration, so the driver must sign in again.
+- Phone 2 R5CWB0BR3BP remains unavailable; install pending.
 ### v1.61 - RTKLIB solver compiled into the native app (2026-11-02)
 - Native 1.0.8: RTKLIB 2.4.3 vendored and compiled via NDK 27.1/CMake into libpf_rtk.so (all ABIs).
 - JNI bridge feeds Android raw observations + RTCM corrections into rtkpos (kinematic RTK); TelemetryService publishes rtk_fixed positions only from actual solver output.

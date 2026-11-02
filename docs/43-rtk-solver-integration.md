@@ -40,8 +40,9 @@ libpf_rtk.so in APK:         arm64-v8a, armeabi-v7a, x86, x86_64
 JNI + RTK sources:           21 translation units
 release signing:             unchanged PrivateFleet key
 version:                     1.0.8 / versionCode 9
-emulator:                    app launches; native lib loads on service start
-                             (service start requires an active driver session)
+emulator:                    app launches
+physical phone RFCW10QT5ZE:  1.0.8 installed, launches to driver sign-in
+                             (clean install; previous 1.0.0 data cleared)
 ```
 
 ## Honest status
