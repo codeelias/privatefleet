@@ -102,6 +102,23 @@ Root causes, all introduced with the fused engine:
 5. Telemetry cadence of 900 ms exceeded the 10-per-10 s API limit and hit
    429s; now 1050 ms.
 
+## Reliability redesign (1.0.10)
+
+Field feedback: fused output rumbled within ~50 m and deviated hundreds of
+metres when zoomed out - worse than plain Android GPS. Corrective redesign:
+
+1. IMU acceleration is no longer integrated into position at all; the EKF is
+   a constant-velocity smoother, and velocity is damped toward the next GNSS
+   fix. This removes the dominant rumble source.
+2. Stationary fixes (speed < 1.5 m/s) and fixes outside the innovation gate
+   snap exactly to GNSS, so the output can never be worse than raw GNSS.
+3. Innovation gate: moving fixes farther than max(25 m, 3 sigma) from the
+   state hard-correct instead of being filtered in.
+4. Network provider re-added as a coarse indoor fallback (15 s), matching the
+   behaviour the field liked before the fused engine.
+5. Accuracy now reported as the per-axis covariance rather than an inflated
+   two-axis value.
+
 ## Honest gaps
 
 - RTK correction transport exists (NTRIP client, 1.0.7) but no fixed solver is integrated; sub-metre is still not delivered.

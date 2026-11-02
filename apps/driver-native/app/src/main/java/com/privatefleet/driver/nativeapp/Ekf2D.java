@@ -49,31 +49,25 @@ final class Ekf2D {
     }
 
     double accuracyMetres() {
-        return Math.sqrt(Math.max(0, covariance[0][0] + covariance[1][1]));
+        return Math.sqrt(Math.max(0, Math.max(covariance[0][0], covariance[1][1])));
     }
 
+    /**
+     * Constant-velocity prediction. IMU acceleration is deliberately NOT
+     * integrated into position: consumer-grade accelerometer noise was the
+     * source of the rumble. The velocity is damped so the state decays toward
+     * the next GNSS fix instead of extrapolating drift.
+     */
     void predict(double dtSeconds, double accelerationEast, double accelerationNorth) {
         if (!initialized) return;
         double dt = Math.max(0, Math.min(0.5, dtSeconds));
         if (dt == 0) return;
-        double ax = Math.max(-8, Math.min(8, accelerationEast));
-        double ay = Math.max(-8, Math.min(8, accelerationNorth));
         double speed = Math.hypot(state[2], state[3]);
-        if (speed < 0.6 && Math.hypot(ax, ay) < 0.35) {
-            state[2] *= 0.96;
-            state[3] *= 0.96;
-            ax = 0;
-            ay = 0;
-        } else {
-            state[2] += ax * dt;
-            state[3] += ay * dt;
-        }
-        state[0] += state[2] * dt + 0.5 * ax * dt * dt;
-        state[1] += state[3] * dt + 0.5 * ay * dt * dt;
-        double vx = Math.max(-45, Math.min(45, state[2]));
-        double vy = Math.max(-45, Math.min(45, state[3]));
-        state[2] = vx;
-        state[3] = vy;
+        double damping = speed < 0.5 ? 0.5 : (speed < 1.0 ? 0.85 : 1.0);
+        state[2] *= damping;
+        state[3] *= damping;
+        state[0] += state[2] * dt;
+        state[1] += state[3] * dt;
 
         // P = F P F^T with F = [I dtI; 0 I], computed as a general matrix
         // product so the cross-terms stay correct.
@@ -85,8 +79,8 @@ final class Ekf2D {
         };
         double[][] fp = multiply(f, covariance);
         double[][] next = multiplyTransposed(fp, f);
-        double qPosition = 0.8 * dt * dt;
-        double qVelocity = 1.2 * dt;
+        double qPosition = 0.4 * dt * dt;
+        double qVelocity = 0.8 * dt;
         next[0][0] += qPosition;
         next[1][1] += qPosition;
         next[2][2] += qVelocity;
@@ -95,6 +89,32 @@ final class Ekf2D {
         for (int row = 0; row < 4; row += 1) {
             System.arraycopy(next[row], 0, covariance[row], 0, 4);
         }
+    }
+
+    /**
+     * Hard-correct to the GNSS position and zero velocity. Used when the
+     * vehicle is stationary or a fix is outside the innovation gate, so the
+     * filtered output can never be worse than the raw GNSS fix itself.
+     */
+    void snapPosition(double east, double north, double accuracyMetres) {
+        if (!initialized) {
+            initialize(east, north, 0, 0, accuracyMetres);
+            return;
+        }
+        state[0] = east;
+        state[1] = north;
+        state[2] = 0;
+        state[3] = 0;
+        for (int row = 0; row < 4; row += 1) {
+            for (int column = 0; column < 4; column += 1) {
+                covariance[row][column] = 0;
+            }
+        }
+        double variance = Math.max(1, accuracyMetres * accuracyMetres);
+        covariance[0][0] = variance;
+        covariance[1][1] = variance;
+        covariance[2][2] = 4;
+        covariance[3][3] = 4;
     }
 
     private static double[][] multiply(double[][] left, double[][] right) {

@@ -68,7 +68,6 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
     private final Ekf2D ekf = new Ekf2D();
     private final float[] rotationMatrix = new float[9];
     private final float[] orientation = new float[3];
-    private final float[] gravity = new float[3];
 
     private SensorManager sensorManager;
     private LocationManager locationManager;
@@ -79,11 +78,8 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
     private long lastPredictionNanos = 0L;
     private long lastGnssAt = 0L;
     private double lastGnssAccuracy = 50.0;
-    private double accelerationEast = 0.0;
-    private double accelerationNorth = 0.0;
     private float azimuthDegrees = 0f;
     private boolean hasRotation = false;
-    private boolean hasLinearAcceleration = false;
     private boolean running = false;
 
     public FusedPositionEngine(Context context, Listener listener) {
@@ -102,17 +98,9 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
         sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
         if (sensorManager != null) {
             Sensor rotation = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
-            Sensor acceleration = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
-            if (acceleration == null) {
-                acceleration = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-            }
             if (rotation != null) {
                 sensorManager.registerListener(this, rotation, SensorManager.SENSOR_DELAY_GAME, handler);
                 hasRotation = true;
-            }
-            if (acceleration != null) {
-                sensorManager.registerListener(this, acceleration, SensorManager.SENSOR_DELAY_GAME, handler);
-                hasLinearAcceleration = acceleration.getType() == Sensor.TYPE_LINEAR_ACCELERATION;
             }
         }
         locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
@@ -122,7 +110,14 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
             try {
                 locationManager.requestLocationUpdates(
                         LocationManager.GPS_PROVIDER, GNSS_INTERVAL_MS, 0f, this, handler.getLooper());
+                // Network fixes as a coarse fallback keep the pin honest
+                // indoors; the filter treats them as position corrections.
+                locationManager.requestLocationUpdates(
+                        LocationManager.NETWORK_PROVIDER, 15_000L, 0f, this, handler.getLooper());
                 Location last = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                if (last == null) {
+                    last = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                }
                 if (last != null) onLocationChanged(last);
             } catch (SecurityException | IllegalArgumentException ignored) {
             }
@@ -144,7 +139,7 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
         lastPredictionNanos = nowNanos;
         dt = Math.max(0, Math.min(0.5, dt));
         if (dt <= 0) return;
-        ekf.predict(dt, accelerationEast, accelerationNorth);
+        ekf.predict(dt, 0, 0);
         emit(System.currentTimeMillis());
     }
 
@@ -173,17 +168,23 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
         } else {
             east = (location.getLongitude() - anchorLongitude) * 111_320 * anchorCosLat;
             north = (location.getLatitude() - anchorLatitude) * 110_540;
-            ekf.updatePosition(east, north, accuracy);
-            // Only feed GNSS velocity when genuinely moving; stationary
-            // fixes report noisy speed/bearing that would inject random
-            // velocity into the filter and wander the pin.
-            if (location.hasSpeed() && location.hasBearing() && location.getSpeed() > 2.0) {
-                double bearing = Math.toRadians(location.getBearing());
-                ekf.updateVelocity(
-                        location.getSpeed() * Math.sin(bearing),
-                        location.getSpeed() * Math.cos(bearing),
-                        Math.max(2.0, accuracy * 0.15)
-                );
+            double speed = location.hasSpeed() ? location.getSpeed() : 0;
+            double innovation = Math.hypot(east - ekf.east(), north - ekf.north());
+            double gate = Math.max(25, 3 * ekf.accuracyMetres());
+            if (speed < 1.5 || innovation > gate) {
+                // Stationary or outlier: hold the GNSS fix exactly. The
+                // filtered output can never rumble worse than raw GNSS.
+                ekf.snapPosition(east, north, accuracy);
+            } else {
+                ekf.updatePosition(east, north, accuracy);
+                if (location.hasBearing() && speed > 2.0) {
+                    double bearing = Math.toRadians(location.getBearing());
+                    ekf.updateVelocity(
+                            speed * Math.sin(bearing),
+                            speed * Math.cos(bearing),
+                            Math.max(2.0, accuracy * 0.15)
+                    );
+                }
             }
         }
         lastGnssAt = System.currentTimeMillis();
@@ -219,36 +220,6 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
             SensorManager.getOrientation(rotationMatrix, orientation);
             azimuthDegrees = (float) ((Math.toDegrees(orientation[0]) + 360) % 360);
             hasRotation = true;
-            return;
-        }
-        if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-            if (!hasRotation) return;
-            accelerationEast = rotationMatrix[0] * event.values[0]
-                    + rotationMatrix[1] * event.values[1]
-                    + rotationMatrix[2] * event.values[2];
-            accelerationNorth = rotationMatrix[3] * event.values[0]
-                    + rotationMatrix[4] * event.values[1]
-                    + rotationMatrix[5] * event.values[2];
-            return;
-        }
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-            if (!hasRotation) return;
-            // Seed the gravity low-pass with the first reading instead of
-            // treating a full 9.8 m/s² step as horizontal acceleration.
-            if (gravity[0] == 0f && gravity[1] == 0f && gravity[2] == 0f) {
-                gravity[0] = event.values[0];
-                gravity[1] = event.values[1];
-                gravity[2] = event.values[2];
-                return;
-            }
-            gravity[0] = 0.8f * gravity[0] + 0.2f * event.values[0];
-            gravity[1] = 0.8f * gravity[1] + 0.2f * event.values[1];
-            gravity[2] = 0.8f * gravity[2] + 0.2f * event.values[2];
-            double ax = event.values[0] - gravity[0];
-            double ay = event.values[1] - gravity[1];
-            double az = event.values[2] - gravity[2];
-            accelerationEast = rotationMatrix[0] * ax + rotationMatrix[1] * ay + rotationMatrix[2] * az;
-            accelerationNorth = rotationMatrix[3] * ax + rotationMatrix[4] * ay + rotationMatrix[5] * az;
         }
     }
 
@@ -281,9 +252,5 @@ public final class FusedPositionEngine implements SensorEventListener, LocationL
 
     public boolean hasRotation() {
         return hasRotation;
-    }
-
-    public boolean hasLinearAcceleration() {
-        return hasLinearAcceleration;
     }
 }

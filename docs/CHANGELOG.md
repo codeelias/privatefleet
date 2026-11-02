@@ -1,3 +1,8 @@
+### v1.68 - Accuracy reliability redesign (2026-11-02)
+- Removed IMU position integration (rumble source); constant-velocity EKF with damped velocity.
+- Stationary and innovation-gated fixes snap exactly to GNSS; filter output can no longer be worse than raw GNSS.
+- Network provider fallback restored; accuracy now reported per-axis.
+- 1.0.10 (versionCode 11) published; installed on R5CWB0BR3BP. Phone 1 install pending reconnection.
 ### v1.67 - Phone 2 on 1.0.9 (2026-11-02)
 - R5CWB0BR3BP updated in place to 1.0.9; Mo Khan session persisted; native bridge ready; dead-reckoning gating verified (no posts after 15 s indoors).
 - Both pilot phones now run the positioning-stable 1.0.9.

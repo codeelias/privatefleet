@@ -61,9 +61,21 @@ public class Ekf2DTest {
         // F P F^T: P02' = P02 + dt*P22 = 0.4, symmetric with P20'.
         assertEquals(0.4, filter.covariance(0, 2), 0.01);
         assertEquals(filter.covariance(0, 2), filter.covariance(2, 0), 1e-9);
-        // P00' = 100 + 2*dt*P02 + dt^2*P22 + qPosition = 100 + 0.04 + 0.008
-        assertEquals(100.048, filter.covariance(0, 0), 0.01);
-        // P22' = P22 + qVelocity = 4 + 0.12
-        assertEquals(4.12, filter.covariance(2, 2), 0.01);
+        // P00' = 100 + 2*dt*P02 + dt^2*P22 + qPosition = 100 + 0.04 + 0.004
+        assertEquals(100.044, filter.covariance(0, 0), 0.01);
+        // P22' = P22 + qVelocity = 4 + 0.08
+        assertEquals(4.08, filter.covariance(2, 2), 0.01);
+    }
+
+    @Test
+    public void snapPositionHoldsGnssExactlyAndClearsVelocity() {
+        Ekf2D filter = new Ekf2D();
+        filter.initialize(0, 0, 3, 4, 5);
+        filter.snapPosition(12, -7, 6);
+        assertEquals(12, filter.east(), 1e-9);
+        assertEquals(-7, filter.north(), 1e-9);
+        assertEquals(0, filter.velocityEast(), 1e-9);
+        assertEquals(0, filter.velocityNorth(), 1e-9);
+        assertEquals(6, filter.accuracyMetres(), 0.01);
     }
 }
