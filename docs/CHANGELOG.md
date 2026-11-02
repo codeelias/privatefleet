@@ -1,3 +1,6 @@
+### v1.67 - Phone 2 on 1.0.9 (2026-11-02)
+- R5CWB0BR3BP updated in place to 1.0.9; Mo Khan session persisted; native bridge ready; dead-reckoning gating verified (no posts after 15 s indoors).
+- Both pilot phones now run the positioning-stable 1.0.9.
 ### v1.66 - Positioning stability fix (2026-11-02)
 - Fixed EKF covariance propagation (F P F^T cross-terms were wrong), added analytic regression test.
 - Velocity only fed above 2 m/s; stationary speed noise no longer wanders the pin.
