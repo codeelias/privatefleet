@@ -179,7 +179,7 @@ export function resolveVehicleFix(
   now: number,
 ): PositioningResult | null {
   if (!vehicle.location) return null;
-  const lastSeen = vehicle.lastSeenAt ? Date.parse(vehicle.lastSeenAt) : Number.NaN;
+  const lastSeen = vehicle.lastSeenAt ? Date.parse(vehicle.lastSeenAt.replace(" ", "T")) : Number.NaN;
   const ageMs = Number.isFinite(lastSeen) ? Math.max(0, now - lastSeen) : null;
   const observedAt = Number.isFinite(lastSeen) ? lastSeen : null;
   const stale =
@@ -254,4 +254,5 @@ export function resolveVehicleFix(
     outlier: false,
   };
 }
+
 

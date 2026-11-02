@@ -180,10 +180,11 @@ Stop 1/30 | Remaining 16.8 km | ETA 12:29
 
 ## Verification
 
-- API route/instruction tests: 14 passed
+- API tests: 99 passed
+- Route/instruction tests: 14 passed
 - Web map engine tests: 41 passed
 - Map camera Playwright test: pass
-- Full dispatcher/driver E2E: pending final run
+- Full dispatcher/driver E2E: 20 passed / 20 skipped (3.5 min)
 - Desktop and 390 px map: no page overflow
 
 ## Remaining honest gaps
