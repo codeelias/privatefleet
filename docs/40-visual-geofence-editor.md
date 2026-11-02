@@ -52,6 +52,9 @@ geofence API tests:          3 passed (lifecycle, staff-only, driver scoping)
 E2E editor test:             draw, undo, cancel on the map (pass)
 production drive:            drew a polygon on the live map, saved it,
                              verified the stored GeoJSON ring, deleted it
+full E2E suite:              21 passed / 21 skipped
+map/heads-up/geofence tests: 53 passed
+API suite:                   101 passed
 ```
 
 Production-verified stored geometry (before cleanup):
