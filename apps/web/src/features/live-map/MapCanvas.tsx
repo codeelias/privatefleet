@@ -1294,6 +1294,20 @@ export function MapCanvas({
                 {selectedVehicle?.ekfConfidence ? ` · ${selectedVehicle.ekfConfidence} confidence` : ""}
                 {" · "}{Math.round(selectedFix.accuracyMetres ?? 0)} m estimated error
               </p>
+              {selectedVehicle?.rtkState && (
+                <p className="mt-0.5 text-[9px] font-semibold" data-testid="map-rtk-state">
+                  Precision: {{
+                    rtk_fixed: "RTK fixed",
+                    rtk_float: "RTK float",
+                    corrections_ready: "Corrections ready",
+                    raw_ready: "Raw GNSS",
+                    unsupported: "Unsupported",
+                  }[selectedVehicle.rtkState]}
+                  {selectedVehicle.correctionAgeMs !== undefined
+                    ? ` · corrections ${(selectedVehicle.correctionAgeMs / 1000).toFixed(1)} s old`
+                    : ""}
+                </p>
+              )}
               {selectedFix.stale && <p className="mt-1 text-[9px] text-status-warning">Last known position; ETA is advisory.</p>}
               {selectedFix.outlier && <p className="mt-1 text-[9px] text-status-warning">GPS jump rejected; showing last accepted fix.</p>}
             </section>

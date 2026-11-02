@@ -1,3 +1,7 @@
+### v1.60 - RTK correction transport and precision gate (2026-11-02)
+- Native 1.0.7: NTRIP RTCM stream client, local correction config, PrecisionState machine and an RtkSolver boundary whose default implementation can never claim float/fixed.
+- Telemetry/vehicles now carry rtkState and correctionAgeMs (migration 0016); dispatcher HUD labels the precision state honestly.
+- Verification: NtripClient + PrecisionState JUnit tests, API telemetry round-trip, native 1.0.7 build.
 ### v1.59 - Raw GNSS quality + IMU EKF positioning (2026-11-02)
 - Native 1.0.6: raw GNSS quality monitor (satellites, L1+L5, carrier-phase validity), IMU prediction and a pure 2D EKF producing 10 Hz fused fixes; telemetry throttled to 1 Hz.
 - No sub-metre claim: no corrections/RTK source is present. Confidence and estimated error are shown instead.

@@ -499,6 +499,9 @@ export const TelemetrySampleSchema = z.object({
   dualFrequency: z.boolean().optional(),
   carrierPhase: z.boolean().optional(),
   ekfConfidence: z.enum(["high", "medium", "low"]).optional(),
+  /** RTK precision state; fixed/float can only come from a real solver. */
+  rtkState: z.enum(["unsupported", "raw_ready", "corrections_ready", "rtk_float", "rtk_fixed"]).optional(),
+  correctionAgeMs: z.number().int().nonnegative().optional(),
 });
 export type TelemetrySample = z.infer<typeof TelemetrySampleSchema>;
 

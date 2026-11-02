@@ -81,7 +81,7 @@ emulator install/launch: passed
 
 ## Honest gaps
 
-- No RTK/PPP corrections; sub-metre is not delivered.
+- RTK correction transport exists (NTRIP client, 1.0.7) but no fixed solver is integrated; sub-metre is still not delivered.
 - No raw pseudorange/carrier-phase position solver (RTKLIB/PPP) in the APK.
 - IMU dead reckoning drifts during long GNSS outages; confidence drops and
   the UI says so.

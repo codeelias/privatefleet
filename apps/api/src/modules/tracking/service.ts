@@ -109,14 +109,16 @@ export async function ingestTelemetry(
         INSERT INTO location_points
           (tenant_id, vehicle_id, driver_id, captured_at, latitude, longitude,
            accuracy_metres, heading_deg, speed_mps, source, satellites_used,
-           dual_frequency, carrier_phase, ekf_confidence, sequence_no)
+           dual_frequency, carrier_phase, ekf_confidence, rtk_state,
+           correction_age_ms, sequence_no)
         VALUES
           (${tenantId}, ${vehicle.id}, ${driverId}, ${sample.capturedAt},
            ${sample.latitude}, ${sample.longitude},
            ${sample.accuracyMetres ?? null}, ${sample.headingDeg ?? null},
            ${sample.speedMps ?? null}, ${sample.source ?? null},
            ${sample.satellitesUsed ?? null}, ${sample.dualFrequency ?? null},
-           ${sample.carrierPhase ?? null}, ${sample.ekfConfidence ?? null}, ${sequence})
+           ${sample.carrierPhase ?? null}, ${sample.ekfConfidence ?? null},
+           ${sample.rtkState ?? null}, ${sample.correctionAgeMs ?? null}, ${sequence})
       `);
       await db.execute(sql`
         UPDATE vehicles
@@ -153,6 +155,8 @@ export async function ingestTelemetry(
         ...(sample.dualFrequency !== undefined ? { dualFrequency: sample.dualFrequency } : {}),
         ...(sample.carrierPhase !== undefined ? { carrierPhase: sample.carrierPhase } : {}),
         ...(sample.ekfConfidence !== undefined ? { ekfConfidence: sample.ekfConfidence } : {}),
+        ...(sample.rtkState !== undefined ? { rtkState: sample.rtkState } : {}),
+        ...(sample.correctionAgeMs !== undefined ? { correctionAgeMs: sample.correctionAgeMs } : {}),
       };
       positions.push(position);
       results.push({

@@ -38,7 +38,12 @@ public class TelemetryService extends Service {
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicBoolean sending = new AtomicBoolean(false);
+    private final RtkSolver rtkSolver = new NoRtkSolver();
     private FusedPositionEngine engine;
+    private NtripClient ntripClient;
+    private volatile boolean correctionsConnected = false;
+    private volatile long correctionAgeMs = Long.MAX_VALUE;
+    private volatile String rtkState = "unsupported";
     private volatile long lastSentAt = 0L;
     private PowerManager.WakeLock wakeLock;
 
@@ -94,11 +99,41 @@ public class TelemetryService extends Service {
             engine.start();
             Log.i(TAG, "fused GNSS/IMU positioning started");
         }
+        startCorrections();
+    }
+
+    private void startCorrections() {
+        if (ntripClient != null) return;
+        CorrectionsConfig config = new CorrectionsConfig(this);
+        if (!config.isEnabled()) {
+            rtkState = PrecisionState.contract(
+                    PrecisionState.evaluate(0, false, false, false, Long.MAX_VALUE,
+                            rtkSolver.hasFloatSolution(), rtkSolver.hasFixedSolution()));
+            return;
+        }
+        ntripClient = new NtripClient(
+                config.host(), config.port(), config.mountpoint(),
+                config.username(), config.password(),
+                status -> {
+                    correctionsConnected = status.connected;
+                    correctionAgeMs = status.ageMs(System.currentTimeMillis());
+                    rtkState = PrecisionState.contract(
+                            PrecisionState.evaluate(0, false, false, correctionsConnected,
+                                    correctionAgeMs, rtkSolver.hasFloatSolution(),
+                                    rtkSolver.hasFixedSolution()));
+                });
+        ntripClient.start();
+        Log.i(TAG, "correction stream configured: " + config.host() + "/" + config.mountpoint());
     }
 
     private void onFusedFix(FusedPositionEngine.Fix fix) {
         if (fix.accuracyMetres > 250) return;
         LocationStore.save(this, fix.latitude, fix.longitude, fix.capturedAt);
+        PrecisionState.Level level = PrecisionState.evaluate(
+                fix.satellitesUsed, fix.dualFrequency, fix.carrierPhase,
+                correctionsConnected, correctionAgeMs,
+                rtkSolver.hasFloatSolution(), rtkSolver.hasFixedSolution());
+        rtkState = PrecisionState.contract(level);
         long now = System.currentTimeMillis();
         if (now - lastSentAt < 900L) return;
         if (!sending.compareAndSet(false, true)) return;
@@ -117,11 +152,16 @@ public class TelemetryService extends Service {
                 sample.put("dualFrequency", fix.dualFrequency);
                 sample.put("carrierPhase", fix.carrierPhase);
                 sample.put("ekfConfidence", fix.confidence);
+                sample.put("rtkState", rtkState);
+                if (correctionsConnected && correctionAgeMs != Long.MAX_VALUE) {
+                    sample.put("correctionAgeMs", correctionAgeMs);
+                }
                 JSONArray samples = new JSONArray();
                 samples.put(sample);
                 new ApiClient(this).telemetry(samples);
                 Log.i(TAG, "fused telemetry posted acc=" + fix.accuracyMetres
-                        + " sats=" + fix.satellitesUsed + " confidence=" + fix.confidence);
+                        + " sats=" + fix.satellitesUsed + " confidence=" + fix.confidence
+                        + " rtk=" + rtkState);
             } catch (Exception error) {
                 Log.w(TAG, "telemetry post failed: " + error.getMessage());
             } finally {
@@ -171,6 +211,10 @@ public class TelemetryService extends Service {
         if (engine != null) {
             engine.stop();
             engine = null;
+        }
+        if (ntripClient != null) {
+            ntripClient.stop();
+            ntripClient = null;
         }
         executor.shutdownNow();
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();

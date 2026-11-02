@@ -119,6 +119,8 @@ interface VehicleRow {
   dual_frequency: boolean | null;
   carrier_phase: boolean | null;
   ekf_confidence: string | null;
+  rtk_state: string | null;
+  correction_age_ms: number | null;
 }
 
 interface RouteRow {
@@ -187,11 +189,13 @@ export class PgFleetService {
       const vehicles = (await db.execute(
         sql`SELECT v.id, v.registration, v.vehicle_type, v.status, v.driver_id, v.latitude, v.longitude, v.captured_at,
                    lp.accuracy_metres, lp.heading_deg, lp.speed_mps,
-                   lp.source, lp.satellites_used, lp.dual_frequency, lp.carrier_phase, lp.ekf_confidence
+                   lp.source, lp.satellites_used, lp.dual_frequency, lp.carrier_phase, lp.ekf_confidence,
+                   lp.rtk_state, lp.correction_age_ms
             FROM vehicles v
             LEFT JOIN LATERAL (
               SELECT accuracy_metres, heading_deg, speed_mps, source,
-                     satellites_used, dual_frequency, carrier_phase, ekf_confidence
+                     satellites_used, dual_frequency, carrier_phase, ekf_confidence,
+                     rtk_state, correction_age_ms
               FROM location_points
               WHERE vehicle_id = v.id
               ORDER BY captured_at DESC
@@ -300,6 +304,12 @@ export class PgFleetService {
           ...(vehicle.carrier_phase !== null ? { carrierPhase: vehicle.carrier_phase } : {}),
           ...(vehicle.ekf_confidence
             ? { ekfConfidence: vehicle.ekf_confidence as VehicleDto["ekfConfidence"] }
+            : {}),
+          ...(vehicle.rtk_state
+            ? { rtkState: vehicle.rtk_state as VehicleDto["rtkState"] }
+            : {}),
+          ...(vehicle.correction_age_ms !== null
+            ? { correctionAgeMs: vehicle.correction_age_ms }
             : {}),
         })),
         jobs: jobs.map((job) => ({

@@ -242,6 +242,8 @@ describe("GPS telemetry ingestion", () => {
             dualFrequency: true,
             carrierPhase: true,
             ekfConfidence: "high",
+            rtkState: "corrections_ready",
+            correctionAgeMs: 1_200,
           },
         ],
       },
@@ -260,6 +262,8 @@ describe("GPS telemetry ingestion", () => {
         dualFrequency?: boolean;
         carrierPhase?: boolean;
         ekfConfidence?: string;
+        rtkState?: string;
+        correctionAgeMs?: number;
       }>;
     }).vehicles.find((entry) => entry.id === session.vehicleId);
     expect(vehicle?.positionSource).toBe("fused");
@@ -267,6 +271,8 @@ describe("GPS telemetry ingestion", () => {
     expect(vehicle?.dualFrequency).toBe(true);
     expect(vehicle?.carrierPhase).toBe(true);
     expect(vehicle?.ekfConfidence).toBe("high");
+    expect(vehicle?.rtkState).toBe("corrections_ready");
+    expect(vehicle?.correctionAgeMs).toBe(1_200);
   });
 
   it("requires a driver device token", async () => {    const anonymous = await app.inject({

@@ -63,5 +63,7 @@ export const VehiclePositionSchema = z.object({
   dualFrequency: z.boolean().optional(),
   carrierPhase: z.boolean().optional(),
   ekfConfidence: z.enum(["high", "medium", "low"]).optional(),
+  rtkState: z.enum(["unsupported", "raw_ready", "corrections_ready", "rtk_float", "rtk_fixed"]).optional(),
+  correctionAgeMs: z.number().int().nonnegative().optional(),
 });
 export type VehiclePosition = z.infer<typeof VehiclePositionSchema>;

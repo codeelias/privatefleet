@@ -161,6 +161,8 @@ export const locationPoints = pgTable(
     dualFrequency: boolean("dual_frequency"),
     carrierPhase: boolean("carrier_phase"),
     ekfConfidence: text("ekf_confidence"),
+    rtkState: text("rtk_state"),
+    correctionAgeMs: integer("correction_age_ms"),
     /** Server-assigned monotonic per-vehicle sequence. */
     sequenceNo: bigint("sequence_no", { mode: "number" }).notNull(),
   },
@@ -625,6 +627,7 @@ export const tenantScopedTables = [
   dispatchPolicyOverrides,
   driverWorkRequests,
 ] as const;
+
 
 
 
