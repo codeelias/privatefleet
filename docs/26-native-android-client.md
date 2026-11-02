@@ -2,7 +2,7 @@
 
 Status: **pilot tracking/ops client**, not yet full POD parity.
 
-Current pilot release: **1.0.4** (`versionCode 5`), signed with the
+Current pilot release: **1.0.5** (`versionCode 6`), signed with the
 PrivateFleet release key.
 
 Package: `com.privatefleet.driver.nativeapp`  
@@ -16,7 +16,7 @@ WebView or JavaScript runtime.
 - durable access/refresh session encrypted with Android Keystore AES/GCM
 - cold relaunch stays signed in without re-entering the PIN
 - sign-out keeps only the last workspace/driver encrypted for prefill; the PIN is never stored
-- in-app update prompt from the internal release manifest
+- in-app update prompt from the internal release manifest\n- driver Heads-Up banner for the next stop window (1.0.5)
 - Start shift / shift status
 - Request more jobs (durable dispatcher request)
 - Nearest-stop ordering (arrived pinned first, completed/skipped/failed excluded)
@@ -31,7 +31,7 @@ WebView or JavaScript runtime.
   `LocationManager`:
   - GPS + network providers
   - 10 s / 15 s time-based updates, 0 m distance for the pilot
-  - accuracy filter ≤150 m
+  - accuracy filter â‰¤150 m
   - POST `/v1/telemetry` with the same contract as the Expo client
   - foreground-service notification, wake lock, START_STICKY
   - continues when the screen is off
@@ -42,7 +42,7 @@ WebView or JavaScript runtime.
 Physical Galaxy S22, Android 16, Tailscale connected:
 
 ```text
-second phone R5CWB0BR3BP (SM-S901B) installed 1.0.4
+second phone R5CWB0BR3BP (SM-S901B) installed 1.0.4 (1.0.5 install pending)
 PIN login as Mo Khan succeeded
 25 assigned jobs
 background service isForeground=true
@@ -52,14 +52,14 @@ sign-out -> login prefilled tenant + driver; re-login started tracking
 
 native app installed and launched
 PIN login succeeded
-shift: on_route · 19 jobs
+shift: on_route Â· 19 jobs
 foreground service: isForeground=true
-screen-off test: 17 → 25 location_points rows in ~80 s
+screen-off test: 17 â†’ 25 location_points rows in ~80 s
 latest point captured while screen was off
 native Arrive: PASS
-dropoff status changed pending → arrived
+dropoff status changed pending â†’ arrived
 native Complete: PASS (recipient name)
-dropoff status changed arrived → completed
+dropoff status changed arrived â†’ completed
 native signature upload: PASS (stop_evidence kind=signature)
 native photo upload: PASS (stop_evidence kind=photo)
 offline arrive: queued with network disabled
@@ -88,7 +88,7 @@ configuration is required before distribution.
 ## Permissions
 
 - FINE/COARSE location
-- BACKGROUND location (user selected “Allow all the time”)
+- BACKGROUND location (user selected â€œAllow all the timeâ€)
 - POST_NOTIFICATIONS
 - FOREGROUND_SERVICE + FOREGROUND_SERVICE_LOCATION
 - WAKE_LOCK
@@ -110,3 +110,4 @@ configuration is required before distribution.
 - API base is compiled into `BuildConfig`; a change requires a rebuild.
 - The native client currently targets the Tailscale HTTPS endpoint. LAN access
   would require rebuilding with `https://api.privatefleet.home.arpa`.
+

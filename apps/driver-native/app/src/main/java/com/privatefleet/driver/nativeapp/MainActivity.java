@@ -59,6 +59,7 @@ public class MainActivity extends Activity {
     private Button prevButton;
     private Button nextButton;
     private TextView locationView;
+    private TextView headsUpView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -173,6 +174,16 @@ public class MainActivity extends Activity {
 
         statusView = statusLabel("Status: " + session.driverStatus);
         root.addView(statusView);
+
+        headsUpView = new TextView(this);
+        headsUpView.setTextSize(12);
+        headsUpView.setPadding(dp(12), dp(9), dp(12), dp(9));
+        headsUpView.setVisibility(View.GONE);
+        LinearLayout.LayoutParams headsUpParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        headsUpParams.topMargin = dp(8);
+        headsUpParams.bottomMargin = dp(4);
+        root.addView(headsUpView, headsUpParams);
 
         Button start = new Button(this);
         start.setText("on_route".equals(session.driverStatus)
@@ -382,6 +393,7 @@ public class MainActivity extends Activity {
         String type;
         String address;
         String status;
+        String windowEnd;
         double latitude;
         double longitude;
         double distanceMetres;
@@ -413,6 +425,7 @@ public class MainActivity extends Activity {
                     item.type = stop.optString("stopType", "stop");
                     item.address = stop.optString("address", "");
                     item.status = status;
+                    item.windowEnd = stop.optString("windowEnd", "");
                     JSONObject location = stop.optJSONObject("location");
                     if (location != null) {
                         item.latitude = location.optDouble("latitude", 0);
@@ -435,6 +448,7 @@ public class MainActivity extends Activity {
                 .comparing((StopItem item) -> !"arrived".equals(item.status))
                 .thenComparingDouble(item -> item.distanceMetres)
                 .thenComparing(item -> item.jobRef));
+        updateHeadsUp();
         renderPage();
     }
 
@@ -572,6 +586,62 @@ public class MainActivity extends Activity {
                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
                 * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         return 2 * radius * Math.asin(Math.sqrt(a));
+    }
+
+    private void updateHeadsUp() {
+        if (headsUpView == null) return;
+        long now = System.currentTimeMillis();
+        StopItem next = null;
+        long nextEnd = Long.MAX_VALUE;
+        for (StopItem item : stopItems) {
+            if (!"pending".equals(item.status) && !"arrived".equals(item.status)) continue;
+            Long end = parseIsoMillis(item.windowEnd);
+            if (end == null) continue;
+            if (end < nextEnd) {
+                nextEnd = end;
+                next = item;
+            }
+        }
+        if (next == null) {
+            headsUpView.setVisibility(View.GONE);
+            return;
+        }
+        long minutes = Math.abs(Math.round((nextEnd - now) / 60000.0));
+        String text;
+        int fill;
+        int stroke;
+        int color;
+        if (nextEnd < now) {
+            text = "Heads up: " + next.jobRef + " window closed " + minutes + " min ago. Contact dispatch before leaving.";
+            fill = Color.rgb(254, 242, 242);
+            stroke = Color.rgb(248, 113, 113);
+            color = Color.rgb(185, 28, 28);
+        } else if (nextEnd - now <= 45 * 60_000L) {
+            text = "Heads up: " + next.jobRef + " window closes in " + minutes + " min.";
+            fill = Color.rgb(255, 251, 235);
+            stroke = Color.rgb(251, 191, 36);
+            color = Color.rgb(146, 64, 14);
+        } else {
+            headsUpView.setVisibility(View.GONE);
+            return;
+        }
+        headsUpView.setText(text);
+        headsUpView.setTextColor(color);
+        headsUpView.setBackground(rounded(fill, 12f, stroke));
+        headsUpView.setVisibility(View.VISIBLE);
+    }
+
+    private static Long parseIsoMillis(String value) {
+        if (value == null || value.trim().isEmpty()) return null;
+        try {
+            return java.time.Instant.parse(value).toEpochMilli();
+        } catch (Exception ignored) {
+            try {
+                return java.time.OffsetDateTime.parse(value.replace(' ', 'T')).toInstant().toEpochMilli();
+            } catch (Exception stillInvalid) {
+                return null;
+            }
+        }
     }
 
     private void promptPhoto(String jobId, String stopId) {
@@ -749,6 +819,7 @@ public class MainActivity extends Activity {
                 Toast.LENGTH_LONG).show();
     }
 }
+
 
 
 

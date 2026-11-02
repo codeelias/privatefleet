@@ -1,4 +1,4 @@
-# PrivateFleet — implemented system, status and runbook
+# PrivateFleet â€” implemented system, status and runbook
 
 Last updated: 2026-11-01  
 Commit baseline: `c400476` (native offline evidence queue)  
@@ -14,17 +14,17 @@ two.
 
 ```text
 Android driver app (Galaxy S22)
-  ├── LAN:   https://api.privatefleet.home.arpa
-  └── WAN:   https://pf-node.tail060a86.ts.net  (Tailscale Serve)
-                    │
+  â”œâ”€â”€ LAN:   https://api.privatefleet.home.arpa
+  â””â”€â”€ WAN:   https://pf-node.tail060a86.ts.net  (Tailscale Serve)
+                    â”‚
 Windows host 192.168.1.128
-  ├── Caddy :443  app.privatefleet.home.arpa / api.privatefleet.home.arpa
-  ├── API Fastify 127.0.0.1:4000
-  ├── PostgreSQL/PostGIS 127.0.0.1:5432  (never exposed)
-  ├── OSRM 127.0.0.1:5000
-  ├── VROOM 127.0.0.1:3000 (Docker, digest-pinned)
-  ├── dnsmasq (Docker) :53 for *.privatefleet.home.arpa
-  └── Tailscale node pf-node (100.76.118.22)
+  â”œâ”€â”€ Caddy :443  app.privatefleet.home.arpa / api.privatefleet.home.arpa
+  â”œâ”€â”€ API Fastify 127.0.0.1:4000
+  â”œâ”€â”€ PostgreSQL/PostGIS 127.0.0.1:5432  (never exposed)
+  â”œâ”€â”€ OSRM 127.0.0.1:5000
+  â”œâ”€â”€ VROOM 127.0.0.1:3000 (Docker, digest-pinned)
+  â”œâ”€â”€ dnsmasq (Docker) :53 for *.privatefleet.home.arpa
+  â””â”€â”€ Tailscale node pf-node (100.76.118.22)
 ```
 
 Dispatcher web: `https://app.privatefleet.home.arpa`.
@@ -56,7 +56,7 @@ Dispatcher web: `https://app.privatefleet.home.arpa`.
 | Native nearest-stop ordering + paging | Deployed | arrived pinned, pending sorted by GPS distance, 3/6 per page |
 | Native encrypted session/queue/evidence | Deployed | Android Keystore AES/GCM, FLAG_SECURE |
 | Native offline evidence queue | Deployed | signature/photo survive network loss and sync on reconnect |
-| Native remembered session | Deployed 1.0.4 | cold relaunch bypasses PIN; encrypted workspace/driver prefill after sign-out |
+| Native remembered session | Deployed 1.0.5 | cold relaunch bypasses PIN; encrypted workspace/driver prefill after sign-out |
 | Native update channel | Deployed | `/downloads/native/latest.json` + APK; in-app prompt |
 | Second driver phone | Live | R5CWB0BR3BP, Mo Khan, 25 jobs, background service active |
 | Dispatcher map HUD/dock | Deployed | inset vehicle HUD, centred 46 px taskbar icon, 3-up pager, 440 px popover, bounded assignment sheet |
@@ -68,10 +68,10 @@ Dispatcher web: `https://app.privatefleet.home.arpa`.
 
 ### Route lifecycle (current behaviour)
 
-- `arrive` → stop `arrived`, route moves to `in_progress`.
-- `complete` / `skip` → stop terminal, then:
-  - if the route still has open stops → stays `in_progress`;
-  - if no open stops → route becomes `completed`;
+- `arrive` â†’ stop `arrived`, route moves to `in_progress`.
+- `complete` / `skip` â†’ stop terminal, then:
+  - if the route still has open stops â†’ stays `in_progress`;
+  - if no open stops â†’ route becomes `completed`;
   - driver becomes `available` when no other published/in-progress route exists;
   - outbox event `route.completed` is written.
 - Dispatcher can explicitly close a route:
@@ -90,7 +90,7 @@ Extended:       300 km / 11 h travel / 12 h working / 70 visits
 
 - One tenant revision covers preset, advanced values and all vehicle overrides.
 - Optimisation and approval use the same revision.
-- Working duration is `travel + 5 min × visits` — an estimate, **not** legal
+- Working duration is `travel + 5 min Ã— visits` â€” an estimate, **not** legal
   drivers' hours compliance.
 - A new job set is not compared against the old baseline for distance/coverage;
   only identical job sets are regression-checked. Hard limits always apply.
@@ -99,7 +99,7 @@ Extended:       300 km / 11 h travel / 12 h working / 70 visits
 
 ```text
 Tailscale host:  pf-node  (100.76.118.22)
-Serve:           https://pf-node.tail060a86.ts.net → 127.0.0.1:4000
+Serve:           https://pf-node.tail060a86.ts.net â†’ 127.0.0.1:4000
 Phone:           g (100.124.180.48), galaxy-s22 (100.123.137.123)
 ```
 
@@ -114,7 +114,7 @@ Phone:           g (100.124.180.48), galaxy-s22 (100.123.137.123)
 
 ```text
 Container: privatefleet-dns (dnsmasq), port 53 UDP/TCP
-Records:   *.privatefleet.home.arpa → 192.168.1.128
+Records:   *.privatefleet.home.arpa â†’ 192.168.1.128
 Upstream:  192.168.1.254 (BT Hub)
 ```
 
@@ -149,7 +149,7 @@ C:\privatefleet\hard-restart-api.ps1     # kills tsx then starts scheduled task
 curl.exe -s http://127.0.0.1:4000/healthz
 ```
 
-Scheduled task: **PrivateFleet API** → `start-api.ps1` → `tsx src/server.ts`.
+Scheduled task: **PrivateFleet API** â†’ `start-api.ps1` â†’ `tsx src/server.ts`.
 If the API exits, read `C:\PrivateFleet\logs\api.log` and
 `C:\Temp\api-start-full.log`. A common failure is deploying `fleet-service.ts`
 without its new import (`dispatch-policy.ts`).
@@ -284,13 +284,13 @@ Advisory only; it never assigns or publishes.
 Incremental cost per candidate job:
 
 ```text
-added fuel       = detour km × FUEL_PENCE_PER_KM
-added vehicle    = detour km × VEHICLE_PENCE_PER_KM
-added wage       = added minutes / 60 × DRIVER_PENCE_PER_HOUR
+added fuel       = detour km Ã— FUEL_PENCE_PER_KM
+added vehicle    = detour km Ã— VEHICLE_PENCE_PER_KM
+added wage       = added minutes / 60 Ã— DRIVER_PENCE_PER_HOUR
 ```
 
 Defaults (environment-overridable): fuel 12p/km, vehicle 8p/km,
-driver £15/h, maximum detour 4 km.
+driver Â£15/h, maximum detour 4 km.
 
 A job is only recommended when:
 
@@ -300,7 +300,8 @@ A job is only recommended when:
   policy limits.
 
 Each suggestion includes the driver, vehicle, added km, added minutes,
-incremental £ cost, current route estimated cost and a plain-language reason.
+incremental Â£ cost, current route estimated cost and a plain-language reason.
 The dispatcher decides whether to assign. Detour estimates are geometric with a
 1.4 road factor, not a re-optimisation; they are directional, not a substitute
 for running the solver.
+
