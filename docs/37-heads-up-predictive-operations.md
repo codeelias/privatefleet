@@ -83,6 +83,21 @@ Every item has:
 - Follow vehicle when a driver is involved
 - Open exceptions for the confirmed-event workflow
 
+## Customer update from a late risk
+
+A projected-late item now has **Customer update**:
+
+- creates a real job-scoped tracking token through the existing API
+- builds a copyable message with the predicted arrival/window evidence and
+  tracking URL
+- the link can be opened directly or copied into the operator's existing
+  customer channel
+- no SMS/email provider is invented or charged
+- the link is revocable from Customer Tracking
+
+This is deliberately a manual send step: the system prepares the truth, the
+dispatcher chooses the customer channel.
+
 ## Live result
 
 At 12:00 on 2 November 2026, the production fleet produced:
@@ -133,6 +148,7 @@ screen.
 - Unassigned risk is based on the pickup window opening, not a promised
   customer contact time.
 - The panel shows the top eight; full lists are in the exceptions workflow.
+- Customer update prepares a copyable message and tracking link; it does not send SMS/email itself.
 - A real traffic provider would be a paid integration and must not be faked.
 
 ## Next differentiators

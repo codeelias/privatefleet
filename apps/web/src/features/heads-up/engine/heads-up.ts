@@ -233,10 +233,14 @@ export function buildHeadsUp(state: FleetState, now = Date.now()): HeadsUpResult
     });
   }
 
+  const kindRank = (kind: HeadsUpKind): number =>
+    kind === "late" ? 0 : kind === "unassigned" ? 1 : kind === "no_route" ? 2 : kind === "off_route" ? 3 : 4;
   const ordered = [...items.values()].sort((left, right) => {
     const severity = severityRank(left.severity) - severityRank(right.severity);
     if (severity !== 0) return severity;
-    return (left.minutesLate ?? 0) - (right.minutesLate ?? 0);
+    const kind = kindRank(left.kind) - kindRank(right.kind);
+    if (kind !== 0) return kind;
+    return (right.minutesLate ?? 0) - (left.minutesLate ?? 0);
   });
   const summary: HeadsUpSummary = {
     total: ordered.length,

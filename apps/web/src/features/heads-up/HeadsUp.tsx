@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FleetState } from "@privatefleet/contracts";
 import { StatusChip } from "../../shared/ui/StatusChip";
+import { api } from "../../shared/api/client";
 import { buildHeadsUp, type HeadsUpItem } from "./engine/heads-up";
 
 function toneFor(item: HeadsUpItem): "danger" | "warning" | "neutral" {
@@ -24,6 +25,11 @@ export function HeadsUp({
   onOpenAlerts: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [customerUpdate, setCustomerUpdate] = useState<
+    { reference: string; message: string; url: string } | null
+  >(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   const result = useMemo(() => buildHeadsUp(state), [state]);
   const { summary } = result;
   const top = result.items[0];
@@ -37,6 +43,25 @@ export function HeadsUp({
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open]);
+  async function prepareCustomerUpdate(item: HeadsUpItem): Promise<void> {
+    if (!item.jobId) return;
+    setUpdateBusy(true);
+    setUpdateError(null);
+    try {
+      const created = await api.createTrackingToken(item.jobId);
+      const url = `${window.location.origin}${created.url}`;
+      setCustomerUpdate({
+        reference: item.title.split(" projected")[0] ?? item.title,
+        url,
+        message: `Hello, an update on your delivery: ${item.detail} Track its live progress here: ${url}`,
+      });
+    } catch (error) {
+      setUpdateError(error instanceof Error ? error.message : "Tracking link could not be created");
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
   const summaryLabel =
     summary.total === 0
       ? "No predicted exceptions"
@@ -132,6 +157,16 @@ export function HeadsUp({
                         Open assignment
                       </button>
                     )}
+                    {item.kind === "late" && item.jobId && (
+                      <button
+                        type="button"
+                        onClick={() => void prepareCustomerUpdate(item)}
+                        disabled={updateBusy}
+                        className="rounded-md border border-command-border px-2 py-1 text-[10px] font-semibold text-text-primary disabled:opacity-40"
+                      >
+                        {updateBusy ? "Preparing..." : "Customer update"}
+                      </button>
+                    )}
                     {item.driverId && (
                       <button
                         type="button"
@@ -160,6 +195,27 @@ export function HeadsUp({
           )}
         </div>
       )}
+
+      {customerUpdate && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 p-4" role="dialog" aria-modal="true" aria-label="Customer update">
+          <div className="w-full max-w-[460px] rounded-xl border border-command-border bg-command-surface p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-text-secondary">Customer update</p>
+                <h3 className="mt-0.5 text-[15px] font-semibold text-text-primary">{customerUpdate.reference}</h3>
+              </div>
+              <button type="button" onClick={() => setCustomerUpdate(null)} className="rounded-md border border-command-border px-2 py-1 text-[10px] font-semibold text-text-primary">Close</button>
+            </div>
+            <p className="mt-2 text-[11px] text-text-secondary">The tracking link is job-scoped, expires automatically and can be revoked in Customer Tracking.</p>
+            <textarea readOnly value={customerUpdate.message} aria-label="Customer update message" className="mt-3 h-28 w-full resize-none rounded-lg border border-command-border bg-command-raised p-2 text-[11px] text-text-primary" />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" onClick={() => void navigator.clipboard.writeText(customerUpdate.message)} className="rounded-md bg-brand-primary px-3 py-1.5 text-[11px] font-bold text-on-brand">Copy update</button>
+              <button type="button" onClick={() => window.open(customerUpdate.url, "_blank", "noopener,noreferrer")} className="rounded-md border border-command-border px-3 py-1.5 text-[11px] font-semibold text-text-primary">Open tracking page</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {updateError && <p className="mt-1 text-[10px] text-status-danger">{updateError}</p>}
     </div>
   );
 }
