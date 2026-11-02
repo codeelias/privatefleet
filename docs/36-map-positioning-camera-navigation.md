@@ -51,10 +51,12 @@ polyline and keep the previous selection weights.
 
 ### Basemap fallback
 
-CARTO's unauthenticated raster tiles now contain an `API KEY REQUIRED`
-watermark. The keyless raster fallback is therefore OpenStreetMap standard
-tiles with attribution. This is suitable for the LAN pilot / low volume; a
-licensed tile contract is still required for high-volume commercial use.
+OpenStreetMap's volunteer tile servers prohibit application use, so the app
+requests **no external raster tiles by default**. Vector basemaps (OpenFreeMap)
+remain the normal engine; the no-WebGL raster fallback is a tile-free Leaflet
+surface where routes, vehicles and overlays still render, labelled
+"tile-free raster surface - vector engine recommended". An operator can
+configure a licensed raster provider via `VITE_MAP_RASTER_TILES`.
 
 Both dark and light route palettes are validated through the theme toggle and
 Playwright basemap tests.

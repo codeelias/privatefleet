@@ -67,8 +67,9 @@ Production-verified stored geometry (before cleanup):
 ## Honest limits
 
 - Single-ring polygons only; holes and multipolygons are not supported yet.
-- No satellite basemap in the editor; it uses the same OpenStreetMap raster
-  as the dispatcher fallback.
+- No satellite basemap in the editor; it uses the same tile-free Leaflet
+  surface as the dispatcher fallback, so no volunteer OpenStreetMap tiles are
+  requested.
 - GeoJSON file import/export is not implemented; pasted GeoJSON remains
   available in the Exceptions & Alerts panel for advanced cases.
 - Vertices are edited on the raster engine; vector rendering is not required.

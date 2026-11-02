@@ -1,3 +1,10 @@
+### v1.58 - Tile-policy compliance and visual geofence editor (2026-11-02)
+- Removed all default requests to OpenStreetMap's volunteer tile servers after their tile usage policy blocked the app.
+- Vector basemaps (OpenFreeMap) remain the primary engine; the no-WebGL raster fallback is now a tile-free Leaflet surface where routes, vehicles and overlays still render, with an explicit "tile-free raster surface" label.
+- A licensed raster provider can still be configured via VITE_MAP_RASTER_TILES.
+- Added a dedicated Geofences screen: draw polygons on the map, drag vertices, insert midpoints, remove vertices, undo/redo, live self-intersection/size validation, driver scoping (including "select drivers inside"), job linking, edit and delete.
+- Geofence evaluation now respects per-driver scope; enter/exit events and alerts carry the linked job id.
+- Verification: API 101/101, web engine 53/53, full E2E 21/21; production tile requests verified zero against volunteer servers.
 ### v1.57 - Premium map-first refinement (2026-10-29)
 - Header reduced to a single toolbar: text navigation, orange active underline, no nav capsule.
 - Fleet overview is a hairline-divided status rail; expanded cards remain optional.

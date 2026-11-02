@@ -48,14 +48,21 @@ const CARTO_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 /**
- * Keyless raster fallback for browsers without WebGL. OpenFreeMap serves
- * vector tiles only (`/planet/*.png` is an empty wildcard), so raster must
- * use a real raster provider.
+ * No external raster tiles are requested by default. OpenStreetMap's
+ * volunteer tile servers prohibit application use, so the raster fallback is
+ * a plain Leaflet surface (overlays still render) unless an operator
+ * configures a licensed raster provider via VITE_MAP_RASTER_TILES.
  */
+export const BLANK_RASTER: RasterSource = {
+  url: "",
+  attribution: "",
+  name: "No external basemap",
+};
+
 export const OSM_RASTER: RasterSource = {
-  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  name: "OpenStreetMap",
+  url: "",
+  attribution: "",
+  name: "OpenStreetMap (disabled by default - volunteer tile policy)",
 };
 
 export const CARTO_RASTER: RasterSource = {
@@ -103,12 +110,12 @@ function vectorStylesFromEnv(): VectorStyle[] {
 const configuredRaster = rasterFromEnv();
 const configuredVector = vectorStylesFromEnv();
 
-/** Primary raster source: explicit config > MapTiler (key present) > CARTO. */
+/** Primary raster source: explicit config, otherwise a tile-free surface. */
 export const PRIMARY_RASTER: RasterSource =
-  configuredRaster ?? (MAPTILER_KEY ? MAPTILER_RASTER : OSM_RASTER);
+  configuredRaster ?? BLANK_RASTER;
 
-/** Raster fallback for sessions without WebGL; keyless and working. */
-export const RASTER_FALLBACK: RasterSource = OSM_RASTER;
+/** Raster fallback for sessions without WebGL: tile-free, overlays still work. */
+export const RASTER_FALLBACK: RasterSource = BLANK_RASTER;
 
 /**
  * Vector style chain: explicit config first, then the approved B2

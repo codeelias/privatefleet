@@ -527,6 +527,13 @@ export function MapCanvas({
       if (cancelled) {
         return;
       }
+      if (!provider.url) {
+        // Tile-free compliance surface: overlays render, no external tiles
+        // are requested from volunteer servers.
+        setTilesFailed(false);
+        setRasterProvider(provider.name);
+        return;
+      }
       const layer = L.tileLayer(provider.url, {
         maxZoom: 19,
         attribution: provider.attribution,
@@ -1047,7 +1054,7 @@ export function MapCanvas({
       ? "Tiles failed to load - check network"
       : tileCount > 0
         ? `raster tiles loaded (${tileCount} tiles, ${rasterProvider})`
-        : "loading raster tiles";
+        : "tile-free raster surface - vector engine recommended";
 
   return (
     <section

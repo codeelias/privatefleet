@@ -17,10 +17,6 @@ import {
   type GeoLatLng,
 } from "./engine/geofence-geometry";
 
-const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
-
 export function GeofenceEditor({
   state,
   onPublished,
@@ -90,7 +86,8 @@ export function GeofenceEditor({
       zoomControl: false,
     });
     L.control.zoom({ position: "bottomright" }).addTo(map);
-    L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 19 }).addTo(map);
+    // Tile-free compliance surface: no volunteer OpenStreetMap tiles are
+    // requested. The drawing surface stays fully interactive.
     mapRef.current = map;
     draftRef.current = L.layerGroup().addTo(map);
     fencesRef.current = L.layerGroup().addTo(map);
