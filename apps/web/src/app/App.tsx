@@ -304,7 +304,7 @@ function Dashboard({
     <DndContext onDragEnd={handleDragEnd}>
       <div className="flex h-full min-h-screen flex-col bg-command-bg text-text-primary">
         <header className="relative z-40 border-b border-command-border/80 bg-command-surface/95 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-[1800px] items-center gap-6 px-5 py-3">
+          <div className="mx-auto flex max-w-[1800px] items-center gap-3 px-4 py-3 sm:px-5 lg:gap-6">
             <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-primary text-on-brand">
                 <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
@@ -361,7 +361,7 @@ function Dashboard({
                   <span className="flex h-7 w-7 items-center justify-center rounded-full bg-command-raised text-[11px] font-bold text-text-primary">
                     {(tenantName ?? "N").slice(0, 1).toUpperCase()}
                   </span>
-                  Sign out
+                  <span className="hidden sm:inline">Sign out</span>
                 </button>
               )}
             </div>
@@ -396,7 +396,7 @@ function Dashboard({
               </div>
             )}
             {screen === "board" ? (
-              <DispatchBoard state={state} />
+              <DispatchBoard state={state} onSelectJob={openAssignment} />
             ) : screen === "jobs" ? (
               <JobsScreen
                 state={state}
@@ -910,6 +910,8 @@ export function App() {
     />
   );
 }
+
+
 
 
 
