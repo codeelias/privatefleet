@@ -19,6 +19,10 @@ card tray underneath.
   pickups do not collide.
 - Chip text: job reference and planned pickup time; the tooltip includes the
   drop-off time and any risk.
+- Chips are packed into five visual rows by interval overlap, then ordered by
+  planned pickup.
+- The driver column is sticky; the timeline auto-scrolls near the earliest
+  planned pickup so phones do not open on empty 06:00 space.
 - Customer service windows are deliberately **not** used as job duration. They
   are two-hour windows and overlap by design.
 - Completed and cancelled jobs are excluded from the driver lanes.
@@ -40,6 +44,7 @@ false conflicts.
 
 - 330 px panel on desktop, 58 px collapsed rail.
 - Stacks below the schedule below `lg`.
+- The driver column is 150 px on phones and 210 px on larger screens.
 - Compact items show reference, priority, pickup -> drop-off, customer window,
   stop count and service type.
 - Search by reference/address; filters for All / STAT / Urgent.
@@ -76,6 +81,7 @@ Saturated orange is no longer the default for every scheduled job.
 1024 x 600: split workspace, no page overflow
 390 x 844:  schedule above queue, no page overflow (scrollWidth == 390)
 queue row click: assignment dialog opens
+acceptance test: tests/dispatch-board.spec.ts (pass)
 ```
 
 The schedule scrolls horizontally on phones; the driver column stays fixed.
