@@ -105,7 +105,8 @@ existing enter/exit evaluation gate.
 
 - Map/Heads-Up engine tests: 48 passed
 - API geofence/public-tracking tests: passing
-- Full E2E: pending final run
+- Full E2E: 20 passed / 20 skipped
+- API suite: 100 passed
 - Production checks: tracking fields verified; re-route proposal verified;
   customer-update dialog verified
 
