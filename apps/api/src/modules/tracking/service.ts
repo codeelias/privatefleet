@@ -26,12 +26,14 @@ interface VehicleRow {
   registration: string;
   captured_at: Date | string | null;
   max_seq: number | string | null;
+  driver_id: string | null;
 }
 
 interface GeofenceRow {
   id: string;
   name: string;
   job_id: string | null;
+  driver_ids: string[] | null;
 }
 
 export interface IngestOutcome {
@@ -51,7 +53,7 @@ export async function ingestTelemetry(
 ): Promise<IngestOutcome> {
   return withTenant(handle, tenantId, async (db) => {
     const rows = (await db.execute(sql`
-      SELECT v.id, v.registration, v.captured_at,
+      SELECT v.id, v.registration, v.captured_at, v.driver_id,
              (SELECT coalesce(max(lp.sequence_no), 0)
                 FROM location_points lp WHERE lp.vehicle_id = v.id) AS max_seq
       FROM vehicles v
@@ -72,7 +74,7 @@ export async function ingestTelemetry(
     let newest: TelemetryIngestResult["lastPosition"];
 
     const geofences = (await db.execute(sql`
-      SELECT id, name, job_id FROM geofences
+      SELECT id, name, job_id, driver_ids FROM geofences
       WHERE tenant_id = ${tenantId} AND enabled = true
       ORDER BY created_at
     `)) as unknown as GeofenceRow[];
@@ -193,6 +195,10 @@ async function evaluateGeofences(
   const nowInside = new Map(insideRows.map((row) => [row.id, row.inside]));
 
   for (const geofence of geofences) {
+    const scopedDrivers = geofence.driver_ids ?? [];
+    if (scopedDrivers.length > 0 && vehicle.driver_id && !scopedDrivers.includes(vehicle.driver_id)) {
+      continue;
+    }
     const inside = nowInside.get(geofence.id) ?? false;
     const previous = states.get(geofence.id);
     if (previous !== undefined && previous !== inside) {

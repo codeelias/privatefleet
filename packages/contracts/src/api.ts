@@ -204,6 +204,8 @@ export const GeofenceDtoSchema = z.object({
   geojson: z.string(),
   enabled: z.boolean(),
   jobId: IdSchema.optional(),
+  /** Empty array = applies to every vehicle; otherwise only these drivers. */
+  driverIds: z.array(IdSchema).default([]),
   createdAt: z.string().datetime(),
 });
 export type GeofenceDto = z.infer<typeof GeofenceDtoSchema>;
@@ -653,5 +655,6 @@ export const AssignResponseSchema = z.object({
   etaImpactMinutes: z.number().int().nonnegative(),
 });
 export type AssignResponse = z.infer<typeof AssignResponseSchema>;
+
 
 

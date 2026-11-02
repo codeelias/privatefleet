@@ -263,12 +263,12 @@ export const api = {
   deliveryPerformanceCsv: (query = "") =>
     requestText(`/v1/reports/delivery-performance${query ? `${query}&format=csv` : "?format=csv"}`),
   listGeofences: () => request<GeofenceList>("/v1/geofences"),
-  createGeofence: (name: string, geojson: string, enabled = true, jobId?: string) =>
+  createGeofence: (name: string, geojson: string, enabled = true, jobId?: string, driverIds?: string[]) =>
     request<GeofenceDto>("/v1/geofences", {
       method: "POST",
-      body: JSON.stringify({ name, geojson, enabled, ...(jobId ? { jobId } : {}) }),
+      body: JSON.stringify({ name, geojson, enabled, ...(jobId ? { jobId } : {}), ...(driverIds ? { driverIds } : {}) }),
     }),
-  updateGeofence: (id: string, patch: { name?: string; enabled?: boolean }) =>
+  updateGeofence: (id: string, patch: { name?: string; enabled?: boolean; geojson?: string; driverIds?: string[] }) =>
     request<GeofenceDto>("/v1/geofences/" + id, {
       method: "PATCH",
       body: JSON.stringify(patch),

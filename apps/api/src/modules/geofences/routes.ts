@@ -16,6 +16,8 @@ const GeofenceBodySchema = z.object({
   geojson: z.string().min(1),
   enabled: z.boolean().optional().default(true),
   jobId: z.string().uuid().optional(),
+  /** Empty/omitted = every vehicle; otherwise evaluation is scoped to these drivers. */
+  driverIds: z.array(z.string().uuid()).max(100).optional(),
 });
 
 export function registerGeofenceRoutes(
@@ -54,16 +56,34 @@ export function registerGeofenceRoutes(
           });
         }
       }
+      const driverIds = body.driverIds ?? [];
+      if (driverIds.length > 0) {
+        const drivers = (await db.execute(sql`
+          SELECT count(*)::int AS count FROM drivers
+          WHERE id IN (${sql.join(driverIds, sql`, `)})
+        `)) as unknown as Array<{ count: number }>;
+        if ((drivers[0]?.count ?? 0) !== driverIds.length) {
+          return reply.status(404).send({
+            type: "https://privatefleet.example/errors/driver_not_found",
+            title: "Request could not be completed",
+            status: 404,
+            code: "DRIVER_NOT_FOUND",
+            detail: "One of the scoped drivers does not exist in this workspace",
+            uiMessage: "Refresh the driver list and try again.",
+          });
+        }
+      }
       const rows = (await db.execute(sql`
-        INSERT INTO geofences (id, tenant_id, name, geojson, enabled, job_id)
-        VALUES (${randomUUID()}, ${tenantId}, ${body.name}, ${body.geojson}, ${body.enabled}, ${body.jobId ?? null})
-        RETURNING id, name, geojson, enabled, job_id, created_at
+        INSERT INTO geofences (id, tenant_id, name, geojson, enabled, job_id, driver_ids)
+        VALUES (${randomUUID()}, ${tenantId}, ${body.name}, ${body.geojson}, ${body.enabled}, ${body.jobId ?? null}, ${JSON.stringify(driverIds)}::jsonb)
+        RETURNING id, name, geojson, enabled, job_id, driver_ids, created_at
       `)) as unknown as Array<{
         id: string;
         name: string;
         geojson: string;
         enabled: boolean;
         job_id: string | null;
+        driver_ids: string[] | null;
         created_at: Date | string;
       }>;
       const row = rows[0]!;
@@ -73,6 +93,7 @@ export function registerGeofenceRoutes(
         geojson: row.geojson,
         enabled: row.enabled,
         ...(row.job_id ? { jobId: row.job_id } : {}),
+        driverIds: row.driver_ids ?? [],
         createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at.toISOString(),
       };
     });
@@ -80,13 +101,15 @@ export function registerGeofenceRoutes(
 
   const PatchBodySchema = z.object({
     name: z.string().min(1).max(120).optional(),
+    geojson: z.string().min(1).optional(),
     enabled: z.boolean().optional(),
+    driverIds: z.array(z.string().uuid()).max(100).optional(),
   });
 
   app.get("/v1/geofences", { preHandler: guard }, async (request) => {
     return withTenant(handle, request.auth?.tenantId ?? "", async (db) => {
       const rows = (await db.execute(sql`
-        SELECT id, name, geojson, enabled, job_id, created_at
+        SELECT id, name, geojson, enabled, job_id, driver_ids, created_at
         FROM geofences WHERE tenant_id = ${request.auth?.tenantId ?? ""}
         ORDER BY created_at DESC
       `)) as unknown as Array<{
@@ -95,6 +118,7 @@ export function registerGeofenceRoutes(
         geojson: string;
         enabled: boolean;
         job_id: string | null;
+        driver_ids: string[] | null;
         created_at: Date | string;
       }>;
       return {
@@ -104,6 +128,7 @@ export function registerGeofenceRoutes(
           geojson: row.geojson,
           enabled: row.enabled,
           ...(row.job_id ? { jobId: row.job_id } : {}),
+          driverIds: row.driver_ids ?? [],
           createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at.toISOString(),
         })),
       };
@@ -125,18 +150,37 @@ export function registerGeofenceRoutes(
     const body = PatchBodySchema.parse(request.body ?? {});
     const tenantId = request.auth?.tenantId ?? "";
     return withTenant(handle, tenantId, async (db) => {
+      if (body.driverIds) {
+        const drivers = (await db.execute(sql`
+          SELECT count(*)::int AS count FROM drivers
+          WHERE id IN (${sql.join(body.driverIds, sql`, `)})
+        `)) as unknown as Array<{ count: number }>;
+        if ((drivers[0]?.count ?? 0) !== body.driverIds.length) {
+          return reply.status(404).send({
+            type: "https://privatefleet.example/errors/driver_not_found",
+            title: "Request could not be completed",
+            status: 404,
+            code: "DRIVER_NOT_FOUND",
+            detail: "One of the scoped drivers does not exist in this workspace",
+            uiMessage: "Refresh the driver list and try again.",
+          });
+        }
+      }
       const rows = (await db.execute(sql`
         UPDATE geofences SET
           name = COALESCE(${body.name ?? null}, name),
-          enabled = COALESCE(${body.enabled ?? null}, enabled)
+          geojson = COALESCE(${body.geojson ?? null}, geojson),
+          enabled = COALESCE(${body.enabled ?? null}, enabled),
+          driver_ids = COALESCE(${body.driverIds ? JSON.stringify(body.driverIds) : null}::jsonb, driver_ids)
         WHERE id = ${params.id}
-        RETURNING id, name, geojson, enabled, job_id, created_at
+        RETURNING id, name, geojson, enabled, job_id, driver_ids, created_at
       `)) as unknown as Array<{
         id: string;
         name: string;
         geojson: string;
         enabled: boolean;
         job_id: string | null;
+        driver_ids: string[] | null;
         created_at: Date | string;
       }>;
       const row = rows[0];
@@ -156,6 +200,7 @@ export function registerGeofenceRoutes(
         geojson: row.geojson,
         enabled: row.enabled,
         ...(row.job_id ? { jobId: row.job_id } : {}),
+        driverIds: row.driver_ids ?? [],
         createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at.toISOString(),
       };
     });
@@ -191,3 +236,4 @@ export function registerGeofenceRoutes(
     });
   });
 }
+

@@ -128,7 +128,7 @@ existing enter/exit evaluation gate.
 - No live traffic provider; ETA blending is speed-based.
 - No SMS/email sender; customer messages are prepared for copy or the
   operator's existing channel.
-- Geofences are not drawn on the map yet (management only).
+- Geofences are now drawn and edited visually on a dedicated Geofences screen (single-ring polygons; holes not supported).
 - The portal delay status uses the planned ETA until a live-blended server ETA
   is shipped.
 - Raster bearing rotation is unavailable; vector is required for heading-up.

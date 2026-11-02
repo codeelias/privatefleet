@@ -1,0 +1,1 @@
+ALTER TABLE "geofences" ADD COLUMN "driver_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

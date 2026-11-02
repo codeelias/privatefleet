@@ -203,4 +203,68 @@ describe("geofence lifecycle administration", () => {
     const remaining = (after.json() as { geofences: Array<{ id: string }> }).geofences;
     expect(remaining.some((zone) => zone.id === depot!.id)).toBe(false);
   });
+
+  it("scopes evaluation to selected drivers only", async () => {
+    const otherDriverId = randomUUID();
+    const otherVehicleId = randomUUID();
+    const pinHash = await argonHash("1234");
+    await migrator.sql`
+      INSERT INTO vehicles (id, tenant_id, registration, vehicle_type, status, driver_id)
+      VALUES (${otherVehicleId}, ${tenantId}, 'GEO-2', 'Van', 'available', ${otherDriverId})
+    `;
+    await migrator.sql`
+      INSERT INTO drivers (id, tenant_id, full_name, status, pin_hash, vehicle_id, last_ping_at)
+      VALUES (${otherDriverId}, ${tenantId}, 'Scoped Driver', 'available', ${pinHash}, ${otherVehicleId}, now())
+    `;
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/geofences",
+      headers: authed(ownerToken),
+      payload: {
+        name: "Scoped zone",
+        driverIds: [driverId],
+        geojson: JSON.stringify({
+          type: "Polygon",
+          coordinates: [[[-0.14, 51.49], [-0.1, 51.49], [-0.1, 51.52], [-0.14, 51.52], [-0.14, 51.49]]],
+        }),
+      },
+    });
+    expect(created.statusCode).toBe(200);
+    const zone = created.json() as { id: string; driverIds: string[] };
+    expect(zone.driverIds).toEqual([driverId]);
+
+    // Earlier tests posted future-dated samples; stay ahead of the vehicle's
+    // last accepted fix within the 5-minute future tolerance.
+    const now = Date.now() + 60_000;
+    // First sample initialises the state (no event); the second crosses in.
+    await postTelemetry(51.6, -0.15, new Date(now).toISOString());
+    await postTelemetry(51.5, -0.12, new Date(now + 10_000).toISOString());
+    const scopedEvents = (await migrator.sql`
+      SELECT count(*)::int AS count FROM outbox
+      WHERE tenant_id = ${tenantId}
+        AND event_type = 'geofence.entered'
+        AND payload->'payload'->>'geofenceName' = 'Scoped zone'
+    `) as unknown as Array<{ count: number }>;
+    expect(scopedEvents[0]?.count).toBe(1);
+
+    const rescope = await app.inject({
+      method: "PATCH",
+      url: "/v1/geofences/" + zone.id,
+      headers: authed(ownerToken),
+      payload: { driverIds: [otherDriverId] },
+    });
+    expect(rescope.statusCode).toBe(200);
+
+    await postTelemetry(51.6, -0.15, new Date(now + 20_000).toISOString());
+    await postTelemetry(51.5, -0.12, new Date(now + 30_000).toISOString());
+    const afterRescope = (await migrator.sql`
+      SELECT count(*)::int AS count FROM outbox
+      WHERE tenant_id = ${tenantId}
+        AND payload->'payload'->>'geofenceName' = 'Scoped zone'
+    `) as unknown as Array<{ count: number }>;
+    expect(afterRescope[0]?.count).toBe(1);
+
+    await migrator.sql`DELETE FROM geofences WHERE id = ${zone.id}`;
+  });
 });

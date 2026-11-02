@@ -373,6 +373,8 @@ export const geofences = pgTable(
     enabled: boolean("enabled").notNull().default(true),
     /** Optional job link: lets the customer tracking page show "in your area". */
     jobId: uuid("job_id").references(() => jobs.id, { onDelete: "set null" }),
+    /** Empty array = applies to every vehicle; otherwise only these drivers. */
+    driverIds: jsonb("driver_ids").$type<string[]>().notNull().default([]),
     createdAt,
   },
   (t) => [index("geofences_tenant_enabled_idx").on(t.tenantId, t.enabled)],
@@ -617,6 +619,7 @@ export const tenantScopedTables = [
   dispatchPolicyOverrides,
   driverWorkRequests,
 ] as const;
+
 
 
 

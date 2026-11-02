@@ -17,6 +17,7 @@ import { JobCard } from "../features/dispatch/JobCard";
 import { AlertsScreen } from "../features/alerts/AlertsScreen";
 import { JobsScreen } from "../features/jobs/JobsScreen";
 import { HeadsUp } from "../features/heads-up/HeadsUp";
+import { GeofenceEditor } from "../features/geofences/GeofenceEditor";
 import { TrackingHub } from "../features/customer-tracking/TrackingHub";
 import { AssignmentModal } from "../features/live-map/AssignmentModal";
 import { MapCanvas } from "../features/live-map/MapCanvas";
@@ -34,7 +35,7 @@ import { markTelemetry, startBenchSampler } from "../features/live-map/engine/be
 import { KpiCard } from "../shared/ui/KpiCard";
 import { StatusChip } from "../shared/ui/StatusChip";
 
-type ScreenId = "live" | "board" | "jobs" | "optimise" | "alerts" | "tracking";
+type ScreenId = "live" | "board" | "jobs" | "optimise" | "alerts" | "geofences" | "tracking";
 
 const WORKSPACE_ITEMS: ReadonlyArray<{ label: string; id: ScreenId }> = [
   { label: "Live Operations", id: "live" },
@@ -42,6 +43,7 @@ const WORKSPACE_ITEMS: ReadonlyArray<{ label: string; id: ScreenId }> = [
   { label: "Jobs & Work Orders", id: "jobs" },
   { label: "Route Optimisation", id: "optimise" },
   { label: "Exceptions & Alerts", id: "alerts" },
+  { label: "Geofences", id: "geofences" },
   { label: "Customer Tracking", id: "tracking" },
 ];
 
@@ -408,6 +410,11 @@ function Dashboard({
               />
             ) : screen === "optimise" ? (
               <OptimizationScreen state={state} />
+            ) : screen === "geofences" ? (
+              <GeofenceEditor
+                state={state}
+                onPublished={() => void queryClient.invalidateQueries({ queryKey: ["fleet"] })}
+              />
             ) : screen === "alerts" ? (
               <AlertsScreen
                 state={state}
@@ -919,6 +926,7 @@ export function App() {
     />
   );
 }
+
 
 
 

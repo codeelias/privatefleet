@@ -386,3 +386,9 @@ html[data-map-theme="light"] {
 
 
 
+
+/* Geofence editor handles: visible, draggable, keyboard-safe. */
+.pf-geo-vertex-wrap { background: none; border: none; }
+.pf-geo-vertex { display: block; width: 14px; height: 14px; background: #fff; border: 2px solid #EF842F; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.pf-geo-midpoint-wrap { background: none; border: none; }
+.pf-geo-midpoint { display: block; width: 10px; height: 10px; background: #fff; border: 2px solid #276EF1; transform: rotate(45deg); box-shadow: 0 1px 3px rgba(0,0,0,0.35); }
