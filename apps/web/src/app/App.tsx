@@ -400,6 +400,7 @@ function Dashboard({
             ) : screen === "jobs" ? (
               <JobsScreen
                 state={state}
+                onSelectJob={openAssignment}
                 onImported={() => {
                   void queryClient.invalidateQueries({ queryKey: ["fleet"] });
                 }}
@@ -910,6 +911,8 @@ export function App() {
     />
   );
 }
+
+
 
 
 

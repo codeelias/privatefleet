@@ -31,14 +31,17 @@ export function AssignmentModal({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.stopImmediatePropagation();
+        onClose();
+      }
     };
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     dialogRef.current?.focus();
     return () => {
-      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown, true);
       document.body.style.overflow = previousOverflow;
     };
   }, [onClose]);
@@ -106,7 +109,7 @@ export function AssignmentModal({
             </p>
             <h2 className="mt-0.5 truncate text-[17px] font-bold leading-tight">
               {job?.reference ?? "Job"}
-              {job ? <span className="font-medium text-text-secondary"> Â· {job.serviceType}</span> : null}
+              {job ? <span className="font-medium text-text-secondary"> Ã‚Â· {job.serviceType}</span> : null}
             </h2>
           </div>
           <button
@@ -144,7 +147,7 @@ export function AssignmentModal({
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">{driver.fullName}</span>
                   <span className="mt-0.5 block text-[10px] text-text-secondary">
-                    {driver.status === "on_route" ? "On route Â· impact preview" : "Available now"}
+                    {driver.status === "on_route" ? "On route Ã‚Â· impact preview" : "Available now"}
                   </span>
                 </span>
                 <StatusChip
@@ -215,6 +218,7 @@ export function AssignmentModal({
     </div>
   );
 }
+
 
 
 
