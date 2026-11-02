@@ -56,7 +56,8 @@ Dispatcher web: `https://app.privatefleet.home.arpa`.
 | Native nearest-stop ordering + paging | Deployed | arrived pinned, pending sorted by GPS distance, 3/6 per page |
 | Native encrypted session/queue/evidence | Deployed | Android Keystore AES/GCM, FLAG_SECURE |
 | Native offline evidence queue | Deployed | signature/photo survive network loss and sync on reconnect |
-| Native remembered session | Deployed 1.0.3 | cold relaunch bypasses PIN; encrypted workspace/driver prefill after sign-out |
+| Native remembered session | Deployed 1.0.4 | cold relaunch bypasses PIN; encrypted workspace/driver prefill after sign-out |
+| Native update channel | Deployed | `/downloads/native/latest.json` + APK; in-app prompt |
 | Second driver phone | Live | R5CWB0BR3BP, Mo Khan, 25 jobs, background service active |
 | Dispatcher map HUD/dock | Deployed | inset vehicle HUD, centred 46 px taskbar icon, 3-up pager, 440 px popover, bounded assignment sheet |
 | POD evidence + durable queue | Deployed | duplicate upload treated as success `69ee6eb` |
@@ -235,7 +236,7 @@ next.
 | 2x-DPR marker latency | Pass: p95 184 ms; 1x backing store above 150 vehicles |
 | Restore drill on current schema | Not started; pre-retirement dump retained |
 | Tailscale ACL/MFA hardening | Not started |
-| External health alert channel | Not started; local watchdog + auto-recovery deployed |
+| External health alert channel | Webhook delivery tested; production URL not configured |
 | 30-day reliability evidence and SLA | Not started |
 
 ## 7. Test status

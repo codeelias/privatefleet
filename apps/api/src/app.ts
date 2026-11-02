@@ -24,6 +24,7 @@ import { registerOptimizationRoutes } from "./modules/optimization/routes.js";
 import { createRoutingClients } from "./modules/routing/factory.js";
 import { RoutingError } from "./modules/routing/types.js";
 import { registerDemoRoutes } from "./modules/demo/routes.js";
+import { registerNativeReleaseRoutes } from "./modules/downloads/routes.js";
 import { EvidenceError, EvidenceService } from "./modules/evidence/service.js";
 import { EvidenceStore } from "./modules/evidence/storage.js";
 import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
@@ -369,8 +370,13 @@ export function buildApp(config: AppConfig): {
     demo = { store, bus };
   }
 
+  registerNativeReleaseRoutes(app);
+
   return { app, demo, postgres };
 }
+
+
+
 
 
 

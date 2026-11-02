@@ -152,7 +152,14 @@ outage.
 
 ---
 
-## 5. Stage A status
+## 5. Native update channel
+
+The API now serves `/downloads/native/latest.json` and the signed APK. The
+native client checks the manifest on launch and shows a user-approved update
+prompt. A test manifest (`versionCode 999`) produced the prompt on the physical
+phone; the real manifest (`versionCode 5`, `1.0.4`) was restored afterwards.
+
+## 6. Stage A status
 
 | Item | State |
 |---|---|
@@ -161,8 +168,8 @@ outage.
 | Standard-DPR load | Pass |
 | 2× DPR marker latency | Pass (184 ms; 1× backing store above 150 vehicles) |
 | Caddy auto-recovery | Complete and tested |
-| External alert channel | Not started |
-| Physical release install | Not done |
+| External alert destination | Webhook delivery mechanism tested; owner URL not configured |
+| Physical release install | Complete on R5CWB0BR3BP, app 1.0.4 |
 | 120-second rehearsal / operator baseline | Not done |
 
 Next:

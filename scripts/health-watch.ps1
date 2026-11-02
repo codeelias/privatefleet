@@ -1,11 +1,49 @@
 param(
-  [switch]$Once
+  [switch]$Once,
+  [switch]$TestAlert
 )
 
 $ErrorActionPreference = "Continue"
 $logDir = "C:\PrivateFleet\logs"
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $log = Join-Path $logDir "health-watch.log"
+$alertLog = Join-Path $logDir "alert-delivery.log"
+$statePath = Join-Path $logDir "health-watch-state.json"
+$webhookConfig = "C:\privatefleet\secrets\alert-webhook.json"
+
+function Send-Alert {
+  param([string]$status, [string]$detail)
+  $payload = [ordered]@{
+    at = (Get-Date).ToUniversalTime().ToString("o")
+    host = $env:COMPUTERNAME
+    service = "privatefleet"
+    status = $status
+    detail = $detail
+  } | ConvertTo-Json -Compress
+  if (-not (Test-Path $webhookConfig)) {
+    Add-Content -Path $alertLog -Value (([ordered]@{ at=(Get-Date).ToUniversalTime().ToString("o"); delivery="unconfigured"; status=$status }) | ConvertTo-Json -Compress)
+    return
+  }
+  try {
+    $cfg = Get-Content $webhookConfig -Raw | ConvertFrom-Json
+    if (-not $cfg.url) { throw "webhook url missing" }
+    Invoke-RestMethod -Uri $cfg.url -Method Post -ContentType "application/json" -Body $payload -TimeoutSec 10 | Out-Null
+    Add-Content -Path $alertLog -Value (([ordered]@{ at=(Get-Date).ToUniversalTime().ToString("o"); delivery="sent"; status=$status }) | ConvertTo-Json -Compress)
+  } catch {
+    Add-Content -Path $alertLog -Value (([ordered]@{ at=(Get-Date).ToUniversalTime().ToString("o"); delivery="failed"; status=$status; error=$_.Exception.Message }) | ConvertTo-Json -Compress)
+  }
+}
+
+if ($TestAlert) {
+  Send-Alert "test" "manual health-watch alert test"
+  Write-Output "test alert dispatched"
+  exit 0
+}
+
+$lastStatus = ""
+if (Test-Path $statePath) {
+  try { $lastStatus = (Get-Content $statePath -Raw | ConvertFrom-Json).status } catch { $lastStatus = "" }
+}
 
 function Write-Health {
   param([string]$status, [string]$detail)
@@ -15,6 +53,10 @@ function Write-Health {
     detail = $detail
   } | ConvertTo-Json -Compress
   Add-Content -Path $log -Value $line
+  if ($status -ne $lastStatus) {
+    Send-Alert $status $detail
+    ([ordered]@{ status=$status; at=(Get-Date).ToUniversalTime().ToString("o") }) | ConvertTo-Json -Compress | Set-Content -Path $statePath -Encoding utf8
+  }
   Write-Output $line
 }
 
@@ -80,3 +122,4 @@ if (-not $dbReady -or -not $vroom -or -not $osrm) {
 
 Write-Health "ok" $detail
 exit 0
+

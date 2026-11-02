@@ -256,6 +256,7 @@ public class MainActivity extends Activity {
         root.addView(footer);
         refreshQueue();
         flushQueue();
+        checkForUpdate();
 
         Button signOut = new Button(this);
         signOut.setText("Sign out");
@@ -288,6 +289,32 @@ public class MainActivity extends Activity {
 
 
 
+    private void checkForUpdate() {
+        executor.execute(() -> {
+            try {
+                JSONObject manifest = new ApiClient(this).releaseManifest();
+                int available = manifest.optInt("versionCode", 0);
+                if (available <= BuildConfig.VERSION_CODE) return;
+                int prompted = getSharedPreferences("privatefleet_update", MODE_PRIVATE)
+                        .getInt("prompted_version", 0);
+                if (prompted >= available) return;
+                String versionName = manifest.optString("versionName", "new version");
+                String url = manifest.optString("apkUrl", ApiClient.BASE + "/downloads/native/app-release.apk");
+                runOnUiThread(() -> new AlertDialog.Builder(this)
+                        .setTitle("PrivateFleet update available")
+                        .setMessage("Version " + versionName + " is available. Install it when you are parked and safe.")
+                        .setPositiveButton("Download", (dialog, which) -> {
+                            getSharedPreferences("privatefleet_update", MODE_PRIVATE).edit()
+                                    .putInt("prompted_version", available).apply();
+                            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                        })
+                        .setNegativeButton("Later", null)
+                        .show());
+            } catch (Exception ignored) {
+                // The update channel is advisory; never block the shift on it.
+            }
+        });
+    }
     private void queueEvidence(String kind, String jobId, String stopId,
                                String field, String value) throws Exception {
         JSONObject command = new JSONObject();
@@ -722,6 +749,7 @@ public class MainActivity extends Activity {
                 Toast.LENGTH_LONG).show();
     }
 }
+
 
 
 

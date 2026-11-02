@@ -91,6 +91,8 @@ is in exactly one state:
 | Current-build E2E | 16 passed / 16 skipped / exit 0, 2.6 min |
 | Restore drill | 243.5 s, exit 0, 1,109 geometry stops, 24 RLS tables |
 | Health watchdog | every 5 min; Caddy auto-restart tested `000 -> recovered -> 200` |
+| Native update channel | API-served manifest/APK; in-app 1.0.4 prompt tested |
+| Alert webhook delivery | local sink received structured alert; production URL pending |
 | 250-vehicle marker latency | Standard p95 171.6 ms; 2× DPR p95 184.1 ms (1× backing store above 150 vehicles) |
 
 ---

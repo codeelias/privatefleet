@@ -80,8 +80,8 @@ be distributed.
 Version for this build:
 
 ```text
-versionCode 4
-versionName 1.0.3
+versionCode 5
+versionName 1.0.4
 ```
 
 ### Verified certificate
@@ -135,4 +135,6 @@ adb install -r app/build/outputs/apk/release/app-release.apk
 | Signed APK produced | Complete |
 | Certificate verified | Complete |
 | Physical-phone release install | Complete on R5CWB0BR3BP, logged in as Mo Khan |
+| Internal update channel | Manifest + APK served from API; in-app prompt tested |
+| External alert destination | Delivery mechanism tested; owner URL not configured |
 | Update channel | Not yet defined |

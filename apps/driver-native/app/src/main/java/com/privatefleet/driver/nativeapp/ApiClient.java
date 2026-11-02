@@ -124,6 +124,12 @@ public final class ApiClient {
                 body.toString(), session);
         if (response.status != 200) throw new ApiException(response.status, message(response.body));
     }
+    public JSONObject releaseManifest() throws Exception {
+        Response response = raw("GET", "/downloads/native/latest.json", null, null, null);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+        return new JSONObject(response.body);
+    }
+
     public JSONObject queue() throws Exception {
         Session session = Session.load(context);
         Response response = auth("GET", "/v1/driver/queue", null, session);
@@ -254,6 +260,7 @@ public final class ApiClient {
         }
     }
 }
+
 
 
 

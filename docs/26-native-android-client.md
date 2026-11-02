@@ -2,7 +2,7 @@
 
 Status: **pilot tracking/ops client**, not yet full POD parity.
 
-Current pilot release: **1.0.3** (`versionCode 4`), signed with the
+Current pilot release: **1.0.4** (`versionCode 5`), signed with the
 PrivateFleet release key.
 
 Package: `com.privatefleet.driver.nativeapp`  
@@ -16,6 +16,7 @@ WebView or JavaScript runtime.
 - durable access/refresh session encrypted with Android Keystore AES/GCM
 - cold relaunch stays signed in without re-entering the PIN
 - sign-out keeps only the last workspace/driver encrypted for prefill; the PIN is never stored
+- in-app update prompt from the internal release manifest
 - Start shift / shift status
 - Request more jobs (durable dispatcher request)
 - Nearest-stop ordering (arrived pinned first, completed/skipped/failed excluded)
@@ -41,7 +42,7 @@ WebView or JavaScript runtime.
 Physical Galaxy S22, Android 16, Tailscale connected:
 
 ```text
-second phone R5CWB0BR3BP (SM-S901B) installed 1.0.3
+second phone R5CWB0BR3BP (SM-S901B) installed 1.0.4
 PIN login as Mo Khan succeeded
 25 assigned jobs
 background service isForeground=true
