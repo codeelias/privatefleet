@@ -114,6 +114,11 @@ interface VehicleRow {
   accuracy_metres: number | null;
   heading_deg: number | null;
   speed_mps: number | null;
+  source: string | null;
+  satellites_used: number | null;
+  dual_frequency: boolean | null;
+  carrier_phase: boolean | null;
+  ekf_confidence: string | null;
 }
 
 interface RouteRow {
@@ -181,10 +186,12 @@ export class PgFleetService {
       )) as unknown as DriverRow[];
       const vehicles = (await db.execute(
         sql`SELECT v.id, v.registration, v.vehicle_type, v.status, v.driver_id, v.latitude, v.longitude, v.captured_at,
-                   lp.accuracy_metres, lp.heading_deg, lp.speed_mps
+                   lp.accuracy_metres, lp.heading_deg, lp.speed_mps,
+                   lp.source, lp.satellites_used, lp.dual_frequency, lp.carrier_phase, lp.ekf_confidence
             FROM vehicles v
             LEFT JOIN LATERAL (
-              SELECT accuracy_metres, heading_deg, speed_mps
+              SELECT accuracy_metres, heading_deg, speed_mps, source,
+                     satellites_used, dual_frequency, carrier_phase, ekf_confidence
               FROM location_points
               WHERE vehicle_id = v.id
               ORDER BY captured_at DESC
@@ -285,6 +292,15 @@ export class PgFleetService {
           ...(vehicle.accuracy_metres !== null ? { accuracyMetres: vehicle.accuracy_metres } : {}),
           ...(vehicle.heading_deg !== null ? { headingDeg: vehicle.heading_deg } : {}),
           ...(vehicle.speed_mps !== null ? { speedMps: vehicle.speed_mps } : {}),
+          ...(vehicle.source
+            ? { positionSource: vehicle.source as VehicleDto["positionSource"] }
+            : {}),
+          ...(vehicle.satellites_used !== null ? { satellitesUsed: vehicle.satellites_used } : {}),
+          ...(vehicle.dual_frequency !== null ? { dualFrequency: vehicle.dual_frequency } : {}),
+          ...(vehicle.carrier_phase !== null ? { carrierPhase: vehicle.carrier_phase } : {}),
+          ...(vehicle.ekf_confidence
+            ? { ekfConfidence: vehicle.ekf_confidence as VehicleDto["ekfConfidence"] }
+            : {}),
         })),
         jobs: jobs.map((job) => ({
           id: job.id,

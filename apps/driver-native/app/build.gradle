@@ -16,8 +16,8 @@ android {
         applicationId "com.privatefleet.driver.nativeapp"
         minSdk 26
         targetSdk 36
-        versionCode 6
-        versionName "1.0.5"
+        versionCode 7
+        versionName "1.0.6"
         buildConfigField "String", "API_BASE", "\"https://pf-node.tail060a86.ts.net\""
     }
 
@@ -55,6 +55,8 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = "UTF-8"
 }
 
-
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
 
 

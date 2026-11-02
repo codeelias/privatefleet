@@ -9,9 +9,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
-import android.location.Location;
-import android.location.LocationListener;
-import android.location.LocationManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -26,12 +23,13 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Foreground location service. Runs independently of the Activity and keeps
  * posting the same telemetry contract when the screen is off.
  */
-public class TelemetryService extends Service implements LocationListener {
+public class TelemetryService extends Service {
     public static final String ACTION_START = "com.privatefleet.driver.START_TRACKING";
     public static final String ACTION_STOP = "com.privatefleet.driver.STOP_TRACKING";
     private static final String CHANNEL = "privatefleet_tracking";
@@ -39,7 +37,9 @@ public class TelemetryService extends Service implements LocationListener {
     private static final String TAG = "pf-native";
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private LocationManager locationManager;
+    private final AtomicBoolean sending = new AtomicBoolean(false);
+    private FusedPositionEngine engine;
+    private volatile long lastSentAt = 0L;
     private PowerManager.WakeLock wakeLock;
 
     public static void start(Context context) {
@@ -89,43 +89,43 @@ public class TelemetryService extends Service implements LocationListener {
             stopSelf();
             return;
         }
-        if (locationManager == null) {
-            locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-        }
-        try {
-            locationManager.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER, 10_000L, 0f, this);
-            locationManager.requestLocationUpdates(
-                    LocationManager.NETWORK_PROVIDER, 15_000L, 0f, this);
-            Log.i(TAG, "native foreground location started");
-        } catch (SecurityException | IllegalArgumentException error) {
-            Log.e(TAG, "location updates failed", error);
-            stopSelf();
+        if (engine == null) {
+            engine = new FusedPositionEngine(this, fix -> onFusedFix(fix));
+            engine.start();
+            Log.i(TAG, "fused GNSS/IMU positioning started");
         }
     }
 
-    @Override
-    public void onLocationChanged(Location location) {
-        if (location.getAccuracy() > 150f) return;
-        LocationStore.save(this, location.getLatitude(), location.getLongitude(),
-                location.getTime());
+    private void onFusedFix(FusedPositionEngine.Fix fix) {
+        if (fix.accuracyMetres > 250) return;
+        LocationStore.save(this, fix.latitude, fix.longitude, fix.capturedAt);
+        long now = System.currentTimeMillis();
+        if (now - lastSentAt < 900L) return;
+        if (!sending.compareAndSet(false, true)) return;
+        lastSentAt = now;
         executor.execute(() -> {
             try {
                 JSONObject sample = new JSONObject();
-                sample.put("latitude", location.getLatitude());
-                sample.put("longitude", location.getLongitude());
-                sample.put("capturedAt", iso(location.getTime()));
-                sample.put("accuracyMetres", location.getAccuracy());
-                if (location.hasBearing()) sample.put("headingDeg", location.getBearing());
-                if (location.hasSpeed() && location.getSpeed() >= 0) {
-                    sample.put("speedMps", location.getSpeed());
-                }
+                sample.put("latitude", fix.latitude);
+                sample.put("longitude", fix.longitude);
+                sample.put("capturedAt", iso(fix.capturedAt));
+                sample.put("accuracyMetres", fix.accuracyMetres);
+                sample.put("headingDeg", fix.headingDeg);
+                sample.put("speedMps", Math.max(0, fix.speedMps));
+                sample.put("source", fix.source);
+                sample.put("satellitesUsed", fix.satellitesUsed);
+                sample.put("dualFrequency", fix.dualFrequency);
+                sample.put("carrierPhase", fix.carrierPhase);
+                sample.put("ekfConfidence", fix.confidence);
                 JSONArray samples = new JSONArray();
                 samples.put(sample);
                 new ApiClient(this).telemetry(samples);
-                Log.i(TAG, "telemetry posted");
+                Log.i(TAG, "fused telemetry posted acc=" + fix.accuracyMetres
+                        + " sats=" + fix.satellitesUsed + " confidence=" + fix.confidence);
             } catch (Exception error) {
                 Log.w(TAG, "telemetry post failed: " + error.getMessage());
+            } finally {
+                sending.set(false);
             }
         });
     }
@@ -168,8 +168,9 @@ public class TelemetryService extends Service implements LocationListener {
 
     @Override
     public void onDestroy() {
-        if (locationManager != null) {
-            locationManager.removeUpdates(this);
+        if (engine != null) {
+            engine.stop();
+            engine = null;
         }
         executor.shutdownNow();
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();

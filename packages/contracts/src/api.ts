@@ -493,6 +493,12 @@ export const TelemetrySampleSchema = z.object({
   accuracyMetres: z.number().nonnegative().max(5000).optional(),
   headingDeg: z.number().min(0).max(360).optional(),
   speedMps: z.number().nonnegative().max(120).optional(),
+  /** Fused-position provenance and GNSS quality (native EKF). */
+  source: z.enum(["gnss", "fused", "imu", "network"]).optional(),
+  satellitesUsed: z.number().int().min(0).max(64).optional(),
+  dualFrequency: z.boolean().optional(),
+  carrierPhase: z.boolean().optional(),
+  ekfConfidence: z.enum(["high", "medium", "low"]).optional(),
 });
 export type TelemetrySample = z.infer<typeof TelemetrySampleSchema>;
 

@@ -130,6 +130,12 @@ export const VehicleDtoSchema = z.object({
   headingDeg: z.number().min(0).max(360).optional(),
   /** Device-reported ground speed in metres per second. */
   speedMps: z.number().nonnegative().max(120).optional(),
+  /** Fused-position provenance and raw-GNSS quality. */
+  positionSource: z.enum(["gnss", "fused", "imu", "network"]).optional(),
+  satellitesUsed: z.number().int().min(0).max(64).optional(),
+  dualFrequency: z.boolean().optional(),
+  carrierPhase: z.boolean().optional(),
+  ekfConfidence: z.enum(["high", "medium", "low"]).optional(),
 });
 export type VehicleDto = z.infer<typeof VehicleDtoSchema>;
 

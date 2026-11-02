@@ -207,7 +207,7 @@ function VehiclePin({
         // Telemetry moves smoothly, but map pan/zoom must track the basemap
         // instantly. Animating left/top during a zoom made stale/ghost pins
         // lag behind and appear to vanish off the card.
-        transition: animate ? "left 1.8s linear, top 1.8s linear" : "none",
+        transition: animate ? "left 0.95s linear, top 0.95s linear" : "none",
       }}
       title={`${driverName} - ${vehicle.registration} - ${gpsLabel} - ${confidenceLabel}`}
       data-confidence={confidence ?? "unknown"}
@@ -923,7 +923,7 @@ export function MapCanvas({
     if (!map || !canvas) {
       return;
     }
-    const duration = prefersReducedMotion() ? 0 : 1_800;
+    const duration = prefersReducedMotion() ? 0 : 950;
     const startedAt = performance.now();
     const vehiclesById = new Map(displayVehicles.map((vehicle) => [vehicle.id, vehicle]));
     const targets: Array<{
@@ -1237,6 +1237,9 @@ export function MapCanvas({
               <span className="px-2 text-[9px] font-semibold uppercase tracking-[0.08em] text-text-secondary" data-testid="map-confidence">
                 {selectedFix.confidence}
                 {selectedFix.accuracyMetres !== null ? " \u00b1" + Math.round(selectedFix.accuracyMetres) + "m" : ""}
+                {selectedVehicle?.positionSource === "fused" ? " · EKF" : ""}
+                {selectedVehicle?.satellitesUsed !== undefined ? ` · ${selectedVehicle.satellitesUsed} sats` : ""}
+                {selectedVehicle?.dualFrequency ? " · L1+L5" : ""}
               </span>
             )}
           </div>
@@ -1283,6 +1286,14 @@ export function MapCanvas({
                 <div><dt>Remaining</dt><dd className="mt-0.5 text-[10px] font-semibold text-text-primary">{formatNavigationDistance(navigation.remainingDistanceM)}</dd></div>
                 <div><dt>ETA</dt><dd className="mt-0.5 text-[10px] font-semibold text-text-primary" title={navigation.etaMethod === "live" ? "Blended from live device speed and the planned route" : "Published route duration; no live speed used"}>{formatNavigationEta(navigation.etaIso)}{navigation.etaMethod === "live" ? <span className="ml-0.5 text-status-success">live</span> : null}</dd></div>
               </dl>
+              <p className="mt-1 text-[9px] text-text-secondary" data-testid="map-fix-quality">
+                {selectedVehicle?.positionSource === "fused" ? "EKF fused fix" : "GNSS fix"}
+                {selectedVehicle?.satellitesUsed !== undefined ? ` · ${selectedVehicle.satellitesUsed} satellites` : ""}
+                {selectedVehicle?.dualFrequency ? " · L1+L5" : ""}
+                {selectedVehicle?.carrierPhase ? " · carrier phase" : ""}
+                {selectedVehicle?.ekfConfidence ? ` · ${selectedVehicle.ekfConfidence} confidence` : ""}
+                {" · "}{Math.round(selectedFix.accuracyMetres ?? 0)} m estimated error
+              </p>
               {selectedFix.stale && <p className="mt-1 text-[9px] text-status-warning">Last known position; ETA is advisory.</p>}
               {selectedFix.outlier && <p className="mt-1 text-[9px] text-status-warning">GPS jump rejected; showing last accepted fix.</p>}
             </section>

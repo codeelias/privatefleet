@@ -155,6 +155,12 @@ export const locationPoints = pgTable(
     accuracyMetres: doublePrecision("accuracy_metres"),
     headingDeg: doublePrecision("heading_deg"),
     speedMps: doublePrecision("speed_mps"),
+    /** Fused positioning provenance (native EKF). */
+    source: text("source"),
+    satellitesUsed: integer("satellites_used"),
+    dualFrequency: boolean("dual_frequency"),
+    carrierPhase: boolean("carrier_phase"),
+    ekfConfidence: text("ekf_confidence"),
     /** Server-assigned monotonic per-vehicle sequence. */
     sequenceNo: bigint("sequence_no", { mode: "number" }).notNull(),
   },
@@ -619,6 +625,7 @@ export const tenantScopedTables = [
   dispatchPolicyOverrides,
   driverWorkRequests,
 ] as const;
+
 
 
 

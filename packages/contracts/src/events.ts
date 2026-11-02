@@ -56,5 +56,12 @@ export const VehiclePositionSchema = z.object({
   capturedAt: z.string().datetime(),
   sequenceNo: z.number().int(),
   stale: z.boolean().optional(),
+  accuracyMetres: z.number().nonnegative().optional(),
+  speedMps: z.number().nonnegative().optional(),
+  source: z.enum(["gnss", "fused", "imu", "network"]).optional(),
+  satellitesUsed: z.number().int().min(0).max(64).optional(),
+  dualFrequency: z.boolean().optional(),
+  carrierPhase: z.boolean().optional(),
+  ekfConfidence: z.enum(["high", "medium", "low"]).optional(),
 });
 export type VehiclePosition = z.infer<typeof VehiclePositionSchema>;

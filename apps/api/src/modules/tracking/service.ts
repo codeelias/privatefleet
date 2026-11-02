@@ -108,12 +108,15 @@ export async function ingestTelemetry(
       await db.execute(sql`
         INSERT INTO location_points
           (tenant_id, vehicle_id, driver_id, captured_at, latitude, longitude,
-           accuracy_metres, heading_deg, speed_mps, sequence_no)
+           accuracy_metres, heading_deg, speed_mps, source, satellites_used,
+           dual_frequency, carrier_phase, ekf_confidence, sequence_no)
         VALUES
           (${tenantId}, ${vehicle.id}, ${driverId}, ${sample.capturedAt},
            ${sample.latitude}, ${sample.longitude},
            ${sample.accuracyMetres ?? null}, ${sample.headingDeg ?? null},
-           ${sample.speedMps ?? null}, ${sequence})
+           ${sample.speedMps ?? null}, ${sample.source ?? null},
+           ${sample.satellitesUsed ?? null}, ${sample.dualFrequency ?? null},
+           ${sample.carrierPhase ?? null}, ${sample.ekfConfidence ?? null}, ${sequence})
       `);
       await db.execute(sql`
         UPDATE vehicles
@@ -143,6 +146,13 @@ export async function ingestTelemetry(
         capturedAt: sample.capturedAt,
         sequenceNo: sequence,
         ...(sample.headingDeg !== undefined ? { headingDeg: sample.headingDeg } : {}),
+        ...(sample.speedMps !== undefined ? { speedMps: sample.speedMps } : {}),
+        ...(sample.accuracyMetres !== undefined ? { accuracyMetres: sample.accuracyMetres } : {}),
+        ...(sample.source !== undefined ? { source: sample.source } : {}),
+        ...(sample.satellitesUsed !== undefined ? { satellitesUsed: sample.satellitesUsed } : {}),
+        ...(sample.dualFrequency !== undefined ? { dualFrequency: sample.dualFrequency } : {}),
+        ...(sample.carrierPhase !== undefined ? { carrierPhase: sample.carrierPhase } : {}),
+        ...(sample.ekfConfidence !== undefined ? { ekfConfidence: sample.ekfConfidence } : {}),
       };
       positions.push(position);
       results.push({

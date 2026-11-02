@@ -1,3 +1,9 @@
+### v1.59 - Raw GNSS quality + IMU EKF positioning (2026-11-02)
+- Native 1.0.6: raw GNSS quality monitor (satellites, L1+L5, carrier-phase validity), IMU prediction and a pure 2D EKF producing 10 Hz fused fixes; telemetry throttled to 1 Hz.
+- No sub-metre claim: no corrections/RTK source is present. Confidence and estimated error are shown instead.
+- Location points and fleet vehicles now carry source, satellitesUsed, dualFrequency, carrierPhase, ekfConfidence (migration 0015).
+- Dispatcher navigation HUD shows the fused-fix quality; marker tween reduced to 0.95 s.
+- Verification: native EKF JUnit 4/4, API telemetry quality test, native 1.0.6 build/install on emulator, API/Web deployed.
 ### v1.58 - Tile-policy compliance and visual geofence editor (2026-11-02)
 - Removed all default requests to OpenStreetMap's volunteer tile servers after their tile usage policy blocked the app.
 - Vector basemaps (OpenFreeMap) remain the primary engine; the no-WebGL raster fallback is now a tile-free Leaflet surface where routes, vehicles and overlays still render, with an explicit "tile-free raster surface" label.

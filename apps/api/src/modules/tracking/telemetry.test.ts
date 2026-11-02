@@ -221,8 +221,55 @@ describe("GPS telemetry ingestion", () => {
     expect(blocked.headers["retry-after"]).toBeTruthy();
   });
 
-  it("requires a driver device token", async () => {
-    const anonymous = await app.inject({
+  it("persists fused-position quality fields for the dispatcher", async () => {
+    const session = await seededDriver(`tel-fused-${randomUUID().slice(0, 6)}`);
+    const capturedAt = new Date(Date.now() - 2_000).toISOString();
+    const ingest = await app.inject({
+      method: "POST",
+      url: "/v1/telemetry",
+      headers: { authorization: `Bearer ${session.token}` },
+      payload: {
+        samples: [
+          {
+            latitude: 51.5,
+            longitude: -0.12,
+            capturedAt,
+            accuracyMetres: 7.5,
+            headingDeg: 42,
+            speedMps: 8.2,
+            source: "fused",
+            satellitesUsed: 18,
+            dualFrequency: true,
+            carrierPhase: true,
+            ekfConfidence: "high",
+          },
+        ],
+      },
+    });
+    expect(ingest.statusCode).toBe(200);
+    const state = await app.inject({
+      method: "GET",
+      url: "/v1/fleet/state",
+      headers: { authorization: `Bearer ${session.ownerToken}` },
+    });
+    const vehicle = (state.json() as {
+      vehicles: Array<{
+        id: string;
+        positionSource?: string;
+        satellitesUsed?: number;
+        dualFrequency?: boolean;
+        carrierPhase?: boolean;
+        ekfConfidence?: string;
+      }>;
+    }).vehicles.find((entry) => entry.id === session.vehicleId);
+    expect(vehicle?.positionSource).toBe("fused");
+    expect(vehicle?.satellitesUsed).toBe(18);
+    expect(vehicle?.dualFrequency).toBe(true);
+    expect(vehicle?.carrierPhase).toBe(true);
+    expect(vehicle?.ekfConfidence).toBe("high");
+  });
+
+  it("requires a driver device token", async () => {    const anonymous = await app.inject({
       method: "POST",
       url: "/v1/telemetry",
       payload: { samples: [sample(51.5, -0.1, new Date().toISOString())] },
