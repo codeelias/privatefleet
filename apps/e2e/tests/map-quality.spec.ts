@@ -10,8 +10,8 @@ import { fleetState, resetScenario, WEB } from "./helpers";
 test("stale GPS ghosts markers and never shows them as live", async ({ page, isMobile }) => {
   test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
   await resetScenario("morning-rush");
-  await page.goto(WEB);
-  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible();
+  await page.goto(`${WEB}/?map=raster`);
+  await expect(page.getByRole("button", { name: "Open unassigned jobs" })).toBeVisible();
 
   // Let telemetry establish accepted samples, then cut the network.
   await page.waitForTimeout(3_500);
@@ -33,8 +33,8 @@ test("reconnect restores a consistent snapshot without duplicates", async ({
 }) => {
   test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
   await resetScenario("morning-rush");
-  await page.goto(WEB);
-  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible();
+  await page.goto(`${WEB}/?map=raster`);
+  await expect(page.getByRole("button", { name: "Open unassigned jobs" })).toBeVisible();
   const before = await fleetState();
 
   await page.context().setOffline(true);
@@ -43,7 +43,7 @@ test("reconnect restores a consistent snapshot without duplicates", async ({
 
   // A fresh snapshot (full reload) must restore the same authoritative state.
   await page.reload();
-  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open unassigned jobs" })).toBeVisible();
   await expect(page.locator("path.leaflet-interactive")).toHaveCount(3);
 
   const after = await fleetState();
@@ -57,8 +57,8 @@ test("reconnect restores a consistent snapshot without duplicates", async ({
 
 test("debug alignment grid is available behind ?debug=map", async ({ page, isMobile }) => {
   test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
-  await page.goto(`${WEB}/?debug=map`);
-  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible();
+  await page.goto(`${WEB}/?debug=map&map=raster`);
+  await expect(page.getByRole("button", { name: "Open unassigned jobs" })).toBeVisible();
   const grid = page.getByTestId("map-debug-grid");
   await expect(grid).toBeVisible();
   await expect
@@ -77,8 +77,8 @@ test("malformed route geometry is hidden and the last verified route retained", 
 }) => {
   test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
   await resetScenario("morning-rush");
-  await page.goto(WEB);
-  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible();
+  await page.goto(`${WEB}/?map=raster`);
+  await expect(page.getByRole("button", { name: "Open unassigned jobs" })).toBeVisible();
   await expect(page.locator("path.leaflet-interactive")).toHaveCount(3);
 
   // Force the next fleet snapshot to carry invalid geometry for every route.

@@ -21,8 +21,8 @@ test("250-vehicle fleet: marker latency and frame times", async ({
 
   // Map-only reference: same page, 3 demo vehicles, no load. Separates
   // map/compositor cost from fleet-marker cost in the same environment.
-  await page.goto(`${WEB}/?benchmark=1`);
-  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible({
+  await page.goto(`${WEB}/?benchmark=1&map=raster`);
+  await expect(page.getByRole("button", { name: "Open unassigned jobs" })).toBeVisible({
     timeout: 30_000,
   });
   await page.waitForTimeout(3_000);
@@ -38,7 +38,7 @@ test("250-vehicle fleet: marker latency and frame times", async ({
 
   try {
     await page.reload();
-    await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible({
+    await expect(page.getByRole("button", { name: "Open unassigned jobs" })).toBeVisible({
       timeout: 30_000,
     });
     // Large fleets render through the single canvas marker layer.

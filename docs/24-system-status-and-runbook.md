@@ -229,24 +229,26 @@ next.
 | Native release signing | Complete (RSA 4096, 1.0.1, verified); update channel not defined |
 | Duplicate job-reference constraint | **Already enforced**; cross-tenant only |
 | Demo/load tenant isolation and audited reset | Load tenant retired; reset procedure still to be written |
-| Current-build E2E / load / soak rerun | Not started |
+| Current-build E2E / restore | Complete: 16 passed, 243.5 s restore |
+| 2x-DPR 250-vehicle performance | Open: p95 1.54 s |
 | Restore drill on current schema | Not started; pre-retirement dump retained |
 | Tailscale ACL/MFA hardening | Not started |
+| External health alert channel | Not started; local watchdog + auto-recovery deployed |
 | 30-day reliability evidence and SLA | Not started |
 
 ## 7. Test status
 
-- Last full API suite: **90/90 pass** before the native/web-only changes.
-- The suites must be rerun as part of Stage A because the current build has not
-  been re-proven end-to-end since the map and native changes.
-- One fleet test has shown order dependence against the shared test database;
-  it passed on isolated/full rerun, but test isolation remains a CI risk.
-- Visit-order regression: pass.
-- Policy resolver tests: pass.
-- Web production build and typecheck: pass.
-- Live 30-job regression on VROOM 1.15: pass (Mo 134.0 km, Sarah 77.4 km).
-- Native screen-off GPS, offline command and offline evidence: verified on the
-  physical Galaxy S22.
+- Current-build E2E: **16 passed / 16 skipped / exit 0** (2.6 min).
+- Restore drill on the pre-retirement backup: **243.5 s, exit 0**, 1,109
+  geometry stops, 24 RLS tables.
+- 250-vehicle load at standard DPR: **p95 123 ms**.
+- 250-vehicle load at 2x DPR: **p95 1,538 ms** - open performance defect.
+- Last full API suite: 90/90 pass before the latest native/web-only changes; it
+  should be rerun in the next assurance pass.
+- Visit-order regression, policy resolver and 30-job VROOM regression pass.
+- Web production build and typecheck pass.
+- Native screen-off GPS, offline command and offline evidence are verified on
+  the physical Galaxy S22.
 
 ## 8. Relevant commits
 

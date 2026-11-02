@@ -4,7 +4,7 @@
  * server-authoritative assignment confirmation.
  */
 import { expect, test, type Page } from "@playwright/test";
-import { API, WEB, fleetState, resetScenario } from "./helpers";
+import { API, WEB, fleetState, openUnassigned, resetScenario } from "./helpers";
 
 test.skip(({ isMobile }) => Boolean(isMobile), "desktop dispatcher project only");
 
@@ -24,9 +24,7 @@ test("Morning Rush: assign J-208 via click flow with impact preview", async ({ p
   await page.getByRole("button", { name: "Morning Rush" }).click();
   await expect(page.getByRole("button", { name: "Morning Rush" })).toBeEnabled();
 
-  const trayHeader = page.getByText("Unassigned jobs - drag onto a driver or select");
-  await expect(trayHeader).toBeVisible();
-  await trayHeader.click();
+  await openUnassigned(page);
 
   const card = page.getByRole("button", { name: /J-208/ }).first();
   await card.click();
@@ -59,7 +57,7 @@ test("Emergency: drag STAT J-208 onto the nearest driver pin", async ({ page }) 
 
   // The urgent STAT alert is visible in the needs-attention panel.
   await expect(page.getByText("J-208 STAT request received")).toBeVisible();
-  await page.getByText("Unassigned jobs - drag onto a driver or select").click();
+  await openUnassigned(page);
 
   const handle = page.locator('[aria-label="Drag J-208 to assign"]');
   const pin = page.locator('[title*="Mo Khan"]').first();

@@ -88,6 +88,10 @@ is in exactly one state:
 | TLS | Caddy internal CA; native app trusts it |
 | Backups | scheduled `.dump.age` to Google Drive |
 | Runbooks | status, restore, VROOM, LAN deployment, native client |
+| Current-build E2E | 16 passed / 16 skipped / exit 0, 2.6 min |
+| Restore drill | 243.5 s, exit 0, 1,109 geometry stops, 24 RLS tables |
+| Health watchdog | every 5 min; Caddy auto-restart tested `000 -> recovered -> 200` |
+| Standard-DPR 250-vehicle load | p95 123 ms |
 
 ---
 
@@ -102,6 +106,7 @@ is in exactly one state:
 | Driver request loop | Request and dispatcher decision | Approval does not assign work or re-optimise the route |
 | Customer tracking | Portal/tracking components and ETA display | Real customer link, branding, proactive delay notification, dispute-ready proof export not proven |
 | Native release | Signed APK produced and verified | Physical-phone release install, update channel, 8-hour battery soak |
+| High-DPI map performance | 2x-DPR benchmark measured | p95 1.54 s; interactive gate missed |
 | Accessibility | Keyboard, focus, labels, Escape | Screen-reader pass and 200% zoom not done |
 | Map mobile experience | Responsive dock, assignment sheet | Vehicle HUD intentionally hidden below `md`; no mobile detail sheet |
 

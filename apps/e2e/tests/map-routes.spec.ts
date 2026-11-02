@@ -130,15 +130,16 @@ test("Live map: selecting a vehicle highlights its route", async ({ page, isMobi
   test.skip(isMobile, "dispatcher map layout is desktop-only in the demo");
 
   await resetScenario("morning-rush");
-  await page.goto(WEB);
-  await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible();
+  await page.goto(`${WEB}/?map=raster`);
+  await expect(page.getByRole("button", { name: "Open unassigned jobs" })).toBeVisible();
 
   const pin = page.locator('[title*="VAN-02"]').first();
   await expect(pin).toBeVisible();
-  await pin.click();
+  await pin.focus();
+  await page.keyboard.press("Enter");
   await expect(pin).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator('path.leaflet-interactive[stroke-width="5"]')).toHaveCount(1);
-  await expect(page.locator('path.leaflet-interactive[stroke-width="3"]')).toHaveCount(2);
+  await expect(page.locator('path.leaflet-interactive[stroke-width="6"]')).toHaveCount(1);
+  await expect(page.locator('path.leaflet-interactive[stroke-width="4"]')).toHaveCount(2);
 
   // Scenario switching keeps the map consistent and never fakes geometry.
   await page.getByRole("button", { name: "Emergency" }).click();
@@ -146,6 +147,8 @@ test("Live map: selecting a vehicle highlights its route", async ({ page, isMobi
   await expect(page.locator("path.leaflet-interactive")).toHaveCount(3);
   await expect(page.getByText(/Route geometry unavailable/)).toHaveCount(0);
 });
+
+
 
 
 

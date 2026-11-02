@@ -21,8 +21,8 @@ test("250-vehicle fleet at 2x DPR: true-paint latency and frame times", async ({
   expect(load.ok()).toBe(true);
 
   try {
-    await page.goto(`${WEB}/?benchmark=1`);
-    await expect(page.getByText("Unassigned jobs - drag onto a driver or select")).toBeVisible({
+    await page.goto(`${WEB}/?benchmark=1&map=raster`);
+    await expect(page.getByRole("button", { name: "Open unassigned jobs" })).toBeVisible({
       timeout: 30_000,
     });
     await expect(page.getByTestId("vehicle-canvas")).toBeVisible({ timeout: 30_000 });
