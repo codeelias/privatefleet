@@ -30,5 +30,6 @@ apps/driver-native/keystore.properties
 *.keystore
 
 # Native release artifacts (APK/manifest published on the host)
-downloads/
+/downloads/
+
 
