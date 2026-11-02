@@ -44,9 +44,11 @@ emulator:                    app launches
 physical phone R5CWB0BR3BP:  1.0.8 installed over 1.0.4, Mo Khan signed in,
                              session persisted after cold restart, native
                              bridge reported ready, telemetry posting
-physical phone RFCW10QT5ZE:  earlier 1.0.8 build without the JNI bridge;
-                             must be replaced with the fixed APK when
-                             reconnected (currently disconnected)
+physical phone RFCW10QT5ZE:  fixed 1.0.8 installed, Tom Cole signed in,
+                             session persisted after cold restart, native
+                             bridge reported ready
+
+Both pilot phones now run the fixed 1.0.8 with a remembered driver session.
 ```
 
 ## JNI packaging bug found on device

@@ -1,3 +1,8 @@
+### v1.64 - Both pilot phones on fixed 1.0.8 with remembered sessions (2026-11-02)
+- Phone 1 RFCW10QT5ZE replaced with the fixed 1.0.8, Tom Cole signed in; session persisted after cold restart; JNI bridge ready.
+- Tom's stored PIN did not match the seeded 1234 and could not be recovered, so it was reset to the pilot PIN 1234 and verified through the login API.
+- Phone 2 R5CWB0BR3BP already verified with Mo Khan signed in and remembered.
+- Both phones report fused GNSS/IMU tracking and native RTK bridge ready; RTK remains unsupported until a correction stream is configured.
 ### v1.63 - Phone 2 installed, signed in, JNI packaging fixed (2026-11-02)
 - Fixed a release-blocking JNI bug: CMake declared C-only, so pf_rtk.cpp was excluded and the first 1.0.8 APK crashed with UnsatisfiedLinkError. Enabled CXX and verified all five JNI exports before republishing.
 - Phone 2 R5CWB0BR3BP updated in place 1.0.4 -> fixed 1.0.8, signed in as Mo Khan, session persisted after cold restart; native RTK bridge logs ready; telemetry posting (RTK unsupported until corrections are configured).
