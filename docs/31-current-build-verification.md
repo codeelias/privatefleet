@@ -98,8 +98,13 @@ Interpretation:
 - frame rate remains low in both profiles; this is a marker-animation cost, not
   a route/solver issue
 
-This is recorded as an open performance defect. It must not be presented as a
-green high-DPI load result.
+After restoring the intended 1.5x DPR cap above 150 vehicles, repeated benchmark
+runs still measured 2× p95 between **1.54 s and 3.80 s**; the test host was
+visibly slower across both profiles on the repeat runs (standard p95 varied
+123-205 ms). The cap is a real lightweighting measure but is not sufficient.
+
+This remains an open performance defect and must not be presented as a green
+high-DPI load result.
 
 Likely areas: 250 promoted DOM pins plus canvas redraw, DPR backing store, and
 browser throttling in headless mode. The next step is profiling at 2× DPR with

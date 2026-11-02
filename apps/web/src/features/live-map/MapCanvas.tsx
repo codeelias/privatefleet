@@ -835,7 +835,7 @@ export function MapCanvas({
       }
       // Device-fidelity backing store: up to 2x for sharp markers on
       // retina displays, 1.5x above 150 vehicles to bound fill cost.
-      const dprCap = 2;
+      const dprCap = state.vehicles.length > 150 ? 1.5 : 2;
       const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
       if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
         canvas.width = Math.round(width * dpr);
@@ -1109,6 +1109,7 @@ export function MapCanvas({
     </section>
   );
 }
+
 
 
 

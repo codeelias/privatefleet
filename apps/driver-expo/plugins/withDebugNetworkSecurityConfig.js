@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Debug-only Android network security config for the LAN pilot.
  *
  * Android does not trust user-installed CAs for app traffic by default. This
