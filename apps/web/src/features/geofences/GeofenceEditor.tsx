@@ -1,13 +1,15 @@
 /**
- * Visual geofence editor: draw on the map, drag vertices, insert/remove
- * vertices, undo/redo, validate geometry, and scope the fence to drivers.
- * Leaflet raster keeps the editor usable without WebGL; geometry stays pure.
+ * Visual geofence editor on the OpenFreeMap vector basemap (MapLibre).
+ * Draw on the map, drag vertices, insert/remove vertices, undo/redo,
+ * validate geometry, and scope the fence to drivers. No volunteer OSM
+ * tile requests are made; attribution comes from the vector style.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import type { FleetState, GeofenceDto } from "@privatefleet/contracts";
 import { api } from "../../shared/api/client";
+import { VECTOR_STYLES } from "../live-map/map-config";
 import {
   geojsonToVertices,
   midpoint,
@@ -17,6 +19,13 @@ import {
   type GeoLatLng,
 } from "./engine/geofence-geometry";
 
+const DRAFT_LINE_COLOR = "#EF842F";
+const DRAFT_FILL_COLOR = "#F28C28";
+
+function featureCollection(): GeoJSON.FeatureCollection {
+  return { type: "FeatureCollection", features: [] };
+}
+
 export function GeofenceEditor({
   state,
   onPublished,
@@ -25,10 +34,9 @@ export function GeofenceEditor({
   onPublished?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const draftRef = useRef<L.LayerGroup | null>(null);
-  const fencesRef = useRef<L.LayerGroup | null>(null);
-  const vehiclesRef = useRef<L.LayerGroup | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const draftMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const fenceMarkersRef = useRef<maplibregl.Marker[]>([]);
   const verticesRef = useRef<GeoLatLng[]>([]);
   const interactiveRef = useRef(false);
   const undoRef = useRef<GeoLatLng[][]>([]);
@@ -78,123 +86,181 @@ export function GeofenceEditor({
     void load();
   }, []);
 
+  // Map lifecycle: vector basemap, draft source and fence source.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-    const map = L.map(containerRef.current, {
-      center: [51.5074, -0.1278],
+    const style = VECTOR_STYLES[0]?.url ?? "/map-style-night.json";
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style,
+      center: [-0.1278, 51.5074],
       zoom: 12,
-      zoomControl: false,
     });
-    L.control.zoom({ position: "bottomright" }).addTo(map);
-    // Tile-free compliance surface: no volunteer OpenStreetMap tiles are
-    // requested. The drawing surface stays fully interactive.
-    mapRef.current = map;
-    draftRef.current = L.layerGroup().addTo(map);
-    fencesRef.current = L.layerGroup().addTo(map);
-    vehiclesRef.current = L.layerGroup().addTo(map);
-    map.on("click", (event: L.LeafletMouseEvent) => {
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    map.on("load", () => {
+      map.addSource("geo-draft", { type: "geojson", data: featureCollection() });
+      map.addSource("geo-fences", { type: "geojson", data: featureCollection() });
+      map.addLayer({
+        id: "geo-draft-fill",
+        type: "fill",
+        source: "geo-draft",
+        paint: { "fill-color": DRAFT_FILL_COLOR, "fill-opacity": 0.14 },
+      });
+      map.addLayer({
+        id: "geo-draft-line",
+        type: "line",
+        source: "geo-draft",
+        paint: { "line-color": DRAFT_LINE_COLOR, "line-width": 2.5, "line-dasharray": [2, 1] },
+      });
+      map.addLayer({
+        id: "geo-fences-fill",
+        type: "fill",
+        source: "geo-fences",
+        paint: { "fill-color": "#276EF1", "fill-opacity": 0.1 },
+      });
+      map.addLayer({
+        id: "geo-fences-line",
+        type: "line",
+        source: "geo-fences",
+        paint: { "line-color": "#276EF1", "line-width": 2 },
+      });
+    });
+    map.on("click", (event: maplibregl.MapMouseEvent) => {
       if (!interactiveRef.current) return;
-      commit([...verticesRef.current, { lat: event.latlng.lat, lng: event.latlng.lng }]);
+      commit([
+        ...verticesRef.current,
+        { lat: event.lngLat.lat, lng: event.lngLat.lng },
+      ]);
     });
+    mapRef.current = map;
     return () => {
       map.remove();
       mapRef.current = null;
-      draftRef.current = null;
-      fencesRef.current = null;
-      vehiclesRef.current = null;
+      draftMarkersRef.current = [];
+      fenceMarkersRef.current = [];
     };
   }, [commit]);
 
-  // Draft overlay: polygon, vertex handles and midpoint insertion handles.
+  function setDraftData(verticesList: GeoLatLng[]): void {
+    const map = mapRef.current;
+    if (!map || !map.getSource("geo-draft")) return;
+    const source = map.getSource("geo-draft") as maplibregl.GeoJSONSource;
+    if (verticesList.length === 0) {
+      source.setData(featureCollection());
+      return;
+    }
+    const closed = [...verticesList, verticesList[0]!];
+    source.setData({
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [closed.map((point) => [point.lng, point.lat])],
+          },
+        },
+      ],
+    });
+  }
+
+  // Draft overlay: polygon data + vertex and midpoint handles.
   useEffect(() => {
-    const group = draftRef.current;
-    if (!group) return;
-    group.clearLayers();
-    if (vertices.length === 0) return;
+    const map = mapRef.current;
+    if (!map) return;
+    draftMarkersRef.current.forEach((marker) => marker.remove());
+    draftMarkersRef.current = [];
     const active = drawing || editingId !== null;
-    if (!active) return;
+    setDraftData(active ? vertices : []);
+    if (!active || vertices.length === 0) return;
 
-    if (vertices.length >= 2) {
-      L.polyline(vertices as L.LatLngExpression[], {
-        color: "#EF842F",
-        weight: 2.5,
-        dashArray: "6 5",
-      }).addTo(group);
-    }
-    if (vertices.length >= 3) {
-      L.polygon(vertices as L.LatLngExpression[], {
-        color: "#EF842F",
-        weight: 2.5,
-        fillColor: "#F28C28",
-        fillOpacity: 0.14,
-      }).addTo(group);
-    }
+    const vertexElement = (): HTMLElement => {
+      const element = document.createElement("div");
+      element.className = "pf-geo-vertex";
+      element.style.width = "14px";
+      element.style.height = "14px";
+      element.style.background = "#FFFFFF";
+      element.style.border = "2px solid #EF842F";
+      element.style.borderRadius = "50%";
+      element.style.boxShadow = "0 1px 4px rgba(0,0,0,0.4)";
+      element.style.cursor = "move";
+      return element;
+    };
+    const midpointElement = (): HTMLElement => {
+      const element = document.createElement("div");
+      element.className = "pf-geo-midpoint";
+      element.style.width = "10px";
+      element.style.height = "10px";
+      element.style.background = "#FFFFFF";
+      element.style.border = "2px solid #276EF1";
+      element.style.transform = "rotate(45deg)";
+      element.style.boxShadow = "0 1px 3px rgba(0,0,0,0.35)";
+      element.style.cursor = "crosshair";
+      return element;
+    };
 
-    const vertexIcon = L.divIcon({ className: "pf-geo-vertex-wrap", html: '<span class="pf-geo-vertex"></span>', iconSize: [16, 16], iconAnchor: [8, 8] });
     vertices.forEach((point, index) => {
-      const marker = L.marker(point as L.LatLngExpression, {
-        draggable: true,
-        icon: vertexIcon,
-        keyboard: false,
-      }).addTo(group);
-      marker.on("dragend", (event: L.DragEndEvent) => {
-        const moved = event.target.getLatLng() as L.LatLng;
+      const marker = new maplibregl.Marker({ element: vertexElement(), draggable: true, anchor: "center" })
+        .setLngLat([point.lng, point.lat])
+        .addTo(map);
+      marker.on("dragend", () => {
+        const moved = marker.getLngLat();
         const next = [...verticesRef.current];
         next[index] = { lat: moved.lat, lng: moved.lng };
         commit(next);
       });
-      marker.on("contextmenu", (event: L.LeafletMouseEvent) => {
-        L.DomEvent.stop(event);
+      marker.getElement().addEventListener("contextmenu", (event) => {
+        event.preventDefault();
         if (verticesRef.current.length > 3) {
           const next = verticesRef.current.filter((_, position) => position !== index);
           commit(next);
         }
       });
-      marker.on("click", (event: L.LeafletMouseEvent) => L.DomEvent.stop(event));
+      draftMarkersRef.current.push(marker);
     });
 
-    const midpointIcon = L.divIcon({ className: "pf-geo-midpoint-wrap", html: '<span class="pf-geo-midpoint"></span>', iconSize: [12, 12], iconAnchor: [6, 6] });
     const count = vertices.length;
     for (let index = 0; index < count; index += 1) {
       const nextIndex = (index + 1) % count;
       if (count < 3 && index === count - 1) continue;
       const mid = midpoint(vertices[index]!, vertices[nextIndex]!);
-      const marker = L.marker(mid as L.LatLngExpression, {
-        icon: midpointIcon,
-        keyboard: false,
-      }).addTo(group);
-      marker.on("click", (event: L.LeafletMouseEvent) => {
-        L.DomEvent.stop(event);
+      const marker = new maplibregl.Marker({ element: midpointElement(), anchor: "center" })
+        .setLngLat([mid.lng, mid.lat])
+        .addTo(map);
+      marker.getElement().addEventListener("click", () => {
         const next = [...verticesRef.current];
         next.splice(nextIndex, 0, { lat: mid.lat, lng: mid.lng });
         commit(next);
       });
+      draftMarkersRef.current.push(marker);
     }
   }, [vertices, drawing, editingId, commit]);
 
-  // Existing fences + vehicle markers.
+  // Existing fences and vehicle markers.
   useEffect(() => {
-    const fences = fencesRef.current;
-    const vehicles = vehiclesRef.current;
-    if (!fences || !vehicles) return;
-    fences.clearLayers();
-    vehicles.clearLayers();
+    const map = mapRef.current;
+    if (!map) return;
+    fenceMarkersRef.current.forEach((marker) => marker.remove());
+    fenceMarkersRef.current = [];
 
-    for (const fence of geofences) {
+    const features: GeoJSON.Feature[] = geofences.flatMap((fence) => {
       const points = geojsonToVertices(fence.geojson);
-      if (points.length < 3) continue;
-      const polygon = L.polygon(points as L.LatLngExpression[], {
-        color: fence.enabled ? "#276EF1" : "#94A3B8",
-        weight: 2,
-        fillColor: fence.enabled ? "#276EF1" : "#94A3B8",
-        fillOpacity: 0.1,
-      }).addTo(fences);
-      polygon.bindTooltip(fence.name, { sticky: true });
-      polygon.on("click", (event: L.LeafletMouseEvent) => {
-        L.DomEvent.stop(event);
-        editFence(fence);
-      });
-    }
+      if (points.length < 3) return [];
+      return [
+        {
+          type: "Feature" as const,
+          id: fence.id,
+          properties: { id: fence.id, name: fence.name, enabled: fence.enabled },
+          geometry: {
+            type: "Polygon" as const,
+            coordinates: [[...points, points[0]!].map((point) => [point.lng, point.lat])],
+          },
+        },
+      ];
+    });
+    const source = map.getSource("geo-fences") as maplibregl.GeoJSONSource | undefined;
+    source?.setData({ type: "FeatureCollection", features });
 
     for (const vehicle of state.vehicles) {
       if (!vehicle.location) continue;
@@ -202,19 +268,18 @@ export function GeofenceEditor({
       const selected = vehicle.driverId ? driverIds.includes(vehicle.driverId) : false;
       const vehiclePoint = { lat: vehicle.location.latitude, lng: vehicle.location.longitude };
       const inside = vertices.length >= 3 ? pointInPolygon(vehiclePoint, vertices) : false;
-      const marker = L.circleMarker(
-        [vehicle.location.latitude, vehicle.location.longitude] as [number, number],
-        {
-          radius: selected ? 9 : 6,
-          color: "#FFFFFF",
-          weight: 2,
-          fillColor: inside ? "#16A34A" : selected ? "#F28C28" : "#276EF1",
-          fillOpacity: 0.95,
-        },
-      ).addTo(vehicles);
-      marker.bindPopup(`${driver?.fullName ?? "Unassigned"} · ${vehicle.registration}`);
-      marker.on("click", (event: L.LeafletMouseEvent) => {
-        L.DomEvent.stop(event);
+      const element = document.createElement("div");
+      element.style.width = `${selected ? 16 : 12}px`;
+      element.style.height = `${selected ? 16 : 12}px`;
+      element.style.borderRadius = "50%";
+      element.style.border = "2px solid #FFFFFF";
+      element.style.background = inside ? "#16A34A" : selected ? "#F28C28" : "#276EF1";
+      element.style.boxShadow = "0 1px 4px rgba(0,0,0,0.45)";
+      element.style.cursor = "pointer";
+      const marker = new maplibregl.Marker({ element, anchor: "center" })
+        .setLngLat([vehicle.location.longitude, vehicle.location.latitude])
+        .addTo(map);
+      marker.getElement().addEventListener("click", () => {
         if (!vehicle.driverId) return;
         setDriverIds((current) =>
           current.includes(vehicle.driverId!)
@@ -222,8 +287,27 @@ export function GeofenceEditor({
             : [...current, vehicle.driverId!],
         );
       });
+      marker.getElement().title = `${driver?.fullName ?? "Unassigned"} · ${vehicle.registration}`;
+      fenceMarkersRef.current.push(marker);
     }
   }, [geofences, state.vehicles, state.drivers, driverIds, vertices, driverById]);
+
+  // Fence polygon click opens editing.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const onClick = (event: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
+      const feature = event.features?.[0];
+      if (!feature) return;
+      const id = feature.properties?.id as string | undefined;
+      const fence = geofences.find((candidate) => candidate.id === id);
+      if (fence) editFence(fence);
+    };
+    map.on("click", "geo-fences-fill", onClick);
+    return () => {
+      map.off("click", "geo-fences-fill", onClick);
+    };
+  }, [geofences]);
 
   function editFence(fence: GeofenceDto): void {
     setVertices(geojsonToVertices(fence.geojson));
@@ -233,11 +317,12 @@ export function GeofenceEditor({
     setEditingId(fence.id);
     setDrawing(false);
     setError(null);
-    if (mapRef.current) {
-      const points = geojsonToVertices(fence.geojson);
-      if (points.length > 0) {
-        mapRef.current.fitBounds(L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number])), { padding: [40, 40], maxZoom: 16 });
-      }
+    const points = geojsonToVertices(fence.geojson);
+    if (points.length > 0 && mapRef.current) {
+      mapRef.current.fitBounds(
+        [points.map((point) => [point.lng, point.lat])] as unknown as [[number, number], [number, number]],
+        { padding: 60, maxZoom: 16 },
+      );
     }
   }
 
@@ -371,7 +456,12 @@ export function GeofenceEditor({
 
       <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="relative min-h-[420px] overflow-hidden rounded-xl border border-command-border bg-command-surface">
-          <div ref={containerRef} className="absolute inset-0" data-testid="geofence-map" />
+          <div
+            ref={containerRef}
+            className="absolute inset-0"
+            style={{ position: "absolute", inset: 0 }}
+            data-testid="geofence-map"
+          />
           {vertices.length >= 3 && (
             <div className="pointer-events-none absolute left-3 top-3 z-[500] rounded-lg bg-command-surface/95 px-2 py-1 text-[10px] text-text-secondary">
               {validation.valid
@@ -453,7 +543,7 @@ export function GeofenceEditor({
             <p className="mt-3 text-[10px] leading-relaxed text-text-secondary">
               {vertices.length === 0
                 ? "Click the map to start the fence. A fence needs at least three vertices."
-                : `${vertices.length} vertices · right-click a vertex to remove it · drag the small midpoints to insert.`}
+                : `${vertices.length} vertices · right-click a vertex to remove it · click the small midpoints to insert.`}
             </p>
           </section>
 

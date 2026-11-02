@@ -3,6 +3,10 @@
 Date: 2026-11-02  
 Scope: dedicated Geofences screen for dispatchers.
 
+The editor runs on the same OpenFreeMap vector basemap as the live map, so
+the operator sees real roads while drawing. No volunteer OpenStreetMap tile
+requests are made.
+
 ## Interaction model
 
 Coordinates are gone from the operator workflow. The fence is drawn on the
@@ -50,8 +54,9 @@ geometry unit tests:         5 passed (round-trip, area, self-intersection,
                              containment, midpoints)
 geofence API tests:          3 passed (lifecycle, staff-only, driver scoping)
 E2E editor test:             draw, undo, cancel on the map (pass)
-production drive:            drew a polygon on the live map, saved it,
+production drive:            vector basemap rendered, drew a polygon, saved it,
                              verified the stored GeoJSON ring, deleted it
+                             with zero requests to volunteer tile servers
 full E2E suite:              21 passed / 21 skipped
 map/heads-up/geofence tests: 53 passed
 API suite:                   101 passed
@@ -67,12 +72,10 @@ Production-verified stored geometry (before cleanup):
 ## Honest limits
 
 - Single-ring polygons only; holes and multipolygons are not supported yet.
-- No satellite basemap in the editor; it uses the same tile-free Leaflet
-  surface as the dispatcher fallback, so no volunteer OpenStreetMap tiles are
-  requested.
+- No satellite basemap in the editor; it uses the OpenFreeMap vector basemap.
 - GeoJSON file import/export is not implemented; pasted GeoJSON remains
   available in the Exceptions & Alerts panel for advanced cases.
-- Vertices are edited on the raster engine; vector rendering is not required.
+- Vertices are edited on the vector engine (MapLibre + OpenFreeMap).
 
 ## Files
 
