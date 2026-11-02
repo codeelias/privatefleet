@@ -4,7 +4,7 @@
  * lifecycle: create, enable/disable and delete.
  */
 import { useEffect, useState } from "react";
-import type { GeofenceDto } from "@privatefleet/contracts";
+import type { FleetState, GeofenceDto } from "@privatefleet/contracts";
 import { api } from "../../shared/api/client";
 import { Panel } from "../../shared/ui/Panel";
 import { StatusChip } from "../../shared/ui/StatusChip";
@@ -25,12 +25,13 @@ function geojsonSummary(geojson: string): string {
   }
 }
 
-export function GeofencesPanel() {
+export function GeofencesPanel({ jobs }: { jobs: FleetState["jobs"] }) {
   const [geofences, setGeofences] = useState<GeofenceDto[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [geojson, setGeojson] = useState("");
+  const [jobId, setJobId] = useState("");
 
   async function load(): Promise<void> {
     setBusy(true);
@@ -53,9 +54,10 @@ export function GeofencesPanel() {
     setBusy(true);
     setError(null);
     try {
-      await api.createGeofence(name.trim(), geojson.trim());
+      await api.createGeofence(name.trim(), geojson.trim(), true, jobId || undefined);
       setName("");
       setGeojson("");
+      setJobId("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Geofence could not be created");
@@ -127,6 +129,19 @@ export function GeofencesPanel() {
               className="mt-1 h-9 w-full rounded-lg border border-command-border bg-command-surface px-2 text-xs text-text-primary"
             />
           </label>
+          <label className="min-w-40 flex-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-text-secondary">
+            Linked job (optional)
+            <select
+              value={jobId}
+              onChange={(event) => setJobId(event.target.value)}
+              className="mt-1 h-9 w-full rounded-lg border border-command-border bg-command-surface px-2 text-xs text-text-primary"
+            >
+              <option value="">No job</option>
+              {jobs.map((job) => (
+                <option key={job.id} value={job.id}>{job.reference} · {job.status.replace("_", " ")}</option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => void create()}
@@ -153,7 +168,9 @@ export function GeofencesPanel() {
                 <StatusChip tone={zone.enabled ? "success" : "neutral"} label={zone.enabled ? "active" : "disabled"} />
               </div>
               <p className="mt-0.5 text-[10px] text-text-secondary">
-                {geojsonSummary(zone.geojson)} · created {new Date(zone.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                {geojsonSummary(zone.geojson)}
+                {zone.jobId ? ` · linked to ${jobs.find((job) => job.id === zone.jobId)?.reference ?? "job"}` : ""}
+                {" · "}created {new Date(zone.createdAt).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
               </p>
             </div>
             <label className="flex items-center gap-1.5 text-[10px] font-semibold text-text-secondary">

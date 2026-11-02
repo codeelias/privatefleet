@@ -54,7 +54,19 @@ revised distance 103.2 km / revised duration 252 min
   look-ahead; user drag exits follow.
 - Raster bearing remains explicitly unavailable rather than faked.
 
-## 4. Customer-facing tracking accuracy
+## 4. Customer-facing tracking accuracy and proof
+
+Public tracking also exposes privacy-safe proof and zone state:
+
+```text
+inCustomerZone:  true when the vehicle is inside an enabled geofence linked to this job
+customerZoneName
+proof:           photo/signature counts + last recorded time (no personal media)
+```
+
+The public page shows an **In your area - <zone>** banner and a **Proof of
+service** card with recorded counts, never the underlying images or personal
+data.
 
 Public tracking response now includes:
 
@@ -93,7 +105,8 @@ operator lifecycle:
 - `DELETE /v1/geofences/:id` — remove zone (cascade clears per-vehicle state)
 - new web client methods
 - **Geofencing panel** on Exceptions & Alerts:
-  - create a zone from name + GeoJSON polygon
+  - create a zone from name + GeoJSON polygon, optionally linked to a job
+  (job-linked zones drive the customer "in your area" signal)
   - enable/disable and delete
   - vertex summary and created time
   - driver accounts are rejected by the API (staff only)
@@ -105,7 +118,7 @@ existing enter/exit evaluation gate.
 
 - Map/Heads-Up engine tests: 48 passed
 - API geofence/public-tracking tests: passing
-- Full E2E: 20 passed / 20 skipped
+- Full E2E: pending final run after zone/proof UI
 - API suite: 100 passed
 - Production checks: tracking fields verified; re-route proposal verified;
   customer-update dialog verified

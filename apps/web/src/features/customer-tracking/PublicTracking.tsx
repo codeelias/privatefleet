@@ -162,6 +162,11 @@ export function PublicTracking({ token }: { token: string }) {
               })}`
             : "Estimated arrival unavailable"}
         </p>
+        {data.inCustomerZone && (
+          <p className="mt-2 inline-flex rounded-full bg-[#1E3A8A]/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#93C5FD]">
+            {data.customerZoneName ? `In your area - ${data.customerZoneName}` : "In your area"}
+          </p>
+        )}
         {data.delayStatus && data.delayStatus !== "unknown" && (
           <p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] ${data.delayStatus === "late" ? "bg-[#7F1D1D]/40 text-[#FCA5A5]" : "bg-[#14532D]/40 text-[#86EFAC]"}`}>
             {data.delayStatus === "late" ? "Running late" : "On time"}
@@ -189,6 +194,18 @@ export function PublicTracking({ token }: { token: string }) {
             </p>
             <p className="mt-1 truncate text-sm font-medium text-[#E4E4E7]">
               {nextStop.address}
+            </p>
+          </div>
+        )}
+
+        {data.proof && (
+          <div className="mt-4 rounded-2xl border border-[#27272A] bg-[#111113] px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#71717A]">Proof of service</p>
+            <p className="mt-1 text-xs text-[#A1A1AA]">
+              {data.proof.photos > 0 ? `${data.proof.photos} photo${data.proof.photos === 1 ? "" : "s"} recorded` : "No photo"}
+              {" · "}
+              {data.proof.signatures > 0 ? `${data.proof.signatures} signature${data.proof.signatures === 1 ? "" : "s"} recorded` : "no signature"}
+              {data.proof.lastRecordedAt ? ` · ${new Date(data.proof.lastRecordedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}
             </p>
           </div>
         )}

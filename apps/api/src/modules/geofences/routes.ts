@@ -15,6 +15,7 @@ const GeofenceBodySchema = z.object({
   name: z.string().min(1).max(120),
   geojson: z.string().min(1),
   enabled: z.boolean().optional().default(true),
+  jobId: z.string().uuid().optional(),
 });
 
 export function registerGeofenceRoutes(
@@ -38,15 +39,31 @@ export function registerGeofenceRoutes(
     const body = GeofenceBodySchema.parse(request.body);
     const tenantId = request.auth?.tenantId ?? "";
     return withTenant(handle, tenantId, async (db) => {
+      if (body.jobId) {
+        const linked = (await db.execute(sql`
+          SELECT 1 FROM jobs WHERE id = ${body.jobId}
+        `)) as unknown as Array<unknown>;
+        if (linked.length === 0) {
+          return reply.status(404).send({
+            type: "https://privatefleet.example/errors/job_not_found",
+            title: "Request could not be completed",
+            status: 404,
+            code: "JOB_NOT_FOUND",
+            detail: "That job does not exist in this workspace",
+            uiMessage: "That job no longer exists.",
+          });
+        }
+      }
       const rows = (await db.execute(sql`
-        INSERT INTO geofences (id, tenant_id, name, geojson, enabled)
-        VALUES (${randomUUID()}, ${tenantId}, ${body.name}, ${body.geojson}, ${body.enabled})
-        RETURNING id, name, geojson, enabled, created_at
+        INSERT INTO geofences (id, tenant_id, name, geojson, enabled, job_id)
+        VALUES (${randomUUID()}, ${tenantId}, ${body.name}, ${body.geojson}, ${body.enabled}, ${body.jobId ?? null})
+        RETURNING id, name, geojson, enabled, job_id, created_at
       `)) as unknown as Array<{
         id: string;
         name: string;
         geojson: string;
         enabled: boolean;
+        job_id: string | null;
         created_at: Date | string;
       }>;
       const row = rows[0]!;
@@ -55,6 +72,7 @@ export function registerGeofenceRoutes(
         name: row.name,
         geojson: row.geojson,
         enabled: row.enabled,
+        ...(row.job_id ? { jobId: row.job_id } : {}),
         createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at.toISOString(),
       };
     });
@@ -68,7 +86,7 @@ export function registerGeofenceRoutes(
   app.get("/v1/geofences", { preHandler: guard }, async (request) => {
     return withTenant(handle, request.auth?.tenantId ?? "", async (db) => {
       const rows = (await db.execute(sql`
-        SELECT id, name, geojson, enabled, created_at
+        SELECT id, name, geojson, enabled, job_id, created_at
         FROM geofences WHERE tenant_id = ${request.auth?.tenantId ?? ""}
         ORDER BY created_at DESC
       `)) as unknown as Array<{
@@ -76,6 +94,7 @@ export function registerGeofenceRoutes(
         name: string;
         geojson: string;
         enabled: boolean;
+        job_id: string | null;
         created_at: Date | string;
       }>;
       return {
@@ -84,6 +103,7 @@ export function registerGeofenceRoutes(
           name: row.name,
           geojson: row.geojson,
           enabled: row.enabled,
+          ...(row.job_id ? { jobId: row.job_id } : {}),
           createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at.toISOString(),
         })),
       };
@@ -110,12 +130,13 @@ export function registerGeofenceRoutes(
           name = COALESCE(${body.name ?? null}, name),
           enabled = COALESCE(${body.enabled ?? null}, enabled)
         WHERE id = ${params.id}
-        RETURNING id, name, geojson, enabled, created_at
+        RETURNING id, name, geojson, enabled, job_id, created_at
       `)) as unknown as Array<{
         id: string;
         name: string;
         geojson: string;
         enabled: boolean;
+        job_id: string | null;
         created_at: Date | string;
       }>;
       const row = rows[0];
@@ -134,6 +155,7 @@ export function registerGeofenceRoutes(
         name: row.name,
         geojson: row.geojson,
         enabled: row.enabled,
+        ...(row.job_id ? { jobId: row.job_id } : {}),
         createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at.toISOString(),
       };
     });

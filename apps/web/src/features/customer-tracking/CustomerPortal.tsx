@@ -24,6 +24,9 @@ export interface PortalProps {
   etaMethod?: "live" | "planned";
   remainingStops?: number;
   lastUpdateAt?: string;
+  inCustomerZone?: boolean;
+  customerZoneName?: string;
+  proof?: { photos: number; signatures: number; lastRecordedAt?: string };
 }
 
 const STEPS = [
@@ -44,6 +47,9 @@ export function CustomerPortal({
   etaMethod = "planned",
   remainingStops,
   lastUpdateAt,
+  inCustomerZone,
+  customerZoneName,
+  proof,
 }: PortalProps) {
   const theme = {
     "--portal-primary": brand.primary,
@@ -90,6 +96,11 @@ export function CustomerPortal({
             </p>
             <p className="text-2xl font-bold tabular-nums">{eta}</p>
             <p className="text-[10px] text-[#756E61]">{etaMethod === "live" ? "Live estimate" : "Planned arrival"}</p>
+            {inCustomerZone && (
+              <p className="mt-1 inline-flex rounded-full bg-[#DBEAFE] px-2 py-0.5 text-[10px] font-bold text-[#1D4ED8]">
+                {customerZoneName ? `In your area - ${customerZoneName}` : "In your area"}
+              </p>
+            )}
             {delayStatus && delayStatus !== "unknown" && (
               <p className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${delayStatus === "late" ? "bg-[#FEE2E2] text-[#B91C1C]" : "bg-[#DCFCE7] text-[#15803D]"}`}>
                 {delayStatus === "late" ? "Running late" : "On time"}
@@ -155,9 +166,20 @@ export function CustomerPortal({
           <p className="text-[10px] font-bold uppercase tracking-widest text-[#756E61]">
             Proof of service
           </p>
-          <p className="mt-1 text-xs text-[#756E61]">
-            Completion evidence will appear here after the driver completes the stop.
-          </p>
+          {proof ? (
+            <p className="mt-1 text-xs text-[#756E61]">
+              {proof.photos > 0 ? `${proof.photos} photo${proof.photos === 1 ? "" : "s"} recorded` : "No photo recorded"}
+              {" · "}
+              {proof.signatures > 0 ? `${proof.signatures} signature${proof.signatures === 1 ? "" : "s"} recorded` : "no signature recorded"}
+              {proof.lastRecordedAt
+                ? ` · ${new Date(proof.lastRecordedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
+                : ""}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-[#756E61]">
+              Completion evidence will appear here after the driver completes the stop.
+            </p>
+          )}
         </div>
 
         <p className="mt-4 text-center text-[10px] text-[#756E61]">

@@ -176,7 +176,7 @@ export function AlertsScreen({
                             />
                           )}
                           <p className="mt-1 break-all text-[9px] text-text-secondary">
-                            {item.byteSize} bytes Â· {item.contentHash.slice(0, 12)}
+                            {item.byteSize} bytes Ã‚Â· {item.contentHash.slice(0, 12)}
                           </p>
                         </div>
                       ))}
@@ -271,10 +271,11 @@ export function AlertsScreen({
           ))}
         </div>
       </Panel>
-      <GeofencesPanel />
+      <GeofencesPanel jobs={state.jobs} />
     </div>
   );
 }
+
 
 
 

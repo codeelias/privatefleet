@@ -31,6 +31,7 @@ interface VehicleRow {
 interface GeofenceRow {
   id: string;
   name: string;
+  job_id: string | null;
 }
 
 export interface IngestOutcome {
@@ -71,7 +72,7 @@ export async function ingestTelemetry(
     let newest: TelemetryIngestResult["lastPosition"];
 
     const geofences = (await db.execute(sql`
-      SELECT id, name FROM geofences
+      SELECT id, name, job_id FROM geofences
       WHERE tenant_id = ${tenantId} AND enabled = true
       ORDER BY created_at
     `)) as unknown as GeofenceRow[];
@@ -208,6 +209,7 @@ async function evaluateGeofences(
           vehicleId: vehicle.id,
           geofenceId: geofence.id,
           geofenceName: geofence.name,
+          ...(geofence.job_id ? { jobId: geofence.job_id } : {}),
           inside,
           latitude: sample.latitude,
           longitude: sample.longitude,
@@ -231,7 +233,7 @@ async function evaluateGeofences(
            ${`${sample.latitude.toFixed(5)}, ${sample.longitude.toFixed(5)}`},
            ${`Reported ${new Date().toISOString()}`},
            'Review vehicle location and current route.',
-           ${vehicle.id}, NULL, NULL)
+           ${vehicle.id}, ${geofence.job_id ?? null}, NULL)
       `);
     }
     states.set(geofence.id, inside);

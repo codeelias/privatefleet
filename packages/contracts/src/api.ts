@@ -184,6 +184,17 @@ export const PublicTrackingResponseSchema = z.object({
   delayStatus: z.enum(["on_time", "late", "unknown"]).optional(),
   /** Timestamp of the last usable position (null when unavailable). */
   lastUpdateAt: z.string().datetime().optional(),
+  /** True when the vehicle is inside an enabled geofence linked to this job. */
+  inCustomerZone: z.boolean().optional(),
+  customerZoneName: z.string().optional(),
+  /** Privacy-safe proof summary: counts only, never personal media. */
+  proof: z
+    .object({
+      photos: z.number().int().nonnegative(),
+      signatures: z.number().int().nonnegative(),
+      lastRecordedAt: z.string().datetime().optional(),
+    })
+    .optional(),
 });
 export type PublicTrackingResponse = z.infer<typeof PublicTrackingResponseSchema>;
 
@@ -192,6 +203,7 @@ export const GeofenceDtoSchema = z.object({
   name: z.string(),
   geojson: z.string(),
   enabled: z.boolean(),
+  jobId: IdSchema.optional(),
   createdAt: z.string().datetime(),
 });
 export type GeofenceDto = z.infer<typeof GeofenceDtoSchema>;

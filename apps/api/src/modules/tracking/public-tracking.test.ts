@@ -88,6 +88,38 @@ beforeAll(async () => {
     VALUES (${randomUUID()}, ${tenantId}, ${routeId}, ${stopId}, 1, now() + interval '20 minutes', 'planned')
   `;
 
+  const area = await app.inject({
+    method: "POST",
+    url: "/v1/geofences",
+    headers: authed(),
+    payload: {
+      name: "Delivery area",
+      jobId,
+      geojson: JSON.stringify({
+        type: "Polygon",
+        coordinates: [
+          [
+            [-0.14, 51.49],
+            [-0.1, 51.49],
+            [-0.1, 51.52],
+            [-0.14, 51.52],
+            [-0.14, 51.49],
+          ],
+        ],
+      }),
+    },
+  });
+  expect(area.statusCode).toBe(200);
+
+  await migrator.sql`
+    INSERT INTO stop_evidence (id, tenant_id, job_id, stop_id, kind, storage_key, content_hash, mime_type, byte_size, captured_at)
+    VALUES (${randomUUID()}, ${tenantId}, ${jobId}, ${stopId}, 'photo', 'evidence/photo.jpg', 'sha256:test', 'image/jpeg', 12, now())
+  `;
+  await migrator.sql`
+    INSERT INTO stop_evidence (id, tenant_id, job_id, stop_id, kind, storage_key, content_hash, mime_type, byte_size, captured_at)
+    VALUES (${randomUUID()}, ${tenantId}, ${jobId}, ${stopId}, 'signature', 'evidence/signature.svg', 'sha256:sig', 'image/svg+xml', 8, now())
+  `;
+
   const created = await app.inject({
     method: "POST",
     url: "/v1/tracking-tokens",
@@ -129,6 +161,9 @@ describe("public customer tracking", () => {
       etaConfidence?: string;
       remainingStops?: number;
       lastUpdateAt?: string;
+      inCustomerZone?: boolean;
+      customerZoneName?: string;
+      proof?: { photos: number; signatures: number };
     };
     expect(body.jobReference).toBe("TRK-JOB");
     expect(body.status).toBe("in_progress");
@@ -142,6 +177,10 @@ describe("public customer tracking", () => {
     expect(body.etaConfidence).toBeDefined();
     expect(body.remainingStops).toBe(1);
     expect(body.lastUpdateAt).toBeDefined();
+    expect(body.inCustomerZone).toBe(true);
+    expect(body.customerZoneName).toBe("Delivery area");
+    expect(body.proof?.photos).toBe(1);
+    expect(body.proof?.signatures).toBe(1);
     expect(JSON.stringify(body)).not.toContain("phone");
   });
 

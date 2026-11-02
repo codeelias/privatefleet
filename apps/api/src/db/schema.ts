@@ -371,6 +371,8 @@ export const geofences = pgTable(
     /** GeoJSON polygon; a PostGIS geometry column is generated in post-migration. */
     geojson: text("geojson").notNull(),
     enabled: boolean("enabled").notNull().default(true),
+    /** Optional job link: lets the customer tracking page show "in your area". */
+    jobId: uuid("job_id").references(() => jobs.id, { onDelete: "set null" }),
     createdAt,
   },
   (t) => [index("geofences_tenant_enabled_idx").on(t.tenantId, t.enabled)],
@@ -615,6 +617,7 @@ export const tenantScopedTables = [
   dispatchPolicyOverrides,
   driverWorkRequests,
 ] as const;
+
 
 
 

@@ -1,0 +1,2 @@
+ALTER TABLE "geofences" ADD COLUMN "job_id" uuid;--> statement-breakpoint
+ALTER TABLE "geofences" ADD CONSTRAINT "geofences_job_id_jobs_id_fk" FOREIGN KEY ("job_id") REFERENCES "public"."jobs"("id") ON DELETE set null ON UPDATE no action;

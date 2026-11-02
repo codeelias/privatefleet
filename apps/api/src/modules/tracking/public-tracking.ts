@@ -142,6 +142,44 @@ export async function publicTracking(
       (stop) => stop.status === "pending" || stop.status === "arrived",
     ).length;
 
+    const evidenceRows = (await db.execute(sql`
+      SELECT kind, max(captured_at) AS last_captured
+      FROM stop_evidence
+      WHERE job_id = ${row.job_id}
+      GROUP BY kind
+    `)) as unknown as Array<{ kind: string; last_captured: Date | string | null }>;
+    const photos = evidenceRows.filter((entry) => entry.kind === "photo" || entry.kind === "failure_photo").length;
+    const signatures = evidenceRows.filter((entry) => entry.kind === "signature").length;
+    const lastRecorded = evidenceRows
+      .map((entry) => (entry.last_captured ? new Date(entry.last_captured).getTime() : null))
+      .filter((value): value is number => value !== null)
+      .sort((a, b) => b - a)[0];
+    const proof =
+      photos > 0 || signatures > 0
+        ? {
+            photos,
+            signatures,
+            ...(lastRecorded ? { lastRecordedAt: new Date(lastRecorded).toISOString() } : {}),
+          }
+        : undefined;
+
+    let inCustomerZone: boolean | undefined;
+    let customerZoneName: string | undefined;
+    if (position) {
+      const zoneRows = (await db.execute(sql`
+        SELECT name FROM geofences
+        WHERE tenant_id = ${row.tenant_id}
+          AND enabled = true
+          AND job_id = ${row.job_id}
+          AND ST_Contains(geom, ST_SetSRID(ST_MakePoint(${position.longitude}, ${position.latitude}), 4326))
+        LIMIT 1
+      `)) as unknown as Array<{ name: string }>;
+      if (zoneRows[0]) {
+        inCustomerZone = true;
+        customerZoneName = zoneRows[0].name;
+      }
+    }
+
     return {
       jobReference: job.reference,
       status: job.status,
@@ -151,6 +189,9 @@ export async function publicTracking(
       delayStatus,
       ...(remainingStops > 0 ? { remainingStops } : {}),
       ...(position?.capturedAt ? { lastUpdateAt: position.capturedAt } : {}),
+      ...(inCustomerZone !== undefined ? { inCustomerZone } : {}),
+      ...(customerZoneName ? { customerZoneName } : {}),
+      ...(proof ? { proof } : {}),
       ...(job.full_name ? { driverName: job.full_name } : {}),
       ...(job.registration ? { vehicleRegistration: job.registration } : {}),
       ...(position ? { position } : {}),
