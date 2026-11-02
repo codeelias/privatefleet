@@ -16,6 +16,7 @@ import { DispatchBoard } from "../features/dispatch-board/Board";
 import { JobCard } from "../features/dispatch/JobCard";
 import { AlertsScreen } from "../features/alerts/AlertsScreen";
 import { JobsScreen } from "../features/jobs/JobsScreen";
+import { HeadsUp } from "../features/heads-up/HeadsUp";
 import { TrackingHub } from "../features/customer-tracking/TrackingHub";
 import { AssignmentModal } from "../features/live-map/AssignmentModal";
 import { MapCanvas } from "../features/live-map/MapCanvas";
@@ -446,7 +447,7 @@ function Dashboard({
                       <span className="flex items-baseline gap-1.5 px-3"><strong className="text-[15px] font-semibold tabular-nums text-text-primary">{activeVehicles}</strong><span>active</span></span>
                       <span className="flex items-baseline gap-1.5 px-3"><strong className="text-[15px] font-semibold tabular-nums text-text-primary">{inProgress}</strong><span>in progress</span></span>
                       <span className="flex items-baseline gap-1.5 px-3"><strong className="text-[15px] font-semibold tabular-nums text-text-primary">{unassigned.length}</strong><span>unassigned</span></span>
-                      <span className="flex items-baseline gap-1.5 px-3"><strong className={"text-[15px] font-semibold tabular-nums " + (atRisk > 0 ? "text-status-danger" : "text-text-primary")}>{atRisk}</strong><span>at risk</span></span>
+                      <span className="flex items-baseline gap-1.5 px-3"><strong className={"text-[15px] font-semibold tabular-nums " + (atRisk > 0 ? "text-status-danger" : "text-text-primary")}>{atRisk}</strong><span>open alerts</span></span>
                     </div>
                     {state.demoMode && (
                       <div className="ml-auto flex items-center gap-1.5">
@@ -475,7 +476,7 @@ function Dashboard({
                       <KpiCard label="Active vehicles" value={String(activeVehicles)} sub={onRoute + " on route"} />
                       <KpiCard label="Jobs in progress" value={String(inProgress)} sub={unassigned.length + " unassigned"} />
                       <KpiCard label="Unassigned" value={String(unassigned.length)} sub={urgent + " urgent"} tone={urgent > 0 ? "warning" : undefined} />
-                      <KpiCard label="At-risk stops" value={String(atRisk)} sub="needs attention" tone={atRisk > 0 ? "danger" : undefined} />
+                      <KpiCard label="Open alerts" value={String(atRisk)} sub="needs attention" tone={atRisk > 0 ? "danger" : undefined} />
                     </div>
                   )}
                   {scenarioError && (
@@ -483,6 +484,12 @@ function Dashboard({
                       {scenarioError}
                     </p>
                   )}
+                  <HeadsUp
+                    state={state}
+                    onOpenJob={openAssignment}
+                    onFocusDriver={setFocusedDriverId}
+                    onOpenAlerts={() => setScreen("alerts")}
+                  />
                 </div>
 
                 <div className="relative flex min-h-0 flex-1 overflow-hidden p-3">
@@ -911,6 +918,7 @@ export function App() {
     />
   );
 }
+
 
 
 

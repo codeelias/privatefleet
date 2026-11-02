@@ -14,6 +14,16 @@ test("Live map: follow, overview, confidence and navigation surface", async ({ p
   await expect(page.getByTestId("map-camera-controls")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId("map-navigation")).toBeVisible();
 
+  // Proactive heads-up before the dispatcher opens exceptions.
+  const headsUp = page.getByTestId("heads-up");
+  await expect(headsUp).toBeVisible();
+  await headsUp.getByRole("button").first().click();
+  const headsUpPanel = page.getByRole("region", { name: "Predicted operational exceptions" });
+  await expect(headsUpPanel).toBeVisible();
+  await expect(headsUpPanel).toContainText(/predicted|window|route|GPS|No predicted/i);
+  await headsUp.getByRole("button").first().click();
+  await expect(headsUpPanel).toBeHidden();
+
   const follow = page.getByRole("button", { name: "Follow" });
   await expect(follow).toBeEnabled();
   await follow.click();
@@ -28,4 +38,5 @@ test("Live map: follow, overview, confidence and navigation surface", async ({ p
   await expect(camera.getByRole("button", { name: "Overview" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("map-navigation")).toBeVisible();
 });
+
 
