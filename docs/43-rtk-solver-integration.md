@@ -41,9 +41,22 @@ JNI + RTK sources:           21 translation units
 release signing:             unchanged PrivateFleet key
 version:                     1.0.8 / versionCode 9
 emulator:                    app launches
-physical phone RFCW10QT5ZE:  1.0.8 installed, launches to driver sign-in
-                             (clean install; previous 1.0.0 data cleared)
+physical phone R5CWB0BR3BP:  1.0.8 installed over 1.0.4, Mo Khan signed in,
+                             session persisted after cold restart, native
+                             bridge reported ready, telemetry posting
+physical phone RFCW10QT5ZE:  earlier 1.0.8 build without the JNI bridge;
+                             must be replaced with the fixed APK when
+                             reconnected (currently disconnected)
 ```
+
+## JNI packaging bug found on device
+
+The first 1.0.8 APK crashed on sign-in with `UnsatisfiedLinkError` for
+`nativeInit`. CMake was declared as `project(pf_rtk C)`, so `pf_rtk.cpp` was
+never compiled and `libpf_rtk.so` contained RTKLIB without any JNI symbols.
+Fixed by enabling CXX (`project(pf_rtk C CXX)`), rebuilding, and verifying all
+five JNI exports with `llvm-nm` before reinstalling. Phone 2 confirms the
+bridge now loads (`RTK solver native bridge ready`).
 
 ## Honest status
 

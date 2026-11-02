@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
-project(pf_rtk C)
+project(pf_rtk C CXX)
 
 set(CMAKE_C_STANDARD 99)
+set(CMAKE_CXX_STANDARD 17)
 
 set(RTKLIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/rtklib)
 

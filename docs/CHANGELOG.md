@@ -1,3 +1,8 @@
+### v1.63 - Phone 2 installed, signed in, JNI packaging fixed (2026-11-02)
+- Fixed a release-blocking JNI bug: CMake declared C-only, so pf_rtk.cpp was excluded and the first 1.0.8 APK crashed with UnsatisfiedLinkError. Enabled CXX and verified all five JNI exports before republishing.
+- Phone 2 R5CWB0BR3BP updated in place 1.0.4 -> fixed 1.0.8, signed in as Mo Khan, session persisted after cold restart; native RTK bridge logs ready; telemetry posting (RTK unsupported until corrections are configured).
+- Phone 1 RFCW10QT5ZE holds the earlier bridge-less 1.0.8 and is currently disconnected; it needs the fixed APK when reconnected.
+- Republished APK SHA-256 8d2b23ae2899d2eb01cf4f1acf9554a00ad8175968014113b9858cf187ab39a0.
 ### v1.62 - Native 1.0.8 installed on the physical phone (2026-11-02)
 - Tom's phone RFCW10QT5ZE was on a debug-signed 1.0.0, which cannot be updated in place. Uninstalled and clean-installed release-signed 1.0.8 (versionCode 9).
 - Verified: app launches to the driver sign-in screen, no crash. App data was cleared by the signature migration, so the driver must sign in again.
