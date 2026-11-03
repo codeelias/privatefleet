@@ -82,6 +82,7 @@ public class TelemetryService extends Service implements LocationListener {
         wakeLock.setReferenceCounted(false);
         wakeLock.acquire(60 * 60 * 1000L);
         qualityMonitor = new GnssQualityMonitor(this);
+        qualityMonitor.setRawListener(new RawGnssLogger());
         qualityMonitor.start();
     }
 

@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.GnssMeasurementsEvent;
+import android.location.GnssNavigationMessage;
 import android.location.GnssStatus;
 import android.location.LocationManager;
 import android.os.Build;
@@ -36,6 +37,9 @@ public final class GnssQualityMonitor {
 
     public interface RawListener {
         void onMeasurements(GnssMeasurementsEvent event);
+
+        default void onNavigationMessage(GnssNavigationMessage message) {
+        }
     }
 
     private final Context context;
@@ -43,6 +47,7 @@ public final class GnssQualityMonitor {
     private LocationManager locationManager;
     private GnssStatus.Callback statusCallback;
     private GnssMeasurementsEvent.Callback measurementsCallback;
+    private GnssNavigationMessage.Callback navigationCallback;
     private volatile RawListener rawListener;
 
     public void setRawListener(RawListener listener) {
@@ -125,6 +130,24 @@ public final class GnssQualityMonitor {
                 measurementsCallback = null;
             }
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            navigationCallback = new GnssNavigationMessage.Callback() {
+                @Override
+                public void onGnssNavigationMessageReceived(GnssNavigationMessage event) {
+                    RawListener listener = rawListener;
+                    if (listener != null) listener.onNavigationMessage(event);
+                }
+
+                @Override
+                public void onStatusChanged(int status) {
+                }
+            };
+            try {
+                locationManager.registerGnssNavigationMessageCallback(navigationCallback, handler);
+            } catch (SecurityException | IllegalArgumentException ignored) {
+                navigationCallback = null;
+            }
+        }
     }
 
     public Quality snapshot() {
@@ -151,6 +174,12 @@ public final class GnssQualityMonitor {
             if (measurementsCallback != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 try {
                     locationManager.unregisterGnssMeasurementsCallback(measurementsCallback);
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+            if (navigationCallback != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    locationManager.unregisterGnssNavigationMessageCallback(navigationCallback);
                 } catch (IllegalArgumentException ignored) {
                 }
             }

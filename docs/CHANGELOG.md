@@ -1,3 +1,7 @@
+### v1.74 - PF-TIDE Stage 2 wired + RINEX references (2026-11-03)
+- Shadow runner mirrors accepted telemetry into PF-TIDE (in-memory); new staff-only diagnostics endpoint /v1/diagnostics/positioning-shadow is live on the host.
+- Native 1.0.14: pf-raw GNSS capture (measurements + navigation messages) for RTKLIB PPK; verified on Phone 1.
+- OS Net RINEX received and validated against the official coordinate file: STRA (Stratford) 10.4 km is the primary reference base; TEDD 17.5 km; AMER 35.3 km. Station registry added (osnet-stations.ts).
 ### v1.73 - PF-TIDE Stage 0-1 shadow (2026-11-03)
 - Stage 0 baseline measured over 28,123 stored observations (median displacement 0.7-1.0 m, p95 26.9-39.5 m, median accuracy 17.5-22.1 m).
 - Stage 1: pure server-side PF-TIDE Core estimator (adaptive R, NIS gating, event-time replay, corrected/predicted state, FRESH/DEGRADED/COASTING) with 6 unit tests. Not wired to production.

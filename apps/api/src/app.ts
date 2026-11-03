@@ -30,6 +30,7 @@ import { EvidenceStore } from "./modules/evidence/storage.js";
 import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
 import { registerReportRoutes } from "./modules/reports/routes.js";
 import { registerGeofenceRoutes } from "./modules/geofences/routes.js";
+import { registerPositioningDiagnosticsRoutes } from "./modules/positioning/routes.js";
 import { registerPublicTrackingRoutes } from "./modules/tracking/public-tracking-routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
@@ -346,6 +347,7 @@ export function buildApp(config: AppConfig): {
     registerPublicTrackingRoutes(app, auth, db);
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter, db);
     registerTrackingRoutes(app, auth, bus, db);
+    registerPositioningDiagnosticsRoutes(app, auth);
     const routingClients =
       config.osrmBaseUrl && config.vroomBaseUrl
         ? createRoutingClients({

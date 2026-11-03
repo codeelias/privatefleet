@@ -50,6 +50,31 @@ are inflated by historical churn; fresh runs will be cleaner. Median age ≈ 0 s
   out-of-order replay, prediction growth, honest coasting
 - `scripts/baseline-cli.ts` — replay metrics from an exported CSV
 
+## Stage 2 - shadow wired (observational)
+
+- `shadow-runner.ts` mirrors every accepted telemetry sample into the
+  estimator (in-memory, bounded history). Production responses never read it.
+- `GET /v1/diagnostics/positioning-shadow` (staff only) returns per-vehicle
+  snapshot + Category A metrics. Live on the host; Mo's vehicle already shows
+  STOPPED / DEGRADED / accepted with growing baseline.
+- Native 1.0.14 adds `pf-raw` capture (measurements + navigation messages)
+  for RTKLIB PPK against the OS Net base data.
+
+## Verified reference stations (OS Net, 2026-11-03)
+
+Parsed from the delivered RINEX and confirmed against the official OS Net
+coordinates file (ECEF match < 1 mm).
+
+```text
+STRA Stratford   51.544610 N  0.009529 E  h 80.44 m  - 10.4 km (primary)
+TEDD Teddington   51.425285 N -0.343546 E  h 70.03 m  - 17.5 km
+AMER Amersham    51.677194 N -0.559355 E  h 134.14 m - 35.3 km
+```
+
+Delivered RINEX covers day 2026-307 (2026-11-02) hours 00-10 UTC, 30 s
+interval, plus the broadcast ephemeris file. Field runs must be scheduled
+inside an OS Net download window (or a new RINEX set downloaded to match).
+
 ## Next stages (gated)
 
 - Stage 2: run the shadow over ingested telemetry in parallel, expose a

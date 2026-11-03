@@ -14,6 +14,7 @@ import type {
 } from "@privatefleet/contracts";
 import { EVENT_SCHEMA_VERSION } from "@privatefleet/contracts";
 import { withTenant, type Database, type DbHandle } from "../../db/client.js";
+import { observeVehiclePosition } from "../positioning/shadow-runner.js";
 
 export class TrackingError extends Error {
   constructor(readonly code: "DRIVER_HAS_NO_VEHICLE") {
@@ -161,6 +162,18 @@ export async function ingestTelemetry(
         ...(sample.movementState !== undefined ? { movementState: sample.movementState } : {}),
       };
       positions.push(position);
+      // Stage 2: mirror into the PF-TIDE shadow estimator (observational only).
+      observeVehiclePosition(vehicle.id, {
+        capturedAtMs: capturedMs,
+        receivedAtMs: Date.now(),
+        latitude: sample.latitude,
+        longitude: sample.longitude,
+        accuracyMetres: sample.accuracyMetres ?? 0,
+        ...(sample.speedMps !== undefined ? { speedMps: sample.speedMps } : {}),
+        ...(sample.satellitesUsed !== undefined ? { satellitesUsed: sample.satellitesUsed } : {}),
+        ...(sample.source !== undefined ? { source: sample.source } : {}),
+        ...(sample.movementState !== undefined ? { movementState: sample.movementState } : {}),
+      });
       results.push({
         status: "accepted",
         capturedAt: sample.capturedAt,
