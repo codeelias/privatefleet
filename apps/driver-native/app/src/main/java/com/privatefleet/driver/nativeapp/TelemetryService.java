@@ -9,9 +9,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
-import android.location.GnssMeasurement;
-import android.location.GnssMeasurementsEvent;
-import android.location.GnssStatus;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -26,13 +26,18 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Foreground location service. Runs independently of the Activity and keeps
- * posting the same telemetry contract when the screen is off.
+ * Foreground location service.
+ *
+ * Position source is the plain provider flow that was validated in the field:
+ * GPS every 10 s plus network every 15 s, raw fix, 150 m accuracy filter.
+ * The EKF/RTK pipeline is intentionally not on the position path until a
+ * correction stream (base station) exists. Raw GNSS quality is still reported
+ * so the dispatcher sees satellites/L1+L5/carrier without the filter touching
+ * the position.
  */
-public class TelemetryService extends Service {
+public class TelemetryService extends Service implements LocationListener {
     public static final String ACTION_START = "com.privatefleet.driver.START_TRACKING";
     public static final String ACTION_STOP = "com.privatefleet.driver.STOP_TRACKING";
     private static final String CHANNEL = "privatefleet_tracking";
@@ -40,15 +45,8 @@ public class TelemetryService extends Service {
     private static final String TAG = "pf-native";
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private final AtomicBoolean sending = new AtomicBoolean(false);
-    private RtkSolver rtkSolver = new NoRtkSolver();
-    private NativeRtkEngine rtkEngine;
-    private FusedPositionEngine engine;
-    private NtripClient ntripClient;
-    private volatile boolean correctionsConnected = false;
-    private volatile long correctionAgeMs = Long.MAX_VALUE;
-    private volatile String rtkState = "unsupported";
-    private volatile long lastSentAt = 0L;
+    private LocationManager locationManager;
+    private GnssQualityMonitor qualityMonitor;
     private PowerManager.WakeLock wakeLock;
 
     public static void start(Context context) {
@@ -72,6 +70,8 @@ public class TelemetryService extends Service {
         wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "privatefleet:gps");
         wakeLock.setReferenceCounted(false);
         wakeLock.acquire(60 * 60 * 1000L);
+        qualityMonitor = new GnssQualityMonitor(this);
+        qualityMonitor.start();
     }
 
     @Override
@@ -98,152 +98,49 @@ public class TelemetryService extends Service {
             stopSelf();
             return;
         }
-        if (engine == null) {
-            engine = new FusedPositionEngine(this, fix -> onFusedFix(fix));
-            engine.start();
-            Log.i(TAG, "fused GNSS/IMU positioning started");
+        if (locationManager == null) {
+            locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
         }
-        if (rtkEngine == null && NativeRtkEngine.isAvailable()) {
-            rtkEngine = new NativeRtkEngine();
-            rtkSolver = rtkEngine;
-            engine.setRawGnssListener(this::onRawMeasurements);
-            Log.i(TAG, "RTK solver native bridge ready");
-        }
-        startCorrections();
-    }
-
-    private void startCorrections() {
-        if (ntripClient != null) return;
-        CorrectionsConfig config = new CorrectionsConfig(this);
-        if (!config.isEnabled()) {
-            rtkState = PrecisionState.contract(
-                    PrecisionState.evaluate(0, false, false, false, Long.MAX_VALUE,
-                            rtkSolver.hasFloatSolution(), rtkSolver.hasFixedSolution()));
-            return;
-        }
-        ntripClient = new NtripClient(
-                config.host(), config.port(), config.mountpoint(),
-                config.username(), config.password(),
-                new NtripClient.Listener() {
-                    @Override
-                    public void onStatus(NtripClient.Status status) {
-                        correctionsConnected = status.connected;
-                        correctionAgeMs = status.ageMs(System.currentTimeMillis());
-                        rtkState = PrecisionState.contract(
-                                PrecisionState.evaluate(0, false, false, correctionsConnected,
-                                        correctionAgeMs, rtkSolver.hasFloatSolution(),
-                                        rtkSolver.hasFixedSolution()));
-                    }
-
-                    @Override
-                    public void onCorrections(byte[] buffer, int length) {
-                        if (rtkEngine != null && length > 0) {
-                            byte[] chunk = new byte[length];
-                            System.arraycopy(buffer, 0, chunk, 0, length);
-                            rtkEngine.addCorrections(chunk);
-                        }
-                    }
-                });
-        ntripClient.start();
-        Log.i(TAG, "correction stream configured: " + config.host() + "/" + config.mountpoint());
-    }
-
-    private void onRawMeasurements(GnssMeasurementsEvent event) {
-        if (rtkEngine == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
-        long timeNanos = event.getClock().getTimeNanos();
-        long fullBias = 0L;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && event.getClock() != null) {
-            fullBias = event.getClock().getFullBiasNanos();
-        }
-        rtkEngine.startEpoch();
-        for (GnssMeasurement measurement : event.getMeasurements()) {
-            int sys = systemFor(measurement.getConstellationType());
-            if (sys == 0 || !measurement.hasCarrierFrequencyHz()) continue;
-            long transmitNanos = measurement.getReceivedSvTimeNanos();
-            if (transmitNanos == 0) continue;
-            double frequencyHz = measurement.getCarrierFrequencyHz();
-            double cn0 = measurement.getCn0DbHz();
-            double pseudorange = (timeNanos + measurement.getTimeOffsetNanos() - transmitNanos)
-                    * 1e-9 * 299_792_458.0;
-            double pseudorangeRate = measurement.getPseudorangeRateMetersPerSecond();
-            double adrMeters = measurement.getAccumulatedDeltaRangeMeters();
-            boolean adrValid = (measurement.getAccumulatedDeltaRangeState()
-                    & GnssMeasurement.ADR_STATE_VALID) != 0;
-            double gnssSeconds = (timeNanos + measurement.getTimeOffsetNanos() - fullBias) * 1e-9;
-            rtkEngine.addMeasurement(gnssSeconds, sys, measurement.getSvid(), frequencyHz,
-                    cn0, pseudorange, pseudorangeRate, adrMeters, adrValid);
-        }
-        rtkEngine.solve();
-    }
-
-    private static int systemFor(int constellationType) {
-        switch (constellationType) {
-            case GnssStatus.CONSTELLATION_GPS:
-                return 1;
-            case GnssStatus.CONSTELLATION_GLONASS:
-                return 4;
-            case GnssStatus.CONSTELLATION_GALILEO:
-                return 8;
-            case GnssStatus.CONSTELLATION_QZSS:
-                return 16;
-            case GnssStatus.CONSTELLATION_BEIDOU:
-                return 32;
-            default:
-                return 0;
+        try {
+            locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER, 10_000L, 0f, this);
+            locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER, 15_000L, 0f, this);
+            Log.i(TAG, "native foreground location started");
+        } catch (SecurityException | IllegalArgumentException error) {
+            Log.e(TAG, "location updates failed", error);
+            stopSelf();
         }
     }
 
-    private void onFusedFix(FusedPositionEngine.Fix fix) {
-        if (fix.accuracyMetres > 250) return;
-        double latitude = fix.latitude;
-        double longitude = fix.longitude;
-        double accuracy = fix.accuracyMetres;
-        if (rtkEngine != null && rtkEngine.hasFixedSolution()) {
-            latitude = rtkEngine.getLatitudeDeg();
-            longitude = rtkEngine.getLongitudeDeg();
-            accuracy = rtkEngine.positionUncertaintyMetres();
-        }
-        LocationStore.save(this, latitude, longitude, fix.capturedAt);
-        final double outLatitude = latitude;
-        final double outLongitude = longitude;
-        final double outAccuracy = accuracy;
-        PrecisionState.Level level = PrecisionState.evaluate(
-                fix.satellitesUsed, fix.dualFrequency, fix.carrierPhase,
-                correctionsConnected, correctionAgeMs,
-                rtkSolver.hasFloatSolution(), rtkSolver.hasFixedSolution());
-        rtkState = PrecisionState.contract(level);
-        long now = System.currentTimeMillis();
-        if (now - lastSentAt < 1050L) return; // <= 9 posts per 10 s, under the rate limit
-        if (!sending.compareAndSet(false, true)) return;
-        lastSentAt = now;
+    @Override
+    public void onLocationChanged(Location location) {
+        if (location.getAccuracy() > 150f) return;
+        GnssQualityMonitor.Quality quality = qualityMonitor.snapshot();
+        LocationStore.save(this, location.getLatitude(), location.getLongitude(),
+                location.getTime());
         executor.execute(() -> {
             try {
                 JSONObject sample = new JSONObject();
-                sample.put("latitude", outLatitude);
-                sample.put("longitude", outLongitude);
-                sample.put("capturedAt", iso(fix.capturedAt));
-                sample.put("accuracyMetres", outAccuracy);
-                sample.put("headingDeg", fix.headingDeg);
-                sample.put("speedMps", Math.max(0, fix.speedMps));
-                sample.put("source", fix.source);
-                sample.put("satellitesUsed", fix.satellitesUsed);
-                sample.put("dualFrequency", fix.dualFrequency);
-                sample.put("carrierPhase", fix.carrierPhase);
-                sample.put("ekfConfidence", fix.confidence);
-                sample.put("rtkState", rtkState);
-                if (correctionsConnected && correctionAgeMs != Long.MAX_VALUE) {
-                    sample.put("correctionAgeMs", correctionAgeMs);
+                sample.put("latitude", location.getLatitude());
+                sample.put("longitude", location.getLongitude());
+                sample.put("capturedAt", iso(location.getTime()));
+                sample.put("accuracyMetres", location.getAccuracy());
+                sample.put("source", "gnss");
+                if (location.hasBearing()) sample.put("headingDeg", location.getBearing());
+                if (location.hasSpeed() && location.getSpeed() >= 0) {
+                    sample.put("speedMps", location.getSpeed());
                 }
+                sample.put("satellitesUsed", quality.satellitesUsed);
+                sample.put("dualFrequency", quality.dualFrequency);
+                sample.put("carrierPhase", quality.carrierPhase);
+                sample.put("rtkState", "unsupported");
                 JSONArray samples = new JSONArray();
                 samples.put(sample);
                 new ApiClient(this).telemetry(samples);
-                Log.i(TAG, "fused telemetry posted acc=" + fix.accuracyMetres
-                        + " sats=" + fix.satellitesUsed + " confidence=" + fix.confidence
-                        + " rtk=" + rtkState);
+                Log.i(TAG, "telemetry posted");
             } catch (Exception error) {
                 Log.w(TAG, "telemetry post failed: " + error.getMessage());
-            } finally {
-                sending.set(false);
             }
         });
     }
@@ -286,13 +183,11 @@ public class TelemetryService extends Service {
 
     @Override
     public void onDestroy() {
-        if (engine != null) {
-            engine.stop();
-            engine = null;
+        if (locationManager != null) {
+            locationManager.removeUpdates(this);
         }
-        if (ntripClient != null) {
-            ntripClient.stop();
-            ntripClient = null;
+        if (qualityMonitor != null) {
+            qualityMonitor.stop();
         }
         executor.shutdownNow();
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
@@ -304,7 +199,3 @@ public class TelemetryService extends Service {
         return null;
     }
 }
-
-
-
-

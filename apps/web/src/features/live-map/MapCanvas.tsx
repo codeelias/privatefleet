@@ -207,7 +207,7 @@ function VehiclePin({
         // Telemetry moves smoothly, but map pan/zoom must track the basemap
         // instantly. Animating left/top during a zoom made stale/ghost pins
         // lag behind and appear to vanish off the card.
-        transition: animate ? "left 0.95s linear, top 0.95s linear" : "none",
+        transition: animate ? "left 1.8s linear, top 1.8s linear" : "none",
       }}
       title={`${driverName} - ${vehicle.registration} - ${gpsLabel} - ${confidenceLabel}`}
       data-confidence={confidence ?? "unknown"}
@@ -923,7 +923,7 @@ export function MapCanvas({
     if (!map || !canvas) {
       return;
     }
-    const duration = prefersReducedMotion() ? 0 : 950;
+    const duration = prefersReducedMotion() ? 0 : 1_800;
     const startedAt = performance.now();
     const vehiclesById = new Map(displayVehicles.map((vehicle) => [vehicle.id, vehicle]));
     const targets: Array<{

@@ -1,3 +1,7 @@
+### v1.69 - Revert default positioning to validated provider flow (2026-11-03)
+- Field feedback: fused EKF output was not better than plain GPS and added visible motion. Reverted TelemetryService to GPS 10 s + network 15 s raw-fix posting (accuracy filter 150 m).
+- EKF/RTKLIB remain compiled but dormant; quality fields still reported; web marker tween restored to 1.8 s.
+- 1.0.11 (versionCode 12) published and installed on R5CWB0BR3BP; Phone 1 pending reconnection.
 ### v1.68 - Accuracy reliability redesign (2026-11-02)
 - Removed IMU position integration (rumble source); constant-velocity EKF with damped velocity.
 - Stationary and innovation-gated fixes snap exactly to GNSS; filter output can no longer be worse than raw GNSS.

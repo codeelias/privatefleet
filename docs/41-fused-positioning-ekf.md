@@ -119,6 +119,17 @@ metres when zoomed out - worse than plain Android GPS. Corrective redesign:
 5. Accuracy now reported as the per-axis covariance rather than an inflated
    two-axis value.
 
+## Decision after field testing (1.0.11)
+
+Field testing showed the fused output was not better than the plain provider
+flow: it added IMU-driven motion on top of the phone's real urban GPS scatter
+(10-40 m) and worsened the dispatcher view. Without RTK corrections no filter
+can reduce that scatter, so the default position source was reverted to the
+validated provider flow: GPS every 10 s plus network every 15 s, raw fix,
+150 m accuracy filter. GNSS quality (satellites, L1+L5, carrier phase) is still
+reported. The EKF and RTKLIB pipeline remain compiled in the APK but are off
+the position path until a base-station correction stream exists.
+
 ## Honest gaps
 
 - RTK correction transport exists (NTRIP client, 1.0.7) but no fixed solver is integrated; sub-metre is still not delivered.
