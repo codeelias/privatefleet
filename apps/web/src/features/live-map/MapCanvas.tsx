@@ -648,14 +648,14 @@ export function MapCanvas({
       const casing = L.polyline(points, {
         color: selected ? "#FFFFFF" : "#F8FAFC",
         weight: selected ? 10 : status === "route" ? 7.5 : 6,
-        opacity: selected ? 0.95 : dimmed ? 0.25 : 0.7,
+        opacity: selected ? 0.95 : dimmed ? 0.35 : 0.7,
         interactive: false,
         className: "pf-route-casing",
       }).addTo(map);
       const line = L.polyline(points, {
         color: lineColour(status),
         weight: selected ? 6 : status === "route" ? 4 : status === "next" ? 5 : 3.5,
-        opacity: selected ? 1 : dimmed ? 0.22 : 0.92,
+        opacity: selected ? 1 : dimmed ? 0.5 : 0.92,
         dashArray: dash(status),
         className: "pf-route-line",
       }).addTo(map);
@@ -692,7 +692,10 @@ export function MapCanvas({
     map.on("error", (event) => {
       const message = event.error?.message ?? String(event.error);
       console.warn("MapLibre error event:", message);
-      if (!map.isStyleLoaded()) {
+      // Only a failing style/source/tile load justifies switching styles;
+      // layer evaluation errors must never cascade the style chain.
+      const loadFailure = /(style|source|tile|sprite|glyph|404|401|403|failed to|is not a valid)/i.test(message);
+      if (!map.isStyleLoaded() && loadFailure) {
         if (styleIndexRef.current < VECTOR_STYLES.length - 1) {
           styleIndexRef.current += 1;
           const next = VECTOR_STYLES[styleIndexRef.current];
@@ -776,12 +779,20 @@ export function MapCanvas({
         type: "circle",
         source: "vehicle-accuracy",
         paint: {
-          "circle-radius": ["/", ["*", ["get", "accuracy"], 156543.03392 * 0.6225], ["^", 2, ["zoom"]]],
+          // Metres to pixels at ~51.5N (97397 m/px factor at zoom 0), halved
+          // per zoom level; zoom must be inside step/interpolate.
+          "circle-radius": [
+            "interpolate",
+            ["exponential", 2],
+            ["zoom"],
+            6, ["*", ["get", "accuracy"], 1521.8],
+            20, ["*", ["get", "accuracy"], 0.0929],
+          ],
           "circle-color": "#EF842F",
           "circle-opacity": 0.12,
           "circle-stroke-color": "#EF842F",
-          "circle-stroke-width": 1.5,
-          "circle-stroke-opacity": 0.55,
+          "circle-stroke-width": 2,
+          "circle-stroke-opacity": 0.85,
         },
       });
       setReady(true);
@@ -862,7 +873,7 @@ export function MapCanvas({
         "vehicle-routes-line",
         "line-opacity",
         selectedDriverId
-          ? ["case", ["==", ["get", "driverId"], selectedDriverId], 1, 0.18]
+          ? ["case", ["==", ["get", "driverId"], selectedDriverId], 1, 0.45]
           : 0.95,
       );
     }
@@ -873,7 +884,7 @@ export function MapCanvas({
         "vehicle-routes-casing",
         "line-opacity",
         selectedDriverId
-          ? ["case", ["==", ["get", "driverId"], selectedDriverId], 0.95, 0]
+          ? ["case", ["==", ["get", "driverId"], selectedDriverId], 0.95, 0.25]
           : 0.85,
       );
     }

@@ -1,3 +1,8 @@
+### v1.71 - Fix invisible map routes (web only) (2026-11-03)
+- Root cause: the accuracy-ring layer used an invalid zoom expression, MapLibre raised a layer error during style load, and the fallback handler cascaded the style chain to the light OpenFreeMap theme where 0.18-opacity dimmed routes were nearly invisible.
+- Fixed: valid interpolate radius expression; style fallback now only switches on real style/source/tile load failures; non-selected route opacity raised 0.18->0.45 (casing 0->0.25) so routes stay legible on light and dark themes; ring stroke visibility improved.
+- Verified on production: zero MapLibre error events, route lines rendered (dark theme preserved), HUD shows after pin selection.
+- No API/native changes; positioning and routing modules untouched.
 ### v1.70 - Stationary-aware location engine (2026-11-03)
 - Native 1.0.12: StationaryGate movement classifier with hysteresis and parked position hold; source arbitration (network ignored while GPS fresh); per-fix pf-diag logging (accuracy, age, timestamps, speed/bearing accuracy, displacement, decision).
 - movementState added to telemetry/vehicle contracts and location_points (migration 0017); dispatcher HUD shows movement state and an accuracy ring for the selected vehicle.
