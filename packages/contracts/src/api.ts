@@ -502,6 +502,8 @@ export const TelemetrySampleSchema = z.object({
   /** RTK precision state; fixed/float can only come from a real solver. */
   rtkState: z.enum(["unsupported", "raw_ready", "corrections_ready", "rtk_float", "rtk_fixed"]).optional(),
   correctionAgeMs: z.number().int().nonnegative().optional(),
+  /** Stationary-aware classification of the emitting device. */
+  movementState: z.enum(["unknown", "stationary", "moving"]).optional(),
 });
 export type TelemetrySample = z.infer<typeof TelemetrySampleSchema>;
 

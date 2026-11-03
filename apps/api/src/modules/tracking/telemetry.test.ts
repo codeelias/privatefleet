@@ -244,6 +244,7 @@ describe("GPS telemetry ingestion", () => {
             ekfConfidence: "high",
             rtkState: "corrections_ready",
             correctionAgeMs: 1_200,
+            movementState: "stationary",
           },
         ],
       },
@@ -264,6 +265,7 @@ describe("GPS telemetry ingestion", () => {
         ekfConfidence?: string;
         rtkState?: string;
         correctionAgeMs?: number;
+        movementState?: string;
       }>;
     }).vehicles.find((entry) => entry.id === session.vehicleId);
     expect(vehicle?.positionSource).toBe("fused");
@@ -273,6 +275,7 @@ describe("GPS telemetry ingestion", () => {
     expect(vehicle?.ekfConfidence).toBe("high");
     expect(vehicle?.rtkState).toBe("corrections_ready");
     expect(vehicle?.correctionAgeMs).toBe(1_200);
+    expect(vehicle?.movementState).toBe("stationary");
   });
 
   it("requires a driver device token", async () => {    const anonymous = await app.inject({

@@ -163,6 +163,7 @@ export const locationPoints = pgTable(
     ekfConfidence: text("ekf_confidence"),
     rtkState: text("rtk_state"),
     correctionAgeMs: integer("correction_age_ms"),
+    movementState: text("movement_state"),
     /** Server-assigned monotonic per-vehicle sequence. */
     sequenceNo: bigint("sequence_no", { mode: "number" }).notNull(),
   },
@@ -627,6 +628,7 @@ export const tenantScopedTables = [
   dispatchPolicyOverrides,
   driverWorkRequests,
 ] as const;
+
 
 
 

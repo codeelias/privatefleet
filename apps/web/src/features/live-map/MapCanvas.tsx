@@ -767,6 +767,23 @@ export function MapCanvas({
           "line-opacity": 0.28,
         },
       }, "vehicle-routes-line");
+      map.addSource("vehicle-accuracy", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "vehicle-accuracy-ring",
+        type: "circle",
+        source: "vehicle-accuracy",
+        paint: {
+          "circle-radius": ["/", ["*", ["get", "accuracy"], 156543.03392 * 0.6225], ["^", 2, ["zoom"]]],
+          "circle-color": "#EF842F",
+          "circle-opacity": 0.12,
+          "circle-stroke-color": "#EF842F",
+          "circle-stroke-width": 1.5,
+          "circle-stroke-opacity": 0.55,
+        },
+      });
       setReady(true);
     });
     const onUserDrag = () => setCameraMode("overview");
@@ -791,6 +808,31 @@ export function MapCanvas({
       setReady(false);
     };
   }, [useVector, mapStyle]);
+
+  // Accuracy ring for the selected vehicle (uncertainty, not precision theatre).
+  useEffect(() => {
+    const map = vectorRef.current;
+    if (!map || !useVector) return;
+    const source = map.getSource("vehicle-accuracy") as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    const location = selectedVehicle?.location;
+    const feature =
+      location && selectedFix && selectedFix.accuracyMetres !== null
+        ? {
+            type: "Feature" as const,
+            properties: { accuracy: selectedFix.accuracyMetres },
+            geometry: {
+              type: "Point" as const,
+              coordinates: [location.longitude, location.latitude],
+            },
+          }
+        : null;
+    source.setData(
+      feature
+        ? { type: "FeatureCollection", features: [feature] }
+        : { type: "FeatureCollection", features: [] },
+    );
+  }, [useVector, selectedVehicle, selectedFix]);
 
   // Update vector route data only when the geometry actually changed, and
   // keep the selection filter current (docs/17: static geometry must not be
@@ -1306,6 +1348,15 @@ export function MapCanvas({
                   {selectedVehicle.correctionAgeMs !== undefined
                     ? ` · corrections ${(selectedVehicle.correctionAgeMs / 1000).toFixed(1)} s old`
                     : ""}
+                </p>
+              )}
+              {selectedVehicle?.movementState && (
+                <p className="mt-0.5 text-[9px] font-bold" data-testid="map-movement-state">
+                  {{
+                    stationary: "Parked — position held",
+                    moving: "Moving",
+                    unknown: "Movement unknown",
+                  }[selectedVehicle.movementState]}
                 </p>
               )}
               {selectedFix.stale && <p className="mt-1 text-[9px] text-status-warning">Last known position; ETA is advisory.</p>}

@@ -139,6 +139,8 @@ export const VehicleDtoSchema = z.object({
   /** RTK precision state from the native pipeline. */
   rtkState: z.enum(["unsupported", "raw_ready", "corrections_ready", "rtk_float", "rtk_fixed"]).optional(),
   correctionAgeMs: z.number().int().nonnegative().optional(),
+  /** Stationary-aware classification (unknown/stationary/moving). */
+  movementState: z.enum(["unknown", "stationary", "moving"]).optional(),
 });
 export type VehicleDto = z.infer<typeof VehicleDtoSchema>;
 

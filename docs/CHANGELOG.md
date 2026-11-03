@@ -1,3 +1,7 @@
+### v1.70 - Stationary-aware location engine (2026-11-03)
+- Native 1.0.12: StationaryGate movement classifier with hysteresis and parked position hold; source arbitration (network ignored while GPS fresh); per-fix pf-diag logging (accuracy, age, timestamps, speed/bearing accuracy, displacement, decision).
+- movementState added to telemetry/vehicle contracts and location_points (migration 0017); dispatcher HUD shows movement state and an accuracy ring for the selected vehicle.
+- No Kalman, no RTK changes; standard-GPS pipeline only.
 ### v1.69 - Revert default positioning to validated provider flow (2026-11-03)
 - Field feedback: fused EKF output was not better than plain GPS and added visible motion. Reverted TelemetryService to GPS 10 s + network 15 s raw-fix posting (accuracy filter 150 m).
 - EKF/RTKLIB remain compiled but dormant; quality fields still reported; web marker tween restored to 1.8 s.

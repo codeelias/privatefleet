@@ -121,6 +121,7 @@ interface VehicleRow {
   ekf_confidence: string | null;
   rtk_state: string | null;
   correction_age_ms: number | null;
+  movement_state: string | null;
 }
 
 interface RouteRow {
@@ -190,12 +191,12 @@ export class PgFleetService {
         sql`SELECT v.id, v.registration, v.vehicle_type, v.status, v.driver_id, v.latitude, v.longitude, v.captured_at,
                    lp.accuracy_metres, lp.heading_deg, lp.speed_mps,
                    lp.source, lp.satellites_used, lp.dual_frequency, lp.carrier_phase, lp.ekf_confidence,
-                   lp.rtk_state, lp.correction_age_ms
+                   lp.rtk_state, lp.correction_age_ms, lp.movement_state
             FROM vehicles v
             LEFT JOIN LATERAL (
               SELECT accuracy_metres, heading_deg, speed_mps, source,
                      satellites_used, dual_frequency, carrier_phase, ekf_confidence,
-                     rtk_state, correction_age_ms
+                     rtk_state, correction_age_ms, movement_state
               FROM location_points
               WHERE vehicle_id = v.id
               ORDER BY captured_at DESC
@@ -310,6 +311,9 @@ export class PgFleetService {
             : {}),
           ...(vehicle.correction_age_ms !== null
             ? { correctionAgeMs: vehicle.correction_age_ms }
+            : {}),
+          ...(vehicle.movement_state
+            ? { movementState: vehicle.movement_state as VehicleDto["movementState"] }
             : {}),
         })),
         jobs: jobs.map((job) => ({
