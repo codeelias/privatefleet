@@ -1,3 +1,8 @@
+### v1.72 - Resilient API transport and sync verification (2026-11-03)
+- Native 1.0.13: ApiClient now falls back to the LAN origin https://api.privatefleet.home.arpa when the tailnet hostname cannot be resolved (UnknownHost/Connect/Timeout), preferring the last reachable base; JUnit covers the base ordering.
+- Field incident resolved: Tom's phone was on 1.0.9 with its app process stopped and a DNS failure for the tailnet name; reinstall + Tailscale + fallback restored queue and posting (CAR-03 fresh again).
+- Confirmed no jobs/stops were cleared (Mo 48/2 open, Tom 72/65 open, Sarah 26 open); the empty queue was an API-reachability failure, not data loss.
+- Dispatcher confidence dots: green requires device accuracy <= 15 m and age <= 15 s; indoors accuracy 15-40 m correctly shows amber.
 ### v1.71 - Fix invisible map routes (web only) (2026-11-03)
 - Root cause: the accuracy-ring layer used an invalid zoom expression, MapLibre raised a layer error during style load, and the fallback handler cascaded the style chain to the light OpenFreeMap theme where 0.18-opacity dimmed routes were nearly invisible.
 - Fixed: valid interpolate radius expression; style fallback now only switches on real style/source/tile load failures; non-selected route opacity raised 0.18->0.45 (casing 0->0.25) so routes stay legible on light and dark themes; ring stroke visibility improved.

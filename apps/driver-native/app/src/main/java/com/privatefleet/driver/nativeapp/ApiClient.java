@@ -17,6 +17,12 @@ import java.nio.charset.StandardCharsets;
 public final class ApiClient {
     public static final String BASE = BuildConfig.API_BASE;
 
+    /** LAN fallback: resolves via the on-prem dnsmasq when the tailnet name
+     *  cannot be resolved from the device's network. Same origin, same
+     *  internal CA the app already trusts. */
+    private static final String LAN_BASE = "https://api.privatefleet.home.arpa";
+    private static volatile String lastGoodBase = null;
+
     public static final class ApiException extends Exception {
         public final int status;
 
@@ -219,7 +225,32 @@ public final class ApiClient {
 
     private Response raw(String method, String path, String body, String token,
                         String commandId) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(BASE + path).openConnection();
+        Exception lastError = null;
+        for (String base : orderedBases()) {
+            try {
+                Response response = rawOnce(base, method, path, body, token, commandId);
+                lastGoodBase = base;
+                return response;
+            } catch (java.net.UnknownHostException | java.net.ConnectException
+                     | java.net.SocketTimeoutException error) {
+                lastError = error;
+            }
+        }
+        if (lastError != null) throw lastError;
+        throw new java.io.IOException("no reachable API base");
+    }
+
+    static String[] orderedBases() {
+        java.util.LinkedHashSet<String> bases = new java.util.LinkedHashSet<>();
+        if (lastGoodBase != null) bases.add(lastGoodBase);
+        bases.add(BASE);
+        bases.add(LAN_BASE);
+        return bases.toArray(new String[0]);
+    }
+
+    private Response rawOnce(String base, String method, String path, String body,
+                             String token, String commandId) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(base + path).openConnection();
         connection.setRequestMethod(method);
         connection.setConnectTimeout(15000);
         connection.setReadTimeout(20000);
