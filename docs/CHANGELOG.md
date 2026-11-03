@@ -1,3 +1,7 @@
+### v1.73 - PF-TIDE Stage 0-1 shadow (2026-11-03)
+- Stage 0 baseline measured over 28,123 stored observations (median displacement 0.7-1.0 m, p95 26.9-39.5 m, median accuracy 17.5-22.1 m).
+- Stage 1: pure server-side PF-TIDE Core estimator (adaptive R, NIS gating, event-time replay, corrected/predicted state, FRESH/DEGRADED/COASTING) with 6 unit tests. Not wired to production.
+- Baseline CLI for CSV replay; docs/45 defines the programme and the six permanent rules.
 ### v1.72 - Resilient API transport and sync verification (2026-11-03)
 - Native 1.0.13: ApiClient now falls back to the LAN origin https://api.privatefleet.home.arpa when the tailnet hostname cannot be resolved (UnknownHost/Connect/Timeout), preferring the last reachable base; JUnit covers the base ordering.
 - Field incident resolved: Tom's phone was on 1.0.9 with its app process stopped and a DNS failure for the tailnet name; reinstall + Tailscale + fallback restored queue and posting (CAR-03 fresh again).

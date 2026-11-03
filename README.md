@@ -15,7 +15,10 @@ LAN-first multi-tenant courier dispatch platform. Synthetic data only.
 [`docs/30-data-retirement-and-release-signing.md`](docs/30-data-retirement-and-release-signing.md)
 
 **Current-build verification and recovery:**
-[`docs/31-current-build-verification.md`](docs/31-current-build-verification.md)\n\n**Pilot baseline and 120-second rehearsal kit:**\n[`docs/32-pilot-baseline-and-rehearsal-kit.md`](docs/32-pilot-baseline-and-rehearsal-kit.md)\n\n**Dispatch Board redesign:**\n[`docs/33-dispatch-board-redesign.md`](docs/33-dispatch-board-redesign.md)\n\n**Jobs & Work Orders redesign:**\n[`docs/34-jobs-work-orders-redesign.md`](docs/34-jobs-work-orders-redesign.md)\n\n**Stationary-aware location engine:**
+[`docs/31-current-build-verification.md`](docs/31-current-build-verification.md)\n\n**Pilot baseline and 120-second rehearsal kit:**\n[`docs/32-pilot-baseline-and-rehearsal-kit.md`](docs/32-pilot-baseline-and-rehearsal-kit.md)\n\n**Dispatch Board redesign:**\n[`docs/33-dispatch-board-redesign.md`](docs/33-dispatch-board-redesign.md)\n\n**Jobs & Work Orders redesign:**\n[`docs/34-jobs-work-orders-redesign.md`](docs/34-jobs-work-orders-redesign.md)\n\n**PF-TIDE positioning programme:**
+[`docs/45-pf-tide-programme.md`](docs/45-pf-tide-programme.md)
+
+**Stationary-aware location engine:**
 [`docs/44-stationary-aware-location.md`](docs/44-stationary-aware-location.md)
 
 **RTK solver integration (RTKLIB/JNI):**
