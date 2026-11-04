@@ -69,6 +69,7 @@ public class RouteMapActivity extends Activity {
     private Button followButton;
     private MapCacheManager cacheManager;
     private final Map<Long, RouteGeometry.Stop> markerStops = new HashMap<>();
+    private final Map<String, Integer> drawnColourKey = new HashMap<>();
     private final Set<String> syncingStopIds = new HashSet<>();
     private final List<Marker> stopMarkers = new ArrayList<>();
     private final List<Polyline> routePolylines = new ArrayList<>();
@@ -85,6 +86,7 @@ public class RouteMapActivity extends Activity {
     private boolean busy = false;
     private int tickCounter = 0;
     private boolean firstRender = true;
+    private volatile boolean destroyed = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -113,7 +115,7 @@ public class RouteMapActivity extends Activity {
         legend.setTextColor(Color.WHITE);
         legend.setBackgroundColor(Color.argb(180, 24, 24, 27));
         legend.setPadding(dp(8), dp(4), dp(8), dp(4));
-        legend.setText("P = pickup  \u00b7  D = dropoff  \u00b7  \u25CF blue to do  \u00b7  \u25CF orange arrived  \u00b7  \u25CF green complete");
+        legend.setText("P = pickup  \u00b7  D = dropoff");
         FrameLayout.LayoutParams legendLp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.TOP | Gravity.CENTER_HORIZONTAL);
@@ -266,7 +268,7 @@ public class RouteMapActivity extends Activity {
     }
 
     private void refreshPosition() {
-        if (map == null) return;
+        if (destroyed || map == null) return;
         double[] location = LocationStore.load(this);
         if (location == null) return;
         double lat = location[0];
@@ -361,12 +363,24 @@ public class RouteMapActivity extends Activity {
 
     private void renderRoute(RouteGeometry loadedGeometry) {
         geometry = loadedGeometry;
-        // Repaint from server truth: remove all previous overlays first.
-        for (Marker marker : stopMarkers) {
-            map.removeMarker(marker);
+        // Remove only pins whose stops left the route; the rest persist and
+        // are re-bound/updated in place - no mass icon churn per refresh.
+        Set<String> keep = new HashSet<>();
+        for (RouteGeometry.Stop stop : geometry.stops) {
+            keep.add(stop.stopId);
         }
-        stopMarkers.clear();
-        markerStops.clear();
+        List<Marker> stale = new ArrayList<>();
+        for (Marker marker : stopMarkers) {
+            RouteGeometry.Stop bound = markerStops.get(marker.getId());
+            if (bound == null || !keep.contains(bound.stopId)) {
+                stale.add(marker);
+            }
+        }
+        for (Marker marker : stale) {
+            map.removeMarker(marker);
+            stopMarkers.remove(marker);
+            markerStops.remove(marker.getId());
+        }
         // Confirmed terminal stops leave the syncing set (green now).
         Set<String> confirmed = new HashSet<>();
         for (RouteGeometry.Stop stop : geometry.stops) {
@@ -445,15 +459,57 @@ public class RouteMapActivity extends Activity {
     }
 
     private void renderPins() {
+        if (destroyed || map == null) return;
         IconFactory icons = IconFactory.getInstance(this);
+        Set<String> present = new HashSet<>();
+        for (Marker marker : stopMarkers) {
+            RouteGeometry.Stop bound = markerStops.get(marker.getId());
+            if (bound != null) {
+                present.add(bound.stopId);
+            }
+        }
         for (RouteGeometry.Stop stop : geometry.stops) {
-            Marker marker = map.addMarker(new MarkerOptions()
-                    .position(new LatLng(stop.latitude, stop.longitude))
-                    .icon(icons.fromBitmap(pinBitmap(stop))));
-            markerStops.put(marker.getId(), stop);
-            stopMarkers.add(marker);
+            if (!present.contains(stop.stopId)) {
+                Marker marker = map.addMarker(new MarkerOptions()
+                        .position(new LatLng(stop.latitude, stop.longitude))
+                        .icon(icons.fromBitmap(pinBitmap(stop))));
+                markerStops.put(marker.getId(), stop);
+                stopMarkers.add(marker);
+                drawnColourKey.put(stop.stopId, colourKey(stop));
+            }
+        }
+        // Re-bind kept markers to the fresh geometry (server truth), then
+        // swap an icon only when the stop's state actually changed.
+        for (Marker marker : stopMarkers) {
+            RouteGeometry.Stop bound = markerStops.get(marker.getId());
+            if (bound == null) continue;
+            RouteGeometry.Stop fresh = findStop(bound.stopId);
+            if (fresh == null) continue;
+            markerStops.put(marker.getId(), fresh);
+            int key = colourKey(fresh);
+            Integer previous = drawnColourKey.get(fresh.stopId);
+            if (previous == null || previous != key) {
+                marker.setIcon(icons.fromBitmap(pinBitmap(fresh)));
+                drawnColourKey.put(fresh.stopId, key);
+            }
         }
         Log.i(TAG, "renderPins drawn=" + geometry.stops.size());
+    }
+
+    private RouteGeometry.Stop findStop(String stopId) {
+        for (RouteGeometry.Stop candidate : geometry.stops) {
+            if (candidate.stopId.equals(stopId)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private int colourKey(RouteGeometry.Stop stop) {
+        if (syncingStopIds.contains(stop.stopId)) return 2;
+        if (isTerminal(stop.status)) return 3;
+        if ("arrived".equals(stop.status)) return 1;
+        return 0;
     }
 
     /**
@@ -495,18 +551,25 @@ public class RouteMapActivity extends Activity {
     }
 
     private void repinStop(RouteGeometry.Stop updated) {
-        Marker toRemove = null;
+        if (destroyed || map == null) return;
+        Marker existing = null;
         for (Marker marker : stopMarkers) {
             RouteGeometry.Stop bound = markerStops.get(marker.getId());
             if (bound != null && bound.stopId.equals(updated.stopId)) {
-                toRemove = marker;
+                existing = marker;
                 break;
             }
         }
-        if (toRemove != null) {
-            map.removeMarker(toRemove);
-            stopMarkers.remove(toRemove);
-            markerStops.remove(toRemove.getId());
+        if (existing != null) {
+            int key = colourKey(updated);
+            Integer previous = drawnColourKey.get(updated.stopId);
+            if (previous == null || previous != key) {
+                IconFactory icons = IconFactory.getInstance(this);
+                existing.setIcon(icons.fromBitmap(pinBitmap(updated)));
+                drawnColourKey.put(updated.stopId, key);
+            }
+            markerStops.put(existing.getId(), updated);
+            return;
         }
         IconFactory icons = IconFactory.getInstance(this);
         Marker marker = map.addMarker(new MarkerOptions()
@@ -514,6 +577,7 @@ public class RouteMapActivity extends Activity {
                 .icon(icons.fromBitmap(pinBitmap(updated))));
         markerStops.put(marker.getId(), updated);
         stopMarkers.add(marker);
+        drawnColourKey.put(updated.stopId, colourKey(updated));
     }
 
     private boolean isTerminal(String status) {
@@ -525,25 +589,42 @@ public class RouteMapActivity extends Activity {
     }
 
     private Bitmap pinBitmap(RouteGeometry.Stop stop) {
-        int size = dp(48);
+        int size = dp(36);
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        boolean done = "completed".equals(stop.status) || "skipped".equals(stop.status) || "failed".equals(stop.status);
+        Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
+        boolean done = isTerminal(stop.status);
         boolean arrived = "arrived".equals(stop.status);
         boolean syncing = syncingStopIds.contains(stop.stopId);
-        // Colour language: blue = to do, orange = arrived at the stop,
-        // amber = saved offline waiting to sync, green = confirmed complete.
-        paint.setColor(syncing ? 0xFFD97706 : done ? 0xFF16A34A : arrived ? 0xFFF59E0B : 0xFF276EF1);
-        canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(4), paint);
-        paint.setColor(Color.WHITE);
-        paint.setTextSize(dp(13));
-        paint.setTypeface(Typeface.DEFAULT_BOLD);
-        // Label: job reference + stop type - identical to the queue list, so
-        // a pin can never be confused with a neighbouring one.
-        String label = stop.reference + "\u00b7" + ("pickup".equals(stop.type) ? "P" : "D");
-        float width = paint.measureText(label);
-        canvas.drawText(label, (size - width) / 2f, size / 2f + dp(4), paint);
+        // Fill colour (renders on most devices; this Samsung model draws all
+        // fills blue, so state is ALSO encoded in shapes below).
+        fill.setColor(syncing ? 0xFFD97706 : done ? 0xFF16A34A : arrived ? 0xFFF59E0B : 0xFF276EF1);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(3), fill);
+        Paint white = new Paint(Paint.ANTI_ALIAS_FLAG);
+        white.setColor(Color.WHITE);
+        white.setStyle(Paint.Style.STROKE);
+        white.setStrokeWidth(dp(3));
+        if (arrived) {
+            // White ring = arrived at the stop.
+            canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(6), white);
+        }
+        if (done) {
+            // White check mark = confirmed complete.
+            canvas.drawLine(size * 0.28f, size * 0.52f, size * 0.44f, size * 0.68f, white);
+            canvas.drawLine(size * 0.44f, size * 0.68f, size * 0.74f, size * 0.34f, white);
+        }
+        if (syncing) {
+            white.setStrokeWidth(dp(2));
+            white.setStyle(Paint.Style.STROKE);
+            canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(6), white);
+        }
+        Paint text = new Paint(Paint.ANTI_ALIAS_FLAG);
+        text.setColor(Color.WHITE);
+        text.setTextSize(dp(12));
+        text.setTypeface(Typeface.DEFAULT_BOLD);
+        String label = stop.sequence + " " + ("pickup".equals(stop.type) ? "P" : "D");
+        float width = text.measureText(label);
+        canvas.drawText(label, (size - width) / 2f, size * 0.82f, text);
         return bitmap;
     }
 
@@ -857,6 +938,10 @@ public class RouteMapActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        // Stop the tick and mark destroyed so no callback touches the dead
+        // MapView (previously caused 'updateMarker after MapView destroyed').
+        destroyed = true;
+        handler.removeCallbacksAndMessages(null);
         mapView.onDestroy();
         super.onDestroy();
     }

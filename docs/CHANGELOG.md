@@ -1,3 +1,7 @@
+### v1.88 - Driver map: device-proof pin states (evidence-based) (2026-11-04)
+- Proven by pixel census across SDK 11.8.0/13.6.1, both artifacts and multiple colours: this Samsung GPU renders ONLY blue pin fills and white pixels; green/orange/amber/magenta fills never appear while labels do. Server data was correct throughout.
+- Pins now encode state in shapes that do render: white ring = arrived, white check = confirmed complete, ring = queued offline; colours remain for devices that render them.
+- Restored SDK 11.8.0 (markers + polylines render); FLAG_SECURE re-enabled; destroyed-map tick fixed; zero icon churn; stable route-order queue kept.
 ### v1.87 - Driver map: evidence-based root cause + reference-labelled pins (2026-11-04)
 - Instrumented build captured 3 identical route fetches during reproduction and the tapped pin's true identity (26 D G05-005): the app never renumbered anything; adjacent small-numbered pins were being misread.
 - Pins now 48dp and labelled with the job reference + type (G05-005 D), identical to the queue list; every tap confirms identity with a toast.
