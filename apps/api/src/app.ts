@@ -10,6 +10,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { z } from "zod";
 import type { AppConfig } from "./config.js";
+import { sql } from "drizzle-orm";
 import { closeDb, createDb, type DbHandle } from "./db/client.js";
 import { createRealtimeBus, type RealtimeBus } from "./lib/realtime.js";
 import { AuthError, AuthService } from "./modules/auth/service.js";
@@ -31,6 +32,7 @@ import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
 import { registerReportRoutes } from "./modules/reports/routes.js";
 import { registerGeofenceRoutes } from "./modules/geofences/routes.js";
 import { registerPositioningDiagnosticsRoutes } from "./modules/positioning/routes.js";
+import { registerDiagnosticsRoutes } from "./modules/diagnostics/routes.js";
 import { registerPublicTrackingRoutes } from "./modules/tracking/public-tracking-routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
@@ -303,12 +305,34 @@ export function buildApp(config: AppConfig): {
 
   app.get("/healthz", async () => ({ status: "ok" }));
 
-  app.get("/readyz", async () => ({
-    status: "ok",
-    demoMode: config.demoMode,
-    repositoryMode: config.repositoryMode,
-    version: config.version,
-  }));
+  // Liveness is /healthz (process up). Readiness must prove the database is
+  // reachable before load is admitted; the probe is attached once the db
+  // handle exists in postgres mode.
+  let probeDatabase: (() => Promise<boolean>) | null = null;
+  app.get("/readyz", async (_request, reply) => {
+    let database = "n/a";
+    let ready = true;
+    if (probeDatabase) {
+      try {
+        const up = await Promise.race([
+          probeDatabase(),
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2_000)),
+        ]);
+        database = up ? "up" : "down";
+        ready = up;
+      } catch {
+        database = "down";
+        ready = false;
+      }
+    }
+    return reply.status(ready ? 200 : 503).send({
+      status: ready ? "ok" : "degraded",
+      database,
+      demoMode: config.demoMode,
+      repositoryMode: config.repositoryMode,
+      version: config.version,
+    });
+  });
 
   app.get("/v1/meta", async () => ({
     name: config.name,
@@ -325,6 +349,14 @@ export function buildApp(config: AppConfig): {
       throw new Error("postgres repository mode requires DATABASE_URL");
     }
     const db = createDb(config.databaseUrl);
+    probeDatabase = async () => {
+      try {
+        await db.db.execute(sql`SELECT 1`);
+        return true;
+      } catch {
+        return false;
+      }
+    };
     const auth = new AuthService(config, db);
     const bus = createRealtimeBus(app.server, {
       demoMode: false,
@@ -348,6 +380,7 @@ export function buildApp(config: AppConfig): {
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter, db);
     registerTrackingRoutes(app, auth, bus, db);
     registerPositioningDiagnosticsRoutes(app, auth);
+    registerDiagnosticsRoutes(app, auth, db);
     const routingClients =
       config.osrmBaseUrl && config.vroomBaseUrl
         ? createRoutingClients({
