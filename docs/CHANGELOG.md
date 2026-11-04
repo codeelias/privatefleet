@@ -1,3 +1,6 @@
+### v1.75 - Native TLS trust fix, verified on Phone 1 (2026-11-04)
+- Bundled the on-prem CA scoped to api.privatefleet.home.arpa via network security config; public origins keep system trust.
+- Phone 1 now posts telemetry and loads its queue on 1.0.16 (versionCode 17).
 ### v1.74 - PF-TIDE Stage 2 wired + RINEX references (2026-11-03)
 - Shadow runner mirrors accepted telemetry into PF-TIDE (in-memory); new staff-only diagnostics endpoint /v1/diagnostics/positioning-shadow is live on the host.
 - Native 1.0.14: pf-raw GNSS capture (measurements + navigation messages) for RTKLIB PPK; verified on Phone 1.

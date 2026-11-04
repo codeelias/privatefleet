@@ -54,6 +54,17 @@ production smoke → separate commit → recorded metric.
   cluster (PostgreSQL 16, port 5432). Documented here so the gate failure
   mode is understood, not mysterious.
 
+## S7 - Native TLS trust (hardware-verified)
+
+- Defect found on Phone 1: the 1.0.13 LAN fallback to
+  api.privatefleet.home.arpa failed with CertPathValidatorException because
+  the device did not trust the Caddy internal CA.
+- Fix: bundle the on-prem root CA (res/raw/pf_ca.pem) and scope it to the LAN
+  origin only via res/xml/network_security_config.xml; system trust is used
+  for every public origin.
+- Verified on Phone 1: telemetry posted, queue loaded (36 jobs), offline
+  banner cleared. 1.0.16 / versionCode 17.
+
 ## Open slices
 
 - S4 - Native polish (remaining): status-line freshness, button busy states

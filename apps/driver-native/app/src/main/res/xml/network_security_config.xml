@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- System trust for public origins; the bundled private CA only for the
+         on-prem LAN origin the app falls back to when the tailnet name is
+         unreachable. -->
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">api.privatefleet.home.arpa</domain>
+        <trust-anchors>
+            <certificates src="@raw/pf_ca" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
