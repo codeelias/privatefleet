@@ -44,6 +44,16 @@ production smoke → separate commit → recorded metric.
 - Verified: emulator install + launch; physical-phone behaviour pending
   reconnection (RFCW10QT5ZE / R5CWB0BR3BP not attached).
 
+## Gate evidence
+
+- `scripts/verify.ps1` + `scripts/verify.mjs` run typecheck + unit suites
+  deterministically; gate result 2026-11-04: contracts/api/web typecheck
+  clean, API 110/110, web 53/53 - PASS.
+- Root cause found for the earlier failing suite: the dev database lives in
+  WSL Ubuntu-24.04 and the instance was stopped; starting WSL restored the
+  cluster (PostgreSQL 16, port 5432). Documented here so the gate failure
+  mode is understood, not mysterious.
+
 ## Open slices
 
 - S4 - Native polish (remaining): status-line freshness, button busy states
