@@ -83,6 +83,7 @@ public class RouteMapActivity extends Activity {
     private String pendingPhotoJobId;
     private String pendingPhotoStopId;
     private boolean busy = false;
+    private int tickCounter = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -206,6 +207,12 @@ public class RouteMapActivity extends Activity {
                     } catch (Exception ignored) {
                     }
                 });
+            }
+            // Honesty refresh: re-read server truth every 60s so pin colours
+            // converge even if an earlier fetch raced a server commit.
+            tickCounter += 1;
+            if (tickCounter % 6 == 0) {
+                loadRoute();
             }
             handler.postDelayed(this, 10_000);
         }
@@ -460,6 +467,15 @@ public class RouteMapActivity extends Activity {
         layout.addView(button);
     }
 
+    /**
+     * Reload route truth after a confirmed action, then settle-check again
+     * shortly after so a fetch can never lose a race with the server commit.
+     */
+    private void settleReload() {
+        handler.postDelayed(this::loadRoute, 1_200);
+        handler.postDelayed(this::loadRoute, 8_000);
+    }
+
     private void runCommand(String kind, RouteGeometry.Stop stop, String recipient) {
         if (busy) return;
         busy = true;
@@ -470,14 +486,14 @@ public class RouteMapActivity extends Activity {
                 runOnUiThread(() -> {
                     if (result.sent > 0 && result.remaining == 0) {
                         toast(kind + " confirmed on the system");
-                        loadRoute(); // repaint pins from server truth
+                        settleReload();
                     } else if (result.remaining > 0) {
                         syncingStopIds.add(stop.stopId);
                         toast("No connection - saved offline. It will sync automatically.");
                         renderRoute(geometry); // amber pin feedback now
                     } else if (result.conflicts > 0) {
-                        toast("Dispatch changed this stop - refreshing.");
-                        loadRoute();
+                        toast("Already processed on the system - refreshing the map.");
+                        settleReload();
                     }
                 });
             } catch (Exception error) {
@@ -594,7 +610,7 @@ public class RouteMapActivity extends Activity {
                         if (result.sent > 0 && result.remaining == 0) {
                             status.setTextColor(0xFF16A34A);
                             status.setText("Completed and confirmed on the system.");
-                            loadRoute();
+                            settleReload();
                             handler.postDelayed(dialog::dismiss, 900);
                         } else if (result.remaining > 0) {
                             syncingStopIds.add(stop.stopId);
@@ -609,8 +625,8 @@ public class RouteMapActivity extends Activity {
                             layout.addView(close);
                         } else if (result.conflicts > 0) {
                             status.setTextColor(Color.rgb(180, 83, 9));
-                            status.setText("Dispatch changed this stop. Refreshing the map.");
-                            loadRoute();
+                            status.setText("Already processed on the system. Refreshing the map.");
+                            settleReload();
                             handler.postDelayed(dialog::dismiss, 900);
                         }
                     });

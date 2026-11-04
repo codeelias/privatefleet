@@ -1,3 +1,7 @@
+### v1.81 - Driver map: settle-reload fixes pin colour flapping (2026-11-04)
+- After a confirmed action the map re-reads server truth after a short settle delay and again at +8s, so a fetch can no longer race the server commit and repaint a stop blue.
+- Every 60s the map re-reads route truth (honesty refresh) so colours converge even after transient failures.
+- Already-processed actions now say so clearly instead of 'dispatch changed this stop'.
 ### v1.80 - Driver map: server-truth pin colours, no silent closes (2026-11-04)
 - Pins repaint from the server immediately after a confirmed action (green only on system confirmation).
 - Queued-offline actions show an amber pin and a HUD 'waiting to sync' hint; the map retries the offline queue every 10s and turns pins green on drain.
