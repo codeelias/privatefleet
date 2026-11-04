@@ -1,0 +1,402 @@
+package com.privatefleet.driver.nativeapp;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.content.Intent;
+import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.util.Log;
+import android.view.Gravity;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import org.maplibre.android.camera.CameraUpdateFactory;
+import org.maplibre.android.geometry.LatLng;
+import org.maplibre.android.maps.MapLibreMap;
+import org.maplibre.android.maps.MapView;
+import org.maplibre.android.annotations.IconFactory;
+import org.maplibre.android.annotations.Marker;
+import org.maplibre.android.annotations.MarkerOptions;
+import org.maplibre.android.annotations.PolylineOptions;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Driver route map screen. Thin UI wiring only:
+ *  - basemap + offline cache handled by MapCacheManager
+ *  - route data and parsing live in RouteGeometry
+ *  - actions reuse the offline command and evidence queues
+ * The list UI remains the primary workflow; this screen is opt-in.
+ */
+public class RouteMapActivity extends Activity {
+    private static final String TAG = "pf-map";
+    private static final String STYLE_URI = "https://tiles.openfreemap.org/styles/liberty";
+
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private MapView mapView;
+    private MapLibreMap map;
+    private TextView statusView;
+    private MapCacheManager cacheManager;
+    private final Map<Long, RouteGeometry.Stop> markerStops = new HashMap<>();
+
+    private Uri pendingPhotoUri;
+    private String pendingPhotoJobId;
+    private String pendingPhotoStopId;
+    private boolean busy = false;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE,
+                android.view.WindowManager.LayoutParams.FLAG_SECURE);
+
+        FrameLayout frame = new FrameLayout(this);
+        mapView = new MapView(this);
+        frame.addView(mapView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        statusView = new TextView(this);
+        statusView.setTextSize(13);
+        statusView.setTextColor(Color.WHITE);
+        statusView.setBackgroundColor(Color.argb(200, 24, 24, 27));
+        statusView.setPadding(dp(12), dp(8), dp(12), dp(8));
+        FrameLayout.LayoutParams statusLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        statusLp.topMargin = dp(8);
+        frame.addView(statusView, statusLp);
+
+        Button back = new Button(this);
+        back.setText("\u2190 List");
+        back.setOnClickListener(v -> finish());
+        FrameLayout.LayoutParams backLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.START);
+        backLp.topMargin = dp(8);
+        backLp.leftMargin = dp(8);
+        frame.addView(back, backLp);
+
+        setContentView(frame);
+
+        cacheManager = new MapCacheManager(this, (message, hasOfflineData) -> runOnUiThread(() -> {
+            statusView.setText(message);
+            // Only force cached tiles when the network is down; otherwise the
+            // live style renders and the cache is the automatic offline
+            // fallback the SDK applies itself.
+            if (hasOfflineData && map != null && !NetworkState.online(this)) {
+                map.setOfflineRegionDefinition(cacheManager.definition());
+            }
+            if (!hasOfflineData && "Map needs a first download on a better connection - staying in list mode.".equals(message)) {
+                toast(message);
+                finish();
+            }
+        }));
+
+        mapView.getMapAsync(loaded -> {
+            map = loaded;
+            map.setStyle(STYLE_URI, style -> {
+                Log.i(TAG, "style loaded fully=" + style.isFullyLoaded()
+                        + " layers=" + style.getLayers().size()
+                        + " sources=" + style.getSources().size());
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(51.5074, -0.1278), 11));
+                map.setOnMarkerClickListener(marker -> {
+                    RouteGeometry.Stop stop = markerStops.get(marker.getId());
+                    if (stop != null) {
+                        showStopSheet(stop);
+                    }
+                    return true;
+                });
+                cacheManager.start();
+                loadRoute();
+            });
+        });
+    }
+
+    private void loadRoute() {
+        executor.execute(() -> {
+            try {
+                RouteGeometry geometry = RouteGeometry.fromJson(new ApiClient(this).routeGeometry());
+                runOnUiThread(() -> renderRoute(geometry));
+            } catch (Exception error) {
+                Log.w(TAG, "route geometry failed", error);
+                runOnUiThread(() -> statusView.setText("Route unavailable - check connection."));
+            }
+        });
+    }
+
+    private void renderRoute(RouteGeometry geometry) {
+        if (geometry.points.size() >= 2) {
+            List<LatLng> line = new ArrayList<>();
+            for (double[] point : geometry.points) {
+                line.add(new LatLng(point[0], point[1]));
+            }
+            map.addPolyline(new PolylineOptions()
+                    .addAll(line)
+                    .color(Color.parseColor("#EF842F"))
+                    .width(4.5f));
+        }
+        IconFactory icons = IconFactory.getInstance(this);
+        for (RouteGeometry.Stop stop : geometry.stops) {
+            Marker marker = map.addMarker(new MarkerOptions()
+                    .position(new LatLng(stop.latitude, stop.longitude))
+                    .icon(icons.fromBitmap(pinBitmap(stop))));
+            markerStops.put(marker.getId(), stop);
+        }
+        if (!geometry.stops.isEmpty()) {
+            RouteGeometry.Stop first = geometry.stops.get(0);
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                    new LatLng(first.latitude, first.longitude), 12));
+        }
+        if (!statusView.getText().toString().startsWith("Downloading")) {
+            statusView.setText(geometry.stops.isEmpty() ? "No stops on this route." : "Map ready (offline)");
+        }
+    }
+
+    private Bitmap pinBitmap(RouteGeometry.Stop stop) {
+        int size = dp(36);
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        boolean done = "completed".equals(stop.status) || "skipped".equals(stop.status) || "failed".equals(stop.status);
+        paint.setColor(done ? 0xFF16A34A : 0xFF276EF1);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(3), paint);
+        paint.setColor(Color.WHITE);
+        paint.setTextSize(dp(13));
+        paint.setTypeface(Typeface.DEFAULT_BOLD);
+        String label = String.valueOf(stop.sequence);
+        float width = paint.measureText(label);
+        canvas.drawText(label, (size - width) / 2f, size / 2f + dp(4), paint);
+        return bitmap;
+    }
+
+    private void showStopSheet(RouteGeometry.Stop stop) {
+        Dialog dialog = new Dialog(this);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(20), dp(20), dp(20), dp(24));
+        scroll.addView(layout);
+        dialog.setContentView(scroll);
+
+        TextView title = new TextView(this);
+        title.setText(stop.sequence + ". " + stop.reference + " - " + stop.type.toUpperCase());
+        title.setTextSize(18);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        layout.addView(title);
+
+        TextView address = new TextView(this);
+        address.setText(stop.address);
+        address.setTextSize(14);
+        address.setPadding(0, dp(6), 0, 0);
+        layout.addView(address);
+
+        TextView status = new TextView(this);
+        status.setText("Status: " + stop.status
+                + (stop.windowEnd.isEmpty() ? "" : "  \u00b7  window ends " + stop.windowEnd));
+        status.setTextSize(12);
+        status.setTextColor(Color.rgb(102, 112, 133));
+        status.setPadding(0, dp(6), 0, dp(8));
+        layout.addView(status);
+
+        addAction(layout, dialog, "Arrive", () -> runCommand("arrive", stop, null));
+        addAction(layout, dialog, "Upload photo", () -> capturePhoto(stop));
+        addAction(layout, dialog, "Recipient signature", () -> promptSignature(stop));
+        addAction(layout, dialog, "Add note", () -> promptNote(stop));
+        addAction(layout, dialog, "Complete delivery", () -> promptRecipientAndComplete(stop));
+
+        dialog.show();
+    }
+
+    private void addAction(LinearLayout layout, Dialog dialog, String label, Runnable action) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setOnClickListener(v -> {
+            dialog.dismiss();
+            action.run();
+        });
+        layout.addView(button);
+    }
+
+    private void runCommand(String kind, RouteGeometry.Stop stop, String recipient) {
+        if (busy) return;
+        busy = true;
+        executor.execute(() -> {
+            try {
+                CommandSubmitter.command(this, kind, stop.jobId, stop.stopId, recipient, null);
+                runOnUiThread(() -> toast(kind + " sent"));
+            } catch (Exception error) {
+                runOnUiThread(() -> toast("Failed: " + error.getMessage()));
+            } finally {
+                busy = false;
+            }
+        });
+    }
+
+    private void capturePhoto(RouteGeometry.Stop stop) {
+        try {
+            android.content.ContentValues values = new android.content.ContentValues();
+            values.put(MediaStore.Images.Media.DISPLAY_NAME, "pf_" + System.currentTimeMillis() + ".jpg");
+            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+            pendingPhotoUri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            pendingPhotoJobId = stop.jobId;
+            pendingPhotoStopId = stop.stopId;
+            Intent capture = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            capture.putExtra(MediaStore.EXTRA_OUTPUT, pendingPhotoUri);
+            startActivityForResult(capture, 200);
+        } catch (Exception error) {
+            toast("Camera unavailable: " + error.getMessage());
+        }
+    }
+
+    private void promptSignature(RouteGeometry.Stop stop) {
+        Dialog dialog = new Dialog(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(20), dp(20), dp(20), dp(20));
+        TextView title = new TextView(this);
+        title.setText("Recipient signature");
+        title.setTextSize(20);
+        layout.addView(title);
+        SignatureView pad = new SignatureView(this);
+        pad.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(240)));
+        layout.addView(pad);
+        Button save = new Button(this);
+        save.setText("Save signature");
+        save.setOnClickListener(v -> {
+            String pathData = pad.getPathData();
+            if (pathData.isEmpty()) {
+                toast("Signature is empty");
+                return;
+            }
+            dialog.dismiss();
+            submitEvidence("evidence_signature", stop, "pathData", pathData);
+        });
+        layout.addView(save);
+        dialog.setContentView(layout);
+        dialog.show();
+    }
+
+    private void promptNote(RouteGeometry.Stop stop) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Note for dispatch");
+        EditText input = new EditText(this);
+        builder.setView(input);
+        builder.setPositiveButton("Send", (d, w) -> {
+            String text = input.getText().toString().trim();
+            if (!text.isEmpty()) {
+                submitEvidence("evidence_note", stop, "note", text);
+            }
+        });
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
+
+    private void promptRecipientAndComplete(RouteGeometry.Stop stop) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Complete delivery");
+        EditText input = new EditText(this);
+        input.setHint("Recipient name");
+        builder.setView(input);
+        builder.setPositiveButton("Complete", (d, w) ->
+                runCommand("complete", stop, input.getText().toString().trim()));
+        builder.setNegativeButton("Cancel", null);
+        builder.show();
+    }
+
+    private void submitEvidence(String kind, RouteGeometry.Stop stop, String field, String value) {
+        executor.execute(() -> {
+            try {
+                CommandSubmitter.evidence(this, kind, stop.jobId, stop.stopId, field, value);
+                runOnUiThread(() -> toast("Evidence saved - syncing"));
+            } catch (Exception error) {
+                runOnUiThread(() -> toast("Evidence failed: " + error.getMessage()));
+            }
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != 200 || resultCode != RESULT_OK || pendingPhotoUri == null) return;
+        Uri uri = pendingPhotoUri;
+        String jobId = pendingPhotoJobId;
+        String stopId = pendingPhotoStopId;
+        pendingPhotoUri = null;
+        executor.execute(() -> {
+            try (InputStream stream = getContentResolver().openInputStream(uri)) {
+                Bitmap bitmap = BitmapFactory.decodeStream(stream);
+                if (bitmap == null) throw new IllegalStateException("Could not read photo");
+                int max = 1280;
+                float scale = Math.min(1f, Math.min((float) max / bitmap.getWidth(), (float) max / bitmap.getHeight()));
+                Bitmap scaled = scale < 1f
+                        ? Bitmap.createScaledBitmap(bitmap, Math.round(bitmap.getWidth() * scale),
+                        Math.round(bitmap.getHeight() * scale), true)
+                        : bitmap;
+                ByteArrayOutputStream output = new ByteArrayOutputStream();
+                scaled.compress(Bitmap.CompressFormat.JPEG, 80, output);
+                String path = EvidenceStore.savePhoto(this, output.toByteArray());
+                RouteGeometry.Stop stop = new RouteGeometry.Stop(
+                        0, stopId, jobId, "", "", "", "", "", 0, 0);
+                submitEvidence("evidence_photo", stop, "path", path);
+            } catch (Exception error) {
+                runOnUiThread(() -> toast("Photo failed: " + error.getMessage()));
+            }
+        });
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        mapView.onStart();
+    }
+
+    @Override
+    protected void onStop() {
+        mapView.onStop();
+        super.onStop();
+    }
+
+    @Override
+    protected void onDestroy() {
+        mapView.onDestroy();
+        super.onDestroy();
+    }
+
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        mapView.onLowMemory();
+    }
+
+    private int dp(int value) {
+        return Math.round(value * Resources.getSystem().getDisplayMetrics().density);
+    }
+
+    private void toast(String message) {
+        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_SHORT).show());
+    }
+}
+
+

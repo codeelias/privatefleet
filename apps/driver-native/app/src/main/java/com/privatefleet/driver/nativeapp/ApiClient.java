@@ -143,6 +143,14 @@ public final class ApiClient {
         return new JSONObject(response.body);
     }
 
+    /** Read-only map feed: published route line + stop sequence. */
+    public JSONObject routeGeometry() throws Exception {
+        Session session = Session.load(context);
+        Response response = auth("GET", "/v1/driver/route-geometry", null, session);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+        return new JSONObject(response.body);
+    }
+
     public void arrive(String jobId, String stopId, String driverId, String commandId)
             throws Exception {
         JSONObject body = new JSONObject();

@@ -251,6 +251,12 @@ public class MainActivity extends Activity {
         refresh.setOnClickListener(v -> refreshQueue());
         root.addView(refresh);
 
+        Button mapButton = new Button(this);
+        mapButton.setText("Map");
+        mapButton.setOnClickListener(v ->
+                startActivity(new Intent(this, RouteMapActivity.class)));
+        root.addView(mapButton);
+
         queueStatus = new TextView(this);
         queueStatus.setTextSize(11);
         queueStatus.setTextColor(Color.rgb(180, 83, 9));

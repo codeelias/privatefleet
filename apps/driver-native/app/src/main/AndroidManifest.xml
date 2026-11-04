@@ -13,6 +13,7 @@
 
     <application
         android:allowBackup="false"
+        android:name=".PrivateFleetApp"
         android:icon="@android:drawable/sym_def_app_icon"
         android:label="PrivateFleet Native"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
@@ -32,6 +33,11 @@
             android:name=".TelemetryService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <activity
+            android:name=".RouteMapActivity"
+            android:exported="false"
+            android:label="Route map" />
     </application>
 </manifest>
 
