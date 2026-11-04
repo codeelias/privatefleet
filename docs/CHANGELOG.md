@@ -1,3 +1,7 @@
+### v1.78 - Customer live progress (differentiator) (2026-11-04)
+- Public tracking now shows live route-aware progress: stops before you + ~ETA minutes projected from the vehicle position onto the published route, with rolling speed.
+- Pure route-progress module with unit tests; contracts extended with liveProgress; web public page renders the new pill and live ETA.
+- Verified live: stopsAway=0, etaMinutes=1, confidence=high, on_time. Gate green (API 115/115, web 53/53).
 ### v1.77 - Driver map: route following and geofence sync (2026-11-04)
 - Native 1.2.0: live position marker with Follow toggle; completed route grey vs remaining orange; HUD with next stop, distance, ETA and stops left; geofence overlays with inside/outside state.
 - API: route-geometry now returns legDistanceM and arrivalAt per stop; new driver-scoped GET /v1/driver/geofences.

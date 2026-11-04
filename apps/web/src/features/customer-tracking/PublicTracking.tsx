@@ -151,12 +151,23 @@ export function PublicTracking({ token }: { token: string }) {
           </span>
         </div>
 
+        {data.liveProgress && (
+          <p className="mt-3 inline-flex rounded-full bg-[#276EF1]/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#93C5FD]">
+            {data.liveProgress.stopsAway > 0
+              ? `${data.liveProgress.stopsAway} stop${data.liveProgress.stopsAway === 1 ? "" : "s"} before you`
+              : "You are next"}
+          </p>
+        )}
         <p className="mt-4 text-[64px] font-bold leading-[0.95] tracking-[-0.04em] text-white">
-          {etaMinutes !== null ? `${etaMinutes} min` : data.status.replace("_", " ")}
+          {data.liveProgress
+            ? `~${data.liveProgress.etaMinutes} min`
+            : etaMinutes !== null
+              ? `${etaMinutes} min`
+              : data.status.replace("_", " ")}
         </p>
         <p className="mt-1 text-sm text-[#A1A1AA]">
           {data.eta
-            ? `Estimated arrival ${new Date(data.eta).toLocaleTimeString("en-GB", {
+            ? `${data.liveProgress ? "Live estimate" : "Estimated"} arrival ${new Date(data.eta).toLocaleTimeString("en-GB", {
                 hour: "2-digit",
                 minute: "2-digit",
               })}`

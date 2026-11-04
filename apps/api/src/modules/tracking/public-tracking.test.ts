@@ -80,8 +80,9 @@ beforeAll(async () => {
   `;
   const routeId = randomUUID();
   await migrator.sql`
-    INSERT INTO routes (id, tenant_id, route_date, driver_id, vehicle_id, status, version)
-    VALUES (${routeId}, ${tenantId}, current_date, ${driverId}, ${vehicleId}, 'published', 1)
+    INSERT INTO routes (id, tenant_id, route_date, driver_id, vehicle_id, status, version, geometry)
+    VALUES (${routeId}, ${tenantId}, current_date, ${driverId}, ${vehicleId}, 'published', 1,
+      '[{"latitude": 51.505, "longitude": -0.120}, {"latitude": 51.506, "longitude": -0.121}]'::jsonb)
   `;
   await migrator.sql`
     INSERT INTO route_stops (id, tenant_id, route_id, job_stop_id, sequence_no, planned_arrival_at, status)
@@ -164,6 +165,7 @@ describe("public customer tracking", () => {
       inCustomerZone?: boolean;
       customerZoneName?: string;
       proof?: { photos: number; signatures: number };
+      liveProgress?: { stopsAway: number; etaMinutes: number };
     };
     expect(body.jobReference).toBe("TRK-JOB");
     expect(body.status).toBe("in_progress");
@@ -174,6 +176,9 @@ describe("public customer tracking", () => {
     expect(body.stops).toHaveLength(1);
     expect(body.stops[0]?.address).toBe("1 Tracking Way");
     expect(body.delayStatus).toBe("on_time");
+    expect(body.liveProgress).toBeDefined();
+    expect(body.liveProgress?.stopsAway).toBe(0);
+    expect(typeof body.liveProgress?.etaMinutes).toBe("number");
     expect(body.etaConfidence).toBeDefined();
     expect(body.remainingStops).toBe(1);
     expect(body.lastUpdateAt).toBeDefined();

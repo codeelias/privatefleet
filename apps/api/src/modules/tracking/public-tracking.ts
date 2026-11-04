@@ -9,6 +9,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { PublicTrackingResponse } from "@privatefleet/contracts";
 import { withTenant, type DbHandle } from "../../db/client.js";
+import { computeLiveProgress } from "./route-progress.js";
 
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const STALE_AFTER_MS = 60_000;
@@ -75,8 +76,8 @@ export async function publicTracking(
 
   return withTenant(handle, row.tenant_id, async (db) => {
     const jobs = (await db.execute(sql`
-      SELECT j.reference, j.status, v.registration, v.latitude, v.longitude, v.captured_at,
-             d.full_name
+      SELECT j.reference, j.status, j.assigned_vehicle_id, j.assigned_driver_id,
+             v.registration, v.latitude, v.longitude, v.captured_at, d.full_name
       FROM jobs j
       LEFT JOIN vehicles v ON v.id = j.assigned_vehicle_id
       LEFT JOIN drivers d ON d.id = j.assigned_driver_id
@@ -84,6 +85,8 @@ export async function publicTracking(
     `)) as unknown as Array<{
       reference: string;
       status: string;
+      assigned_vehicle_id: string | null;
+      assigned_driver_id: string | null;
       registration: string | null;
       latitude: number | null;
       longitude: number | null;
@@ -180,6 +183,81 @@ export async function publicTracking(
       }
     }
 
+    // Live route-aware progress: project the vehicle onto the published
+    // route and count incomplete stops before this job's first stop.
+    let liveProgress: { stopsAway: number; etaMinutes: number } | undefined;
+    if (position && !position.stale && job.assigned_driver_id) {
+      const routeRows = (await db.execute(sql`
+        SELECT geometry FROM routes
+        WHERE tenant_id = ${row.tenant_id}
+          AND driver_id = ${job.assigned_driver_id}
+          AND status IN ('published', 'in_progress')
+        ORDER BY version DESC
+        LIMIT 1
+      `)) as unknown as Array<{
+        geometry: Array<{ latitude: number; longitude: number }> | null;
+      }>;
+      const geometry = routeRows[0]?.geometry;
+      if (geometry && geometry.length >= 2) {
+        const sequenceRows = (await db.execute(sql`
+          SELECT rs.sequence_no, s.id AS stop_id, s.job_id, s.latitude, s.longitude, s.status
+          FROM route_stops rs
+          JOIN job_stops s ON s.id = rs.job_stop_id
+          WHERE rs.route_id = (
+            SELECT id FROM routes
+            WHERE tenant_id = ${row.tenant_id}
+              AND driver_id = ${job.assigned_driver_id}
+              AND status IN ('published', 'in_progress')
+            ORDER BY version DESC
+            LIMIT 1
+          )
+          ORDER BY rs.sequence_no
+        `)) as unknown as Array<{
+          sequence_no: number;
+          stop_id: string;
+          job_id: string;
+          latitude: number;
+          longitude: number;
+          status: string;
+        }>;
+        const customerSequence = sequenceRows.find(
+          (stop) => stop.job_id === row.job_id,
+        );
+        if (customerSequence) {
+          const stopsAway = sequenceRows.filter(
+            (stop) =>
+              stop.sequence_no < customerSequence.sequence_no &&
+              stop.status !== "completed" &&
+              stop.status !== "skipped" &&
+              stop.status !== "failed",
+          ).length;
+          const speedRows = (await db.execute(sql`
+            SELECT COALESCE(AVG(speed_mps), 0)::float8 AS avg_speed
+            FROM (
+              SELECT speed_mps FROM location_points
+              WHERE vehicle_id = ${job.assigned_vehicle_id}
+                AND speed_mps IS NOT NULL
+                AND captured_at > now() - interval '10 minutes'
+              ORDER BY captured_at DESC
+              LIMIT 5
+            ) recent
+          `)) as unknown as Array<{ avg_speed: number | null }>;
+          const progress = computeLiveProgress(
+            geometry,
+            position.latitude,
+            position.longitude,
+            customerSequence.latitude,
+            customerSequence.longitude,
+            stopsAway,
+            speedRows[0]?.avg_speed ?? 7,
+          );
+          if (progress) {
+            liveProgress = progress;
+          }
+        }
+      }
+    }
+
     return {
       jobReference: job.reference,
       status: job.status,
@@ -188,6 +266,7 @@ export async function publicTracking(
       etaConfidence,
       delayStatus,
       ...(remainingStops > 0 ? { remainingStops } : {}),
+      ...(liveProgress ? { liveProgress } : {}),
       ...(position?.capturedAt ? { lastUpdateAt: position.capturedAt } : {}),
       ...(inCustomerZone !== undefined ? { inCustomerZone } : {}),
       ...(customerZoneName ? { customerZoneName } : {}),

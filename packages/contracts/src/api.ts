@@ -176,6 +176,18 @@ export const PublicTrackingResponseSchema = z.object({
   stops: z.array(PublicTrackingStopSchema),
   /** Remaining uncompleted stops, for progress copy. */
   remainingStops: z.number().int().nonnegative().optional(),
+  /**
+   * Live route-aware progress: stops remaining before this customer's stop
+   * and estimated minutes to arrival, projected from the vehicle's live
+   * position onto the published route. Only present with fresh position +
+   * route geometry; otherwise the planned ETA fields apply.
+   */
+  liveProgress: z
+    .object({
+      stopsAway: z.number().int().nonnegative(),
+      etaMinutes: z.number().int().nonnegative(),
+    })
+    .optional(),
   /** Whether the ETA is a planned schedule or a live-blended estimate. */
   etaMethod: z.enum(["live", "planned"]).optional(),
   /** Trust level of the displayed arrival, derived from fix age. */
