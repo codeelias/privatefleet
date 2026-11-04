@@ -407,8 +407,11 @@ public class RouteMapActivity extends Activity {
         Canvas canvas = new Canvas(bitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         boolean done = "completed".equals(stop.status) || "skipped".equals(stop.status) || "failed".equals(stop.status);
+        boolean arrived = "arrived".equals(stop.status);
         boolean syncing = syncingStopIds.contains(stop.stopId);
-        paint.setColor(syncing ? 0xFFD97706 : done ? 0xFF16A34A : 0xFF276EF1);
+        // Colour language: blue = to do, orange = arrived at the stop,
+        // amber = saved offline waiting to sync, green = confirmed complete.
+        paint.setColor(syncing ? 0xFFD97706 : done ? 0xFF16A34A : arrived ? 0xFFF59E0B : 0xFF276EF1);
         canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(3), paint);
         paint.setColor(Color.WHITE);
         paint.setTextSize(dp(13));
@@ -448,7 +451,19 @@ public class RouteMapActivity extends Activity {
         status.setPadding(0, dp(6), 0, dp(8));
         layout.addView(status);
 
-        addAction(layout, dialog, "Arrive", () -> runCommand("arrive", stop, null));
+        if ("pending".equals(stop.status)) {
+            addAction(layout, dialog, "Arrive", () -> runCommand("arrive", stop, null));
+        } else if ("arrived".equals(stop.status)) {
+            Button already = new Button(this);
+            already.setText("Already arrived");
+            already.setEnabled(false);
+            layout.addView(already);
+        } else {
+            Button doneButton = new Button(this);
+            doneButton.setText("Completed \u2713");
+            doneButton.setEnabled(false);
+            layout.addView(doneButton);
+        }
         addAction(layout, dialog, "Upload photo", () -> capturePhoto(stop));
         addAction(layout, dialog, "Recipient signature", () -> promptSignature(stop));
         addAction(layout, dialog, "Add note", () -> promptNote(stop));
@@ -485,7 +500,13 @@ public class RouteMapActivity extends Activity {
                         this, kind, stop.jobId, stop.stopId, recipient, null);
                 runOnUiThread(() -> {
                     if (result.sent > 0 && result.remaining == 0) {
-                        toast(kind + " confirmed on the system");
+                        if ("arrive".equals(kind)) {
+                            toast("Arrived - marked on the system (orange pin).");
+                        } else if ("complete".equals(kind)) {
+                            toast("Completed - confirmed on the system (green pin).");
+                        } else {
+                            toast(kind + " confirmed on the system");
+                        }
                         settleReload();
                     } else if (result.remaining > 0) {
                         syncingStopIds.add(stop.stopId);

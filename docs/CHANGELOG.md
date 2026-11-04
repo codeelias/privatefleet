@@ -1,3 +1,7 @@
+### v1.82 - Driver map: clear pin colour language (2026-11-04)
+- Pin colours now spell the stop state: blue = to do, orange = arrived, amber = saved offline awaiting sync, green = confirmed complete.
+- Stop sheet disables Arrive with honest labels (Already arrived / Completed) instead of re-sending.
+- Arrive/Complete toasts state exactly what the system confirmed and what the pin colour means.
 ### v1.81 - Driver map: settle-reload fixes pin colour flapping (2026-11-04)
 - After a confirmed action the map re-reads server truth after a short settle delay and again at +8s, so a fetch can no longer race the server commit and repaint a stop blue.
 - Every 60s the map re-reads route truth (honesty refresh) so colours converge even after transient failures.
