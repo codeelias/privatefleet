@@ -37,6 +37,7 @@ const FAILURE_REASON_LABELS: Record<FailureReasonCode, string> = {
   OTHER: "Delivery exception",
 };
 import type { RealtimeBus } from "../../lib/realtime.js";
+import { scoreDelivery } from "./delivery-confidence.js";
 import {
   buildImportCandidates,
   candidateToJob,
@@ -92,6 +93,8 @@ interface StopRow {
   completed_at: Date | string | null;
   failure_code: string | null;
   failure_note: string | null;
+  evidence_kinds: string[] | null;
+  gps_gap_m: number | null;
 }
 
 interface DriverRow {
@@ -180,9 +183,24 @@ export class PgFleetService {
             FROM jobs ORDER BY reference`,
       )) as unknown as JobRow[];
       const stops = (await db.execute(
-        sql`SELECT id, job_id, sequence, stop_type, address, latitude, longitude, status,
-                   window_start, window_end, arrived_at, completed_at, failure_code, failure_note
-            FROM job_stops ORDER BY job_id, sequence`,
+        sql`SELECT s.id, s.job_id, s.sequence, s.stop_type, s.address, s.latitude, s.longitude, s.status,
+                   s.window_start, s.window_end, s.arrived_at, s.completed_at, s.failure_code, s.failure_note,
+                   ev.kinds AS evidence_kinds,
+                   CASE WHEN s.completed_at IS NULL THEN NULL ELSE (
+                     SELECT MIN(ST_Distance(
+                       ST_MakePoint(lp.longitude, lp.latitude)::geography,
+                       ST_MakePoint(s.longitude, s.latitude)::geography))
+                     FROM location_points lp
+                     JOIN jobs j2 ON j2.assigned_vehicle_id = lp.vehicle_id
+                     WHERE j2.id = s.job_id
+                       AND lp.captured_at BETWEEN s.completed_at - interval '5 minutes'
+                                              AND s.completed_at + interval '2 minutes'
+                   ) END AS gps_gap_m
+            FROM job_stops s
+            LEFT JOIN LATERAL (
+              SELECT array_agg(DISTINCT kind) AS kinds FROM stop_evidence WHERE stop_id = s.id
+            ) ev ON true
+            ORDER BY s.job_id, s.sequence`,
       )) as unknown as StopRow[];
       const drivers = (await db.execute(
         sql`SELECT id, full_name, status, vehicle_id, last_ping_at FROM drivers ORDER BY full_name`,
@@ -243,6 +261,22 @@ export class PgFleetService {
 
       const stopsByJob = new Map<string, JobStopDto[]>();
       for (const stop of stops) {
+        const terminal = stop.status === "completed" || stop.status === "skipped" || stop.status === "failed";
+        const confidence = terminal
+          ? scoreDelivery({
+              photo:
+                (stop.evidence_kinds?.includes("photo") ?? false) ||
+                (stop.evidence_kinds?.includes("failure_photo") ?? false),
+              signature: stop.evidence_kinds?.includes("signature") ?? false,
+              gpsWithinTolerance:
+                stop.gps_gap_m !== null && stop.gps_gap_m <= 200,
+              withinWindow:
+                stop.completed_at !== null &&
+                stop.window_end !== null &&
+                epoch(stop.completed_at) <= epoch(stop.window_end),
+              failureCode: stop.failure_code,
+            })
+          : undefined;
         const list = stopsByJob.get(stop.job_id) ?? [];
         list.push({
           id: stop.id,
@@ -258,6 +292,7 @@ export class PgFleetService {
           ...(iso(stop.completed_at) ? { completedAt: iso(stop.completed_at) } : {}),
           ...(stop.failure_code ? { failureCode: stop.failure_code } : {}),
           ...(stop.failure_note ? { failureNote: stop.failure_note } : {}),
+          ...(confidence ? { deliveryConfidence: confidence } : {}),
         });
         stopsByJob.set(stop.job_id, list);
       }

@@ -88,6 +88,17 @@ export const JobStopDtoSchema = z.object({
   completedAt: z.string().datetime().optional(),
   failureCode: z.string().optional(),
   failureNote: z.string().optional(),
+  /**
+   * Evidence-derived delivery confidence for terminal stops: score 0-100
+   * plus the contributing factors. Only present for completed / skipped /
+   * failed stops.
+   */
+  deliveryConfidence: z
+    .object({
+      score: z.number().int().min(0).max(100),
+      factors: z.array(z.string()),
+    })
+    .optional(),
 });
 export type JobStopDto = z.infer<typeof JobStopDtoSchema>;
 

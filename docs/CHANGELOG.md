@@ -1,3 +1,6 @@
+### v1.79 - Delivery confidence score (differentiator) (2026-11-04)
+- Every terminal stop now carries an evidence-derived 0-100 confidence score with factor breakdown; dispatcher stop cards show the badge.
+- Verified live: 57/57 terminal stops scored on production. Gate green.
 ### v1.78 - Customer live progress (differentiator) (2026-11-04)
 - Public tracking now shows live route-aware progress: stops before you + ~ETA minutes projected from the vehicle position onto the published route, with rolling speed.
 - Pure route-progress module with unit tests; contracts extended with liveProgress; web public page renders the new pill and live ETA.

@@ -29,7 +29,14 @@ courier tool exposes it.
   polyline, count incomplete stops before the customer's stop, remaining
   distance / rolling speed -> ETA.
 
-## S2 - Delivery confidence score (automatic, evidence-based)
+## S2 - Delivery confidence score (done, live-verified)
+
+Status: shipped. Every terminal stop in fleet state carries a 0-100 score
+from verifiable signals only (photo 30, signature 30, GPS-at-stop 25, window
+15; structured failures score 0). Dispatcher stop cards show the badge and
+factor breakdown. Verified live: 57/57 terminal stops scored on production.
+
+## S2b (original plan text) - Delivery confidence score (automatic, evidence-based)
 
 Every completed stop is scored 0-100 from verifiable signals only:
 photo evidence present, recipient signature present, completion GPS stamp
@@ -39,11 +46,11 @@ code. Dispatchers see the score + contributing factors; no invented inputs.
 - API: `deliveryConfidence` on job/stop detail (derived at read time).
 - Web: badge on the dispatch board and job detail with factor breakdown.
 
-## S3 - Driver shift performance (native)
+## S3 - Driver shift performance (native) - next slice
 
-"My shift" stats in the driver app from data the driver already produces:
-stops completed, on-time rate, photos/signatures taken, distance driven.
-No new sensors, no invented numbers.
+Planned next: "My shift" stats in the driver app from data the driver
+already produces: stops completed, on-time rate, photos/signatures taken,
+distance driven. No new sensors, no invented numbers.
 
 ## Deferred (documented, not started)
 

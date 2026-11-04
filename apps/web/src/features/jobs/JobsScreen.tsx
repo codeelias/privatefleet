@@ -570,6 +570,16 @@ function JobDetailDrawer({
                       {planned ? ` --------- Planned ${new Date(planned).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}
                     </p>
                     {stop.failureCode && <p className="mt-1 text-[10px] font-semibold text-status-danger">{stop.failureCode.replaceAll("_", " ")}</p>}
+                    {stop.deliveryConfidence && (
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${stop.deliveryConfidence.score >= 70 ? "bg-[#14532D]/30 text-[#86EFAC]" : stop.deliveryConfidence.score >= 40 ? "bg-[#713F12]/30 text-[#FCD34D]" : "bg-[#7F1D1D]/30 text-[#FCA5A5]"}`}>
+                          Confidence {stop.deliveryConfidence.score}
+                        </span>
+                        <span className="truncate text-[9px] text-text-secondary">
+                          {stop.deliveryConfidence.factors.join(", ").replaceAll("_", " ")}
+                        </span>
+                      </div>
+                    )}
                   </li>
                 );
               })}
