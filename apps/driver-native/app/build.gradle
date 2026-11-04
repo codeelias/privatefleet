@@ -17,8 +17,8 @@ android {
         applicationId "com.privatefleet.driver.nativeapp"
         minSdk 26
         targetSdk 36
-        versionCode 26
-        versionName "1.2.7"
+        versionCode 28
+        versionName "1.2.9"
         buildConfigField "String", "API_BASE", "\"https://pf-node.tail060a86.ts.net\""
         externalNativeBuild {
             cmake {
@@ -73,6 +73,8 @@ dependencies {
     testImplementation 'org.json:json:20240303'
     implementation 'org.maplibre.gl:android-sdk:13.6.1'
 }
+
+
 
 
 

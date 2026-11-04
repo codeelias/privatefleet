@@ -1,3 +1,6 @@
+### v1.87 - Driver map: evidence-based root cause + reference-labelled pins (2026-11-04)
+- Instrumented build captured 3 identical route fetches during reproduction and the tapped pin's true identity (26 D G05-005): the app never renumbered anything; adjacent small-numbered pins were being misread.
+- Pins now 48dp and labelled with the job reference + type (G05-005 D), identical to the queue list; every tap confirms identity with a toast.
 ### v1.86 - Driver queue: stable route order (2026-11-04)
 - Root cause of the 'flipping numbers': the queue list re-sorted by live GPS distance on every refresh, so row numbers changed constantly; the server route (v123) never changed.
 - Queue now renders in published route order (matches map pin numbers exactly) with distance-sort only as a fallback when no route exists.

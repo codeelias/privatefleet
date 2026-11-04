@@ -183,6 +183,10 @@ public class RouteMapActivity extends Activity {
                 map.setOnMarkerClickListener(marker -> {
                     RouteGeometry.Stop stop = markerStops.get(marker.getId());
                     if (stop != null) {
+                        Log.i(TAG, "pin tapped seq=" + stop.sequence + " type=" + stop.type
+                                + " status=" + stop.status + " ref=" + stop.reference);
+                        toast("Stop " + stop.sequence + " " + ("pickup".equals(stop.type) ? "P" : "D")
+                                + " \u00b7 " + stop.reference + " \u00b7 " + stop.status);
                         showStopSheet(stop);
                     }
                     return true;
@@ -328,6 +332,22 @@ public class RouteMapActivity extends Activity {
         executor.execute(() -> {
             try {
                 RouteGeometry loaded = RouteGeometry.fromJson(new ApiClient(this).routeGeometry());
+                Log.i(TAG, "loadRoute fetched stops=" + loaded.stops.size()
+                        + " points=" + loaded.points.size());
+                StringBuilder signature = new StringBuilder();
+                for (RouteGeometry.Stop stop : loaded.stops) {
+                    if (signature.length() > 0) signature.append(',');
+                    signature.append(stop.sequence)
+                            .append(stop.type.startsWith("pickup") ? 'P' : 'D')
+                            .append(stop.status.charAt(0));
+                }
+                Log.i(TAG, "route signature: " + signature);
+                for (RouteGeometry.Stop stop : loaded.stops) {
+                    if (stop.sequence >= 20 && stop.sequence <= 32) {
+                        Log.i(TAG, "route seq=" + stop.sequence + " type=" + stop.type
+                                + " status=" + stop.status + " ref=" + stop.reference);
+                    }
+                }
                 runOnUiThread(() -> {
                     renderRoute(loaded);
                     refreshPosition();
@@ -433,6 +453,7 @@ public class RouteMapActivity extends Activity {
             markerStops.put(marker.getId(), stop);
             stopMarkers.add(marker);
         }
+        Log.i(TAG, "renderPins drawn=" + geometry.stops.size());
     }
 
     /**
@@ -504,7 +525,7 @@ public class RouteMapActivity extends Activity {
     }
 
     private Bitmap pinBitmap(RouteGeometry.Stop stop) {
-        int size = dp(36);
+        int size = dp(48);
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -514,15 +535,15 @@ public class RouteMapActivity extends Activity {
         // Colour language: blue = to do, orange = arrived at the stop,
         // amber = saved offline waiting to sync, green = confirmed complete.
         paint.setColor(syncing ? 0xFFD97706 : done ? 0xFF16A34A : arrived ? 0xFFF59E0B : 0xFF276EF1);
-        canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(3), paint);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(4), paint);
         paint.setColor(Color.WHITE);
-        paint.setTextSize(dp(11));
+        paint.setTextSize(dp(13));
         paint.setTypeface(Typeface.DEFAULT_BOLD);
-        // Label: sequence + stop type so pickup and dropoff pins of the same
-        // job reference can never be confused ("14 P" vs "26 D").
-        String label = stop.sequence + " " + ("pickup".equals(stop.type) ? "P" : "D");
+        // Label: job reference + stop type - identical to the queue list, so
+        // a pin can never be confused with a neighbouring one.
+        String label = stop.reference + "\u00b7" + ("pickup".equals(stop.type) ? "P" : "D");
         float width = paint.measureText(label);
-        canvas.drawText(label, (size - width) / 2f, size / 2f + dp(3), paint);
+        canvas.drawText(label, (size - width) / 2f, size / 2f + dp(4), paint);
         return bitmap;
     }
 
