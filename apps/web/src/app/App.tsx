@@ -50,6 +50,20 @@ function MapFallback() {
     </div>
   );
 }
+
+function ShellSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Loading dashboard" className="flex-1 space-y-3 overflow-hidden p-5">
+      <div className="h-10 w-64 animate-pulse rounded-lg bg-command-raised" />
+      <div className="grid grid-cols-4 gap-3">
+        {[0, 1, 2, 3].map((index) => (
+          <div key={index} className="h-20 animate-pulse rounded-xl bg-command-raised" />
+        ))}
+      </div>
+      <div className="h-[420px] animate-pulse rounded-xl bg-command-raised" />
+    </div>
+  );
+}
 import {
   acceptTelemetry,
   staleVehicleIds,
@@ -126,6 +140,7 @@ function Dashboard({
   const [queueOpen, setQueueOpen] = useState(false);
   const [queuePage, setQueuePage] = useState(0);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const telemetryTrackRef = useRef<TrackMap>({});
   const pendingPositionsRef = useRef<Map<string, VehiclePosition>>(new Map());
   const gpsSeenRef = useRef<Map<string, number>>(new Map());
@@ -152,6 +167,10 @@ function Dashboard({
         : baseState,
     [baseState, routesQuery.data],
   );
+
+  useEffect(() => {
+    if (fleetQuery.data) setHasLoadedOnce(true);
+  }, [fleetQuery.data]);
 
   useEffect(() => {
     try {
@@ -416,13 +435,17 @@ function Dashboard({
         <div className="flex flex-1 overflow-hidden">
           <main className="flex flex-1 flex-col overflow-hidden">
             {fleetQuery.isError && (
-              <div className="border-b border-status-warning/40 bg-status-warning/10 px-5 py-2 text-xs text-status-warning">
-                Demo API not reachable - restart the stack with `pnpm dev` (API on
-                port 4000). The dashboard will recover automatically when it
-                returns.
+              <div
+                role="alert"
+                className="border-b border-status-warning/40 bg-status-warning/10 px-5 py-2 text-xs text-status-warning"
+              >
+                Connection lost — the dashboard is reconnecting automatically and
+                will recover as soon as the service responds.
               </div>
             )}
-            {screen === "board" ? (
+            {fleetQuery.isLoading && !hasLoadedOnce ? (
+              <ShellSkeleton />
+            ) : screen === "board" ? (
               <DispatchBoard state={state} onSelectJob={openAssignment} />
             ) : screen === "jobs" ? (
               <JobsScreen
