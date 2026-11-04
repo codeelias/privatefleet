@@ -1,3 +1,7 @@
+### v1.84 - Driver map: pickup/dropoff pins are now distinct (2026-11-04)
+- Root cause of the 'flipping' reports: each job has two pins (pickup and dropoff) sharing one reference; the pickup stays blue while the dropoff turns green, which looked like colour flapping.
+- Pins now label sequence + type ('14 P' / '26 D') and the map shows a legend, so the two stops of a job can never be confused.
+- Single-stop refresh now waits 1.2s for the server commit before reading state.
 ### v1.83 - Driver map: targeted per-stop pin updates (2026-11-04)
 - New driver endpoint GET /v1/driver/jobs/:jobId/stops/:stopId/state for single-stop reads.
 - After arrive/complete, only the affected pin updates in place (no whole-route repaint, no cross-pin flicker); the 60s honesty refresh stays as the full reconciliation net.

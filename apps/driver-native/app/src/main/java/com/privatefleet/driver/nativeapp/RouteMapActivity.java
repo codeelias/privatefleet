@@ -107,6 +107,18 @@ public class RouteMapActivity extends Activity {
         statusLp.topMargin = dp(8);
         frame.addView(statusView, statusLp);
 
+        TextView legend = new TextView(this);
+        legend.setTextSize(10);
+        legend.setTextColor(Color.WHITE);
+        legend.setBackgroundColor(Color.argb(180, 24, 24, 27));
+        legend.setPadding(dp(8), dp(4), dp(8), dp(4));
+        legend.setText("P = pickup  \u00b7  D = dropoff  \u00b7  \u25CF blue to do  \u00b7  \u25CF orange arrived  \u00b7  \u25CF green complete");
+        FrameLayout.LayoutParams legendLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        legendLp.topMargin = dp(44);
+        frame.addView(legend, legendLp);
+
         Button back = new Button(this);
         back.setText("\u2190 List");
         back.setOnClickListener(v -> finish());
@@ -410,7 +422,9 @@ public class RouteMapActivity extends Activity {
      * the reconciliation safety net.
      */
     private void refreshStop(RouteGeometry.Stop stop) {
-        executor.execute(() -> {
+        // Settle delay: let the server commit finish before reading the
+        // single-stop state, so the pin can never show a pre-commit value.
+        handler.postDelayed(() -> executor.execute(() -> {
             try {
                 String status = new ApiClient(this).stopState(stop.jobId, stop.stopId);
                 runOnUiThread(() -> applyStopState(stop, status));
@@ -418,7 +432,7 @@ public class RouteMapActivity extends Activity {
                 Log.w(TAG, "stop state fetch failed", error);
                 runOnUiThread(() -> refreshHud());
             }
-        });
+        }), 1_200);
     }
 
     private void applyStopState(RouteGeometry.Stop stop, String status) {
@@ -483,11 +497,13 @@ public class RouteMapActivity extends Activity {
         paint.setColor(syncing ? 0xFFD97706 : done ? 0xFF16A34A : arrived ? 0xFFF59E0B : 0xFF276EF1);
         canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(3), paint);
         paint.setColor(Color.WHITE);
-        paint.setTextSize(dp(13));
+        paint.setTextSize(dp(11));
         paint.setTypeface(Typeface.DEFAULT_BOLD);
-        String label = String.valueOf(stop.sequence);
+        // Label: sequence + stop type so pickup and dropoff pins of the same
+        // job reference can never be confused ("14 P" vs "26 D").
+        String label = stop.sequence + " " + ("pickup".equals(stop.type) ? "P" : "D");
         float width = paint.measureText(label);
-        canvas.drawText(label, (size - width) / 2f, size / 2f + dp(4), paint);
+        canvas.drawText(label, (size - width) / 2f, size / 2f + dp(3), paint);
         return bitmap;
     }
 
