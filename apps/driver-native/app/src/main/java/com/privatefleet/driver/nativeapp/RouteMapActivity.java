@@ -84,6 +84,7 @@ public class RouteMapActivity extends Activity {
     private String pendingPhotoStopId;
     private boolean busy = false;
     private int tickCounter = 0;
+    private boolean firstRender = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -356,12 +357,30 @@ public class RouteMapActivity extends Activity {
         syncingStopIds.removeAll(confirmed);
         renderLines();
         renderPins();
-        if (!geometry.stops.isEmpty()) {
-            RouteGeometry.Stop first = geometry.stops.get(0);
-            programmaticMove = true;
-            map.moveCamera(CameraUpdateFactory.newLatLngZoom(
-                    new LatLng(first.latitude, first.longitude), 12));
-            programmaticMove = false;
+        // Only the first render may move the camera; refreshes must never
+        // yank the driver's viewport. Center on the driver's last fix, else
+        // the first incomplete stop.
+        if (firstRender) {
+            firstRender = false;
+            double[] location = LocationStore.load(this);
+            if (location != null) {
+                programmaticMove = true;
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                        new LatLng(location[0], location[1]), 13));
+                programmaticMove = false;
+            } else if (!geometry.stops.isEmpty()) {
+                RouteGeometry.Stop target = geometry.stops.get(0);
+                for (RouteGeometry.Stop candidate : geometry.stops) {
+                    if (!isTerminal(candidate.status)) {
+                        target = candidate;
+                        break;
+                    }
+                }
+                programmaticMove = true;
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(
+                        new LatLng(target.latitude, target.longitude), 12));
+                programmaticMove = false;
+            }
         }
         if (!statusView.getText().toString().startsWith("Downloading")) {
             statusView.setText(geometry.stops.isEmpty() ? "No stops on this route." : "Map ready (offline)");

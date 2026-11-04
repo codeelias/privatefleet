@@ -1,3 +1,6 @@
+### v1.85 - Driver map: refreshes never move the camera (2026-11-04)
+- Root cause of 'stop numbers changing': every full refresh and reopen recentered the camera on pin 1, shifting the viewport to different pins. Server route v123 sequences are stable.
+- Camera now moves only on the first render (driver fix, else first incomplete stop); all later refreshes are viewport-neutral.
 ### v1.84 - Driver map: pickup/dropoff pins are now distinct (2026-11-04)
 - Root cause of the 'flipping' reports: each job has two pins (pickup and dropoff) sharing one reference; the pickup stays blue while the dropoff turns green, which looked like colour flapping.
 - Pins now label sequence + type ('14 P' / '26 D') and the map shows a legend, so the two stops of a job can never be confused.
