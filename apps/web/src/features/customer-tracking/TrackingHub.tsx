@@ -36,8 +36,22 @@ export function TrackingHub({ state }: { state: FleetState }) {
     }
   }
 
-  function openPreview() {
-    window.open(`/preview?token=demo-j198&job=${targetJob?.reference ?? "J-198"}`, "_blank", "noopener");
+  function openPreview(): void {
+    if (trackingLink) {
+      window.open(trackingLink, "_blank", "noopener");
+      return;
+    }
+    // No link yet: create a real token for the selected job, then open it.
+    setLinkError(null);
+    void api
+      .createTrackingToken(trackingJobId || targetJob?.id || "")
+      .then((created) => {
+        setTrackingLink(`${window.location.origin}${created.url}`);
+        window.open(`${window.location.origin}${created.url}`, "_blank", "noopener");
+      })
+      .catch((err) => {
+        setLinkError(err instanceof Error ? err.message : "Link could not be created");
+      });
   }
 
   return (
@@ -69,7 +83,7 @@ export function TrackingHub({ state }: { state: FleetState }) {
               <div className="flex-1">
                 <p className="font-bold">{TENANT.displayName}</p>
                 <p className="text-xs text-text-secondary">
-                  Verified domain: northstar.example / tracking
+                  {window.location.host} / tracking
                 </p>
               </div>
               <StatusChip tone="success" label="verified" />
