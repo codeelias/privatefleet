@@ -151,6 +151,14 @@ public final class ApiClient {
         return new JSONObject(response.body);
     }
 
+    /** Driver-scoped geofence feed with inside/outside state. */
+    public JSONObject geofences() throws Exception {
+        Session session = Session.load(context);
+        Response response = auth("GET", "/v1/driver/geofences", null, session);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+        return new JSONObject(response.body);
+    }
+
     public void arrive(String jobId, String stopId, String driverId, String commandId)
             throws Exception {
         JSONObject body = new JSONObject();

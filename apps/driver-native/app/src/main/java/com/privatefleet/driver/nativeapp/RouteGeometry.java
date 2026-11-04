@@ -21,11 +21,14 @@ public final class RouteGeometry {
         public final String status;
         public final String address;
         public final String windowEnd;
+        public final String arrivalAt;
+        public final Integer legDistanceM;
         public final double latitude;
         public final double longitude;
 
         Stop(int sequence, String stopId, String jobId, String reference, String type,
-             String status, String address, String windowEnd, double latitude, double longitude) {
+             String status, String address, String windowEnd, String arrivalAt,
+             Integer legDistanceM, double latitude, double longitude) {
             this.sequence = sequence;
             this.stopId = stopId;
             this.jobId = jobId;
@@ -34,6 +37,8 @@ public final class RouteGeometry {
             this.status = status;
             this.address = address;
             this.windowEnd = windowEnd;
+            this.arrivalAt = arrivalAt;
+            this.legDistanceM = legDistanceM;
             this.latitude = latitude;
             this.longitude = longitude;
         }
@@ -42,7 +47,7 @@ public final class RouteGeometry {
     public final List<double[]> points; // [latitude, longitude]
     public final List<Stop> stops;
 
-    private RouteGeometry(List<double[]> points, List<Stop> stops) {
+    RouteGeometry(List<double[]> points, List<Stop> stops) {
         this.points = points;
         this.stops = stops;
     }
@@ -74,6 +79,8 @@ public final class RouteGeometry {
                         stop.optString("status"),
                         stop.optString("address"),
                         stop.optString("windowEnd", ""),
+                        stop.optString("arrivalAt", ""),
+                        stop.has("legDistanceM") ? (Integer) stop.optInt("legDistanceM") : null,
                         stop.optDouble("latitude"),
                         stop.optDouble("longitude")));
             }

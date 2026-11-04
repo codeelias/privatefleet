@@ -13,6 +13,8 @@ import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Gravity;
@@ -31,6 +33,7 @@ import org.maplibre.android.maps.MapView;
 import org.maplibre.android.annotations.IconFactory;
 import org.maplibre.android.annotations.Marker;
 import org.maplibre.android.annotations.MarkerOptions;
+import org.maplibre.android.annotations.PolygonOptions;
 import org.maplibre.android.annotations.PolylineOptions;
 
 import java.io.ByteArrayOutputStream;
@@ -54,11 +57,19 @@ public class RouteMapActivity extends Activity {
     private static final String STYLE_URI = "https://tiles.openfreemap.org/styles/liberty";
 
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler handler = new Handler(Looper.getMainLooper());
     private MapView mapView;
     private MapLibreMap map;
     private TextView statusView;
+    private TextView hudView;
+    private Button followButton;
     private MapCacheManager cacheManager;
     private final Map<Long, RouteGeometry.Stop> markerStops = new HashMap<>();
+    private RouteGeometry geometry = RouteGeometry.empty();
+    private List<GeofenceInfo> fences = new ArrayList<>();
+    private Marker positionMarker;
+    private boolean follow = true;
+    private boolean programmaticMove = false;
 
     private Uri pendingPhotoUri;
     private String pendingPhotoJobId;
@@ -97,6 +108,33 @@ public class RouteMapActivity extends Activity {
         backLp.leftMargin = dp(8);
         frame.addView(back, backLp);
 
+        followButton = new Button(this);
+        followButton.setText("Following");
+        followButton.setOnClickListener(v -> {
+            follow = !follow;
+            followButton.setText(follow ? "Following" : "Follow");
+            if (follow) refreshPosition();
+        });
+        FrameLayout.LayoutParams followLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP | Gravity.END);
+        followLp.topMargin = dp(8);
+        followLp.rightMargin = dp(8);
+        frame.addView(followButton, followLp);
+
+        hudView = new TextView(this);
+        hudView.setTextSize(13);
+        hudView.setTextColor(Color.WHITE);
+        hudView.setBackgroundColor(Color.argb(210, 24, 24, 27));
+        hudView.setPadding(dp(12), dp(8), dp(12), dp(8));
+        FrameLayout.LayoutParams hudLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        hudLp.bottomMargin = dp(10);
+        hudLp.leftMargin = dp(10);
+        hudLp.rightMargin = dp(10);
+        frame.addView(hudView, hudLp);
+
         setContentView(frame);
 
         cacheManager = new MapCacheManager(this, (message, hasOfflineData) -> runOnUiThread(() -> {
@@ -127,17 +165,128 @@ public class RouteMapActivity extends Activity {
                     }
                     return true;
                 });
+                map.addOnCameraMoveStartedListener(reason -> {
+                    if (!programmaticMove) follow = false;
+                    if (!follow) {
+                        runOnUiThread(() -> followButton.setText("Follow"));
+                    }
+                });
                 cacheManager.start();
                 loadRoute();
+                loadFences();
             });
         });
+        handler.postDelayed(refreshTick, 10_000);
+    }
+
+    private final Runnable refreshTick = new Runnable() {
+        @Override
+        public void run() {
+            refreshPosition();
+            handler.postDelayed(this, 10_000);
+        }
+    };
+
+    private void loadFences() {
+        executor.execute(() -> {
+            try {
+                List<GeofenceInfo> parsed = GeofenceInfo.fromJson(new ApiClient(this).geofences());
+                runOnUiThread(() -> {
+                    fences = parsed;
+                    renderFences();
+                    refreshHud();
+                });
+            } catch (Exception error) {
+                Log.w(TAG, "geofences failed", error);
+            }
+        });
+    }
+
+    private void renderFences() {
+        if (map == null) return;
+        for (GeofenceInfo fence : fences) {
+            if (fence.ring.size() < 3) continue;
+            List<LatLng> ring = new ArrayList<>();
+            for (double[] point : fence.ring) {
+                ring.add(new LatLng(point[0], point[1]));
+            }
+            map.addPolygon(new PolygonOptions()
+                    .addAll(ring)
+                    .fillColor(fence.inside ? 0x33276EF1 : 0x1A276EF1)
+                    .strokeColor(Color.parseColor(fence.inside ? "#276EF1" : "#64748B")));
+        }
+    }
+
+    private void refreshPosition() {
+        if (map == null) return;
+        double[] location = LocationStore.load(this);
+        if (location == null) return;
+        double lat = location[0];
+        double lng = location[1];
+        IconFactory icons = IconFactory.getInstance(this);
+        if (positionMarker == null) {
+            positionMarker = map.addMarker(new MarkerOptions()
+                    .position(new LatLng(lat, lng))
+                    .icon(icons.fromBitmap(positionBitmap())));
+        } else {
+            positionMarker.setPosition(new LatLng(lat, lng));
+        }
+        if (follow) {
+            programmaticMove = true;
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(lat, lng), map.getCameraPosition().zoom));
+            programmaticMove = false;
+        }
+        refreshHud(lat, lng);
+    }
+
+    private void refreshHud() {
+        double[] location = LocationStore.load(this);
+        if (location == null) return;
+        refreshHud(location[0], location[1]);
+    }
+
+    private void refreshHud(double lat, double lng) {
+        RouteProgress.Result progress = RouteProgress.compute(geometry, lat, lng, System.currentTimeMillis());
+        StringBuilder hud = new StringBuilder();
+        if (progress != null) {
+            double km = progress.remainingMetres / 1000.0;
+            hud.append("Next: ").append(progress.nextStop.reference)
+                    .append(" \u00b7 ").append(String.format(java.util.Locale.US, "%.1f km", km));
+            String eta = progress.nextStop.arrivalAt == null || progress.nextStop.arrivalAt.isEmpty()
+                    ? "--:--"
+                    : new java.text.SimpleDateFormat("HH:mm", java.util.Locale.US)
+                            .format(new java.util.Date(progress.etaMillis));
+            hud.append(" \u00b7 ETA ").append(eta)
+                    .append(" \u00b7 ").append(progress.remainingStops).append(" stop(s) left");
+        }
+        boolean insideAny = false;
+        for (GeofenceInfo fence : fences) {
+            if (fence.inside) insideAny = true;
+        }
+        if (insideAny) hud.append(" \u00b7 Inside zone");
+        hudView.setText(hud.length() == 0 ? "No route assigned" : hud.toString());
+    }
+
+    private Bitmap positionBitmap() {
+        int size = dp(22);
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(0xFFEF842F);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(2), paint);
+        paint.setColor(Color.WHITE);
+        canvas.drawCircle(size / 2f, size / 2f, dp(4), paint);
+        return bitmap;
     }
 
     private void loadRoute() {
         executor.execute(() -> {
             try {
-                RouteGeometry geometry = RouteGeometry.fromJson(new ApiClient(this).routeGeometry());
-                runOnUiThread(() -> renderRoute(geometry));
+                RouteGeometry loaded = RouteGeometry.fromJson(new ApiClient(this).routeGeometry());
+                runOnUiThread(() -> {
+                    renderRoute(loaded);
+                    refreshPosition();
+                });
             } catch (Exception error) {
                 Log.w(TAG, "route geometry failed", error);
                 runOnUiThread(() -> statusView.setText("Route unavailable - check connection."));
@@ -145,16 +294,38 @@ public class RouteMapActivity extends Activity {
         });
     }
 
-    private void renderRoute(RouteGeometry geometry) {
-        if (geometry.points.size() >= 2) {
-            List<LatLng> line = new ArrayList<>();
-            for (double[] point : geometry.points) {
-                line.add(new LatLng(point[0], point[1]));
+    private void renderRoute(RouteGeometry loadedGeometry) {
+        geometry = loadedGeometry;
+        markerStops.clear();
+        if (lineManagerGeometryPoints().size() >= 2) {
+            int splitIndex = geometry.points.size();
+            RouteProgress.Result progress = RouteProgress.compute(
+                    geometry, geometry.points.get(0)[0], geometry.points.get(0)[1],
+                    System.currentTimeMillis());
+            if (progress != null && progress.firstIncompleteIndex >= 0) {
+                RouteGeometry.Stop first = geometry.stops.get(progress.firstIncompleteIndex);
+                splitIndex = RouteProgress.nearestIndex(
+                        first.latitude, first.longitude, geometry.points);
             }
-            map.addPolyline(new PolylineOptions()
-                    .addAll(line)
-                    .color(Color.parseColor("#EF842F"))
-                    .width(4.5f));
+            List<LatLng> done = new ArrayList<>();
+            List<LatLng> remaining = new ArrayList<>();
+            for (int index = 0; index < geometry.points.size(); index++) {
+                double[] point = geometry.points.get(index);
+                if (index <= splitIndex) done.add(new LatLng(point[0], point[1]));
+                if (index >= splitIndex) remaining.add(new LatLng(point[0], point[1]));
+            }
+            if (done.size() >= 2) {
+                map.addPolyline(new PolylineOptions()
+                        .addAll(done)
+                        .color(Color.parseColor("#94A3B8"))
+                        .width(3.5f));
+            }
+            if (remaining.size() >= 2) {
+                map.addPolyline(new PolylineOptions()
+                        .addAll(remaining)
+                        .color(Color.parseColor("#EF842F"))
+                        .width(5.0f));
+            }
         }
         IconFactory icons = IconFactory.getInstance(this);
         for (RouteGeometry.Stop stop : geometry.stops) {
@@ -165,12 +336,18 @@ public class RouteMapActivity extends Activity {
         }
         if (!geometry.stops.isEmpty()) {
             RouteGeometry.Stop first = geometry.stops.get(0);
+            programmaticMove = true;
             map.moveCamera(CameraUpdateFactory.newLatLngZoom(
                     new LatLng(first.latitude, first.longitude), 12));
+            programmaticMove = false;
         }
         if (!statusView.getText().toString().startsWith("Downloading")) {
             statusView.setText(geometry.stops.isEmpty() ? "No stops on this route." : "Map ready (offline)");
         }
+    }
+
+    private List<double[]> lineManagerGeometryPoints() {
+        return geometry.points;
     }
 
     private Bitmap pinBitmap(RouteGeometry.Stop stop) {
@@ -358,7 +535,7 @@ public class RouteMapActivity extends Activity {
                 scaled.compress(Bitmap.CompressFormat.JPEG, 80, output);
                 String path = EvidenceStore.savePhoto(this, output.toByteArray());
                 RouteGeometry.Stop stop = new RouteGeometry.Stop(
-                        0, stopId, jobId, "", "", "", "", "", 0, 0);
+                        0, stopId, jobId, "", "", "", "", "", "", null, 0, 0);
                 submitEvidence("evidence_photo", stop, "path", path);
             } catch (Exception error) {
                 runOnUiThread(() -> toast("Photo failed: " + error.getMessage()));

@@ -1,3 +1,7 @@
+### v1.77 - Driver map: route following and geofence sync (2026-11-04)
+- Native 1.2.0: live position marker with Follow toggle; completed route grey vs remaining orange; HUD with next stop, distance, ETA and stops left; geofence overlays with inside/outside state.
+- API: route-geometry now returns legDistanceM and arrivalAt per stop; new driver-scoped GET /v1/driver/geofences.
+- Verified live on Phone 1 (HUD: Next G06-003, 0.4 km, ETA, 59 left, Inside zone; fence Depot Primeter inside=True); full gate green (API 110/110, web 53/53, native 24/24).
 ### v1.76 - Driver route map (offline-first) (2026-11-04)
 - Native 1.1.0: MapLibre vector map with OpenFreeMap liberty; Greater London tiles downloaded once and kept offline, refreshed progressively when connectivity allows; no cache + no network stays in list UI.
 - Tappable stop pins with full detail sheet: arrive, photo, signature, note and complete - all through the offline command/evidence queues.
