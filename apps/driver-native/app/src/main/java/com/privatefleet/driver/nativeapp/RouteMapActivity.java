@@ -334,57 +334,16 @@ public class RouteMapActivity extends Activity {
         }
         stopMarkers.clear();
         markerStops.clear();
-        for (Polyline line : routePolylines) {
-            map.removePolyline(line);
-        }
-        routePolylines.clear();
         // Confirmed terminal stops leave the syncing set (green now).
         Set<String> confirmed = new HashSet<>();
         for (RouteGeometry.Stop stop : geometry.stops) {
-            if ("completed".equals(stop.status) || "skipped".equals(stop.status) || "failed".equals(stop.status)) {
+            if (isTerminal(stop.status)) {
                 confirmed.add(stop.stopId);
             }
         }
         syncingStopIds.removeAll(confirmed);
-
-        if (lineManagerGeometryPoints().size() >= 2) {
-            int splitIndex = geometry.points.size();
-            RouteProgress.Result progress = RouteProgress.compute(
-                    geometry, geometry.points.get(0)[0], geometry.points.get(0)[1],
-                    System.currentTimeMillis());
-            if (progress != null && progress.firstIncompleteIndex >= 0) {
-                RouteGeometry.Stop first = geometry.stops.get(progress.firstIncompleteIndex);
-                splitIndex = RouteProgress.nearestIndex(
-                        first.latitude, first.longitude, geometry.points);
-            }
-            List<LatLng> done = new ArrayList<>();
-            List<LatLng> remaining = new ArrayList<>();
-            for (int index = 0; index < geometry.points.size(); index++) {
-                double[] point = geometry.points.get(index);
-                if (index <= splitIndex) done.add(new LatLng(point[0], point[1]));
-                if (index >= splitIndex) remaining.add(new LatLng(point[0], point[1]));
-            }
-            if (done.size() >= 2) {
-                routePolylines.add(map.addPolyline(new PolylineOptions()
-                        .addAll(done)
-                        .color(Color.parseColor("#94A3B8"))
-                        .width(3.5f)));
-            }
-            if (remaining.size() >= 2) {
-                routePolylines.add(map.addPolyline(new PolylineOptions()
-                        .addAll(remaining)
-                        .color(Color.parseColor("#EF842F"))
-                        .width(5.0f)));
-            }
-        }
-        IconFactory icons = IconFactory.getInstance(this);
-        for (RouteGeometry.Stop stop : geometry.stops) {
-            Marker marker = map.addMarker(new MarkerOptions()
-                    .position(new LatLng(stop.latitude, stop.longitude))
-                    .icon(icons.fromBitmap(pinBitmap(stop))));
-            markerStops.put(marker.getId(), stop);
-            stopMarkers.add(marker);
-        }
+        renderLines();
+        renderPins();
         if (!geometry.stops.isEmpty()) {
             RouteGeometry.Stop first = geometry.stops.get(0);
             programmaticMove = true;
@@ -395,6 +354,116 @@ public class RouteMapActivity extends Activity {
         if (!statusView.getText().toString().startsWith("Downloading")) {
             statusView.setText(geometry.stops.isEmpty() ? "No stops on this route." : "Map ready (offline)");
         }
+    }
+
+    /** Completed/grey vs remaining/orange route line segments. */
+    private void renderLines() {
+        for (Polyline line : routePolylines) {
+            map.removePolyline(line);
+        }
+        routePolylines.clear();
+        if (geometry.points.size() < 2) return;
+        int splitIndex = geometry.points.size();
+        RouteProgress.Result progress = RouteProgress.compute(
+                geometry, geometry.points.get(0)[0], geometry.points.get(0)[1],
+                System.currentTimeMillis());
+        if (progress != null && progress.firstIncompleteIndex >= 0) {
+            RouteGeometry.Stop first = geometry.stops.get(progress.firstIncompleteIndex);
+            splitIndex = RouteProgress.nearestIndex(
+                    first.latitude, first.longitude, geometry.points);
+        }
+        List<LatLng> done = new ArrayList<>();
+        List<LatLng> remaining = new ArrayList<>();
+        for (int index = 0; index < geometry.points.size(); index++) {
+            double[] point = geometry.points.get(index);
+            if (index <= splitIndex) done.add(new LatLng(point[0], point[1]));
+            if (index >= splitIndex) remaining.add(new LatLng(point[0], point[1]));
+        }
+        if (done.size() >= 2) {
+            routePolylines.add(map.addPolyline(new PolylineOptions()
+                    .addAll(done)
+                    .color(Color.parseColor("#94A3B8"))
+                    .width(3.5f)));
+        }
+        if (remaining.size() >= 2) {
+            routePolylines.add(map.addPolyline(new PolylineOptions()
+                    .addAll(remaining)
+                    .color(Color.parseColor("#EF842F"))
+                    .width(5.0f)));
+        }
+    }
+
+    private void renderPins() {
+        IconFactory icons = IconFactory.getInstance(this);
+        for (RouteGeometry.Stop stop : geometry.stops) {
+            Marker marker = map.addMarker(new MarkerOptions()
+                    .position(new LatLng(stop.latitude, stop.longitude))
+                    .icon(icons.fromBitmap(pinBitmap(stop))));
+            markerStops.put(marker.getId(), stop);
+            stopMarkers.add(marker);
+        }
+    }
+
+    /**
+     * Targeted, in-place update of a single pin after its action is confirmed
+     * (no whole-route repaint, no flicker). The 60s honesty refresh remains
+     * the reconciliation safety net.
+     */
+    private void refreshStop(RouteGeometry.Stop stop) {
+        executor.execute(() -> {
+            try {
+                String status = new ApiClient(this).stopState(stop.jobId, stop.stopId);
+                runOnUiThread(() -> applyStopState(stop, status));
+            } catch (Exception error) {
+                Log.w(TAG, "stop state fetch failed", error);
+                runOnUiThread(() -> refreshHud());
+            }
+        });
+    }
+
+    private void applyStopState(RouteGeometry.Stop stop, String status) {
+        if (status == null || status.isEmpty()) return;
+        RouteGeometry.Stop updated = new RouteGeometry.Stop(
+                stop.sequence, stop.stopId, stop.jobId, stop.reference, stop.type, status,
+                stop.address, stop.windowEnd, stop.arrivalAt, stop.legDistanceM,
+                stop.latitude, stop.longitude);
+        List<RouteGeometry.Stop> newStops = new ArrayList<>();
+        for (RouteGeometry.Stop existing : geometry.stops) {
+            newStops.add(existing.stopId.equals(stop.stopId) ? updated : existing);
+        }
+        geometry = new RouteGeometry(geometry.points, newStops);
+        if (isTerminal(status)) {
+            syncingStopIds.remove(stop.stopId);
+        }
+        repinStop(updated);
+        renderLines();
+        refreshHud();
+    }
+
+    private void repinStop(RouteGeometry.Stop updated) {
+        Marker toRemove = null;
+        for (Marker marker : stopMarkers) {
+            RouteGeometry.Stop bound = markerStops.get(marker.getId());
+            if (bound != null && bound.stopId.equals(updated.stopId)) {
+                toRemove = marker;
+                break;
+            }
+        }
+        if (toRemove != null) {
+            map.removeMarker(toRemove);
+            stopMarkers.remove(toRemove);
+            markerStops.remove(toRemove.getId());
+        }
+        IconFactory icons = IconFactory.getInstance(this);
+        Marker marker = map.addMarker(new MarkerOptions()
+                .position(new LatLng(updated.latitude, updated.longitude))
+                .icon(icons.fromBitmap(pinBitmap(updated))));
+        markerStops.put(marker.getId(), updated);
+        stopMarkers.add(marker);
+    }
+
+    private boolean isTerminal(String status) {
+        return "completed".equals(status) || "skipped".equals(status) || "failed".equals(status);
     }
 
     private List<double[]> lineManagerGeometryPoints() {
@@ -483,14 +552,9 @@ public class RouteMapActivity extends Activity {
     }
 
     /**
-     * Reload route truth after a confirmed action, then settle-check again
-     * shortly after so a fetch can never lose a race with the server commit.
+     * Targeted reload of the single stop after a confirmed action. The 60s
+     * honesty refresh stays as the whole-route reconciliation safety net.
      */
-    private void settleReload() {
-        handler.postDelayed(this::loadRoute, 1_200);
-        handler.postDelayed(this::loadRoute, 8_000);
-    }
-
     private void runCommand(String kind, RouteGeometry.Stop stop, String recipient) {
         if (busy) return;
         busy = true;
@@ -507,14 +571,14 @@ public class RouteMapActivity extends Activity {
                         } else {
                             toast(kind + " confirmed on the system");
                         }
-                        settleReload();
+                        refreshStop(stop);
                     } else if (result.remaining > 0) {
                         syncingStopIds.add(stop.stopId);
                         toast("No connection - saved offline. It will sync automatically.");
                         renderRoute(geometry); // amber pin feedback now
                     } else if (result.conflicts > 0) {
-                        toast("Already processed on the system - refreshing the map.");
-                        settleReload();
+                        toast("Already processed on the system - refreshing this stop.");
+                        refreshStop(stop);
                     }
                 });
             } catch (Exception error) {
@@ -631,7 +695,7 @@ public class RouteMapActivity extends Activity {
                         if (result.sent > 0 && result.remaining == 0) {
                             status.setTextColor(0xFF16A34A);
                             status.setText("Completed and confirmed on the system.");
-                            settleReload();
+                            refreshStop(stop);
                             handler.postDelayed(dialog::dismiss, 900);
                         } else if (result.remaining > 0) {
                             syncingStopIds.add(stop.stopId);
@@ -646,8 +710,8 @@ public class RouteMapActivity extends Activity {
                             layout.addView(close);
                         } else if (result.conflicts > 0) {
                             status.setTextColor(Color.rgb(180, 83, 9));
-                            status.setText("Already processed on the system. Refreshing the map.");
-                            settleReload();
+                            status.setText("Already processed on the system. Refreshing this stop.");
+                            refreshStop(stop);
                             handler.postDelayed(dialog::dismiss, 900);
                         }
                     });

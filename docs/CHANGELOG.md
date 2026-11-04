@@ -1,3 +1,7 @@
+### v1.83 - Driver map: targeted per-stop pin updates (2026-11-04)
+- New driver endpoint GET /v1/driver/jobs/:jobId/stops/:stopId/state for single-stop reads.
+- After arrive/complete, only the affected pin updates in place (no whole-route repaint, no cross-pin flicker); the 60s honesty refresh stays as the full reconciliation net.
+- Verified live: stop 26 and stop 30 both return completed through the new endpoint. Gate green.
 ### v1.82 - Driver map: clear pin colour language (2026-11-04)
 - Pin colours now spell the stop state: blue = to do, orange = arrived, amber = saved offline awaiting sync, green = confirmed complete.
 - Stop sheet disables Arrive with honest labels (Already arrived / Completed) instead of re-sending.

@@ -159,6 +159,15 @@ public final class ApiClient {
         return new JSONObject(response.body);
     }
 
+    /** Single-stop state read for targeted pin updates. */
+    public String stopState(String jobId, String stopId) throws Exception {
+        Session session = Session.load(context);
+        Response response = auth("GET",
+                "/v1/driver/jobs/" + jobId + "/stops/" + stopId + "/state", null, session);
+        if (response.status != 200) throw new ApiException(response.status, message(response.body));
+        return new JSONObject(response.body).optString("status", "");
+    }
+
     public void arrive(String jobId, String stopId, String driverId, String commandId)
             throws Exception {
         JSONObject body = new JSONObject();
