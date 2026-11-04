@@ -4,7 +4,7 @@
  * Socket.IO, scenario reset, drag-and-drop assignment (map pins and
  * dispatch lanes) with keyboard/click fallbacks, and screen navigation.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -17,15 +17,39 @@ import { JobCard } from "../features/dispatch/JobCard";
 import { AlertsScreen } from "../features/alerts/AlertsScreen";
 import { JobsScreen } from "../features/jobs/JobsScreen";
 import { HeadsUp } from "../features/heads-up/HeadsUp";
-import { GeofenceEditor } from "../features/geofences/GeofenceEditor";
-import { TrackingHub } from "../features/customer-tracking/TrackingHub";
 import { AssignmentModal } from "../features/live-map/AssignmentModal";
-import { MapCanvas } from "../features/live-map/MapCanvas";
 import { OptimizationScreen } from "../features/optimization/OptimizationScreen";
 import { api } from "../shared/api/client";
 import { LoginScreen } from "../features/auth/LoginScreen";
 import { useSession } from "../shared/auth/useSession";
 import { createFleetSocket } from "../shared/realtime/socket";
+
+// Map engines (MapLibre + Leaflet + positioning) are the heaviest modules:
+// load them only when a map screen is first opened, keeping the login/shell
+// bundle small and fast.
+const MapCanvas = lazy(() =>
+  import("../features/live-map/MapCanvas").then((module) => ({ default: module.MapCanvas })),
+);
+const GeofenceEditor = lazy(() =>
+  import("../features/geofences/GeofenceEditor").then((module) => ({ default: module.GeofenceEditor })),
+);
+const TrackingHub = lazy(() =>
+  import("../features/customer-tracking/TrackingHub").then((module) => ({ default: module.TrackingHub })),
+);
+
+function MapFallback() {
+  return (
+    <div className="flex h-full min-h-[320px] w-full items-center justify-center rounded-xl border border-command-border bg-command-surface">
+      <div className="flex items-center gap-2 text-xs text-text-secondary">
+        <span
+          className="h-3 w-3 animate-spin rounded-full border-2 border-command-border border-t-brand-primary"
+          aria-hidden="true"
+        />
+        Loading map…
+      </div>
+    </div>
+  );
+}
 import {
   acceptTelemetry,
   staleVehicleIds,
@@ -411,10 +435,12 @@ function Dashboard({
             ) : screen === "optimise" ? (
               <OptimizationScreen state={state} />
             ) : screen === "geofences" ? (
-              <GeofenceEditor
-                state={state}
-                onPublished={() => void queryClient.invalidateQueries({ queryKey: ["fleet"] })}
-              />
+              <Suspense fallback={<MapFallback />}>
+                <GeofenceEditor
+                  state={state}
+                  onPublished={() => void queryClient.invalidateQueries({ queryKey: ["fleet"] })}
+                />
+              </Suspense>
             ) : screen === "alerts" ? (
               <AlertsScreen
                 state={state}
@@ -422,7 +448,9 @@ function Dashboard({
                 onRefresh={() => void queryClient.invalidateQueries({ queryKey: ["fleet"] })}
               />
             ) : screen === "tracking" ? (
-              <TrackingHub state={state} />
+              <Suspense fallback={<MapFallback />}>
+                <TrackingHub state={state} />
+              </Suspense>
             ) : screen === "live" ? (
               <>
                 {/* Compact overview expands in place without moving the map when collapsed */}
@@ -501,12 +529,14 @@ function Dashboard({
                 </div>
 
                 <div className="relative flex min-h-0 flex-1 overflow-hidden p-3">
-                  <MapCanvas
-                    state={state}
-                    gpsSeenAt={gpsSeenRef.current}
-                    selectedDriverId={focusedDriverId}
-                    onSelectDriver={setFocusedDriverId}
-                  />
+                  <Suspense fallback={<MapFallback />}>
+                    <MapCanvas
+                      state={state}
+                      gpsSeenAt={gpsSeenRef.current}
+                      selectedDriverId={focusedDriverId}
+                      onSelectDriver={setFocusedDriverId}
+                    />
+                  </Suspense>
 
                   {/* Inset map HUD: selected vehicle stays inside the map edge. */}
                 {vehiclePanel !== "closed" ? (
