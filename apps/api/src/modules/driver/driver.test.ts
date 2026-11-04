@@ -85,6 +85,23 @@ async function seedDriverFleet(fixture: DriverFixture): Promise<void> {
   }
 }
 
+/** Seed a published route with a stop sequence for driverA. */
+async function seedRouteForDriverA(fixture: DriverFixture, routeId: string): Promise<void> {
+  const sql = migrator.sql;
+  await sql`INSERT INTO routes (id, tenant_id, route_date, driver_id, vehicle_id, status, version,
+      geometry, published_at)
+    VALUES (${routeId}, ${fixture.tenantId}, CURRENT_DATE, ${fixture.driverA.id},
+      ${fixture.driverA.vehicleId}, 'published', 1,
+      '[{"latitude": 51.5, "longitude": -0.1}, {"latitude": 51.501, "longitude": -0.101}]'::jsonb, now())`;
+  await sql`INSERT INTO route_stops (id, tenant_id, route_id, job_stop_id, sequence_no, leg_distance_m, planned_arrival_at)
+    VALUES (${randomUUID()}, ${fixture.tenantId}, ${routeId}, ${fixture.driverA.stopId}, 1, 120, now() + interval '20 minutes')`;
+  const driverIds = JSON.stringify([fixture.driverA.id]);
+  await sql`INSERT INTO geofences (id, tenant_id, name, enabled, geojson, driver_ids)
+    VALUES (${randomUUID()}, ${fixture.tenantId}, 'Depot zone', true,
+      '{"type":"Polygon","coordinates":[[[-0.2,51.4],[-0.2,51.6],[0.0,51.6],[0.0,51.4],[-0.2,51.4]]]}'::jsonb,
+      ${driverIds}::jsonb)`;
+}
+
 function authed(token: string): { authorization: string } {
   return { authorization: `Bearer ${token}` };
 }
@@ -152,6 +169,47 @@ describe("driver device login", () => {
     expect(queue.statusCode).toBe(200);
     const body = queue.json() as { driver: { id: string }; jobs: Array<{ id: string }> };
     expect(body.driver.id).toBe(fleet.driverA.id);
+  });
+
+  it("serves route geometry and geofences scoped to the driver", async () => {
+    const routeId = randomUUID();
+    await seedRouteForDriverA(fleet, routeId);
+    const token = await driverLogin(fleet.driverA.id);
+    const geometry = await app.inject({
+      method: "GET",
+      url: "/v1/driver/route-geometry",
+      headers: authed(token),
+    });
+    expect(geometry.statusCode).toBe(200);
+    const body = geometry.json() as {
+      points: Array<{ latitude: number }>;
+      stops: Array<{ stopId: string; legDistanceM?: number; arrivalAt?: string }>;
+    };
+    expect(body.points.length).toBe(2);
+    expect(body.stops.length).toBe(1);
+    expect(body.stops[0].stopId).toBe(fleet.driverA.stopId);
+    expect(body.stops[0].legDistanceM).toBe(120);
+    expect(typeof body.stops[0].arrivalAt).toBe("string");
+
+    const fences = await app.inject({
+      method: "GET",
+      url: "/v1/driver/geofences",
+      headers: authed(token),
+    });
+    expect(fences.statusCode).toBe(200);
+    const fenceBody = fences.json() as {
+      geofences: Array<{ name: string; inside: boolean }>;
+    };
+    expect(fenceBody.geofences.length).toBe(1);
+    expect(fenceBody.geofences[0].name).toBe("Depot zone");
+    expect(fenceBody.geofences[0].inside).toBe(false);
+
+    const otherDriver = await app.inject({
+      method: "GET",
+      url: "/v1/driver/geofences",
+      headers: authed(await driverLogin(fleet.driverB.id)),
+    });
+    expect((otherDriver.json() as { geofences: unknown[] }).geofences.length).toBe(0);
   });
 
   it("rejects a wrong PIN and an unknown driver without leaking details", async () => {
