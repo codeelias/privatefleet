@@ -24,6 +24,9 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -60,6 +63,10 @@ public class MainActivity extends Activity {
     private Button nextButton;
     private TextView locationView;
     private TextView headsUpView;
+    private TextView queueStatus;
+    private Button refreshButton;
+    private volatile boolean queueLoading = false;
+    private ConnectivityManager.NetworkCallback networkCallback;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,6 +82,21 @@ public class MainActivity extends Activity {
         } else {
             showLogin();
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (networkCallback != null) {
+            ConnectivityManager manager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            if (manager != null) {
+                try {
+                    manager.unregisterNetworkCallback(networkCallback);
+                } catch (IllegalArgumentException ignored) {
+                }
+            }
+            networkCallback = null;
+        }
+        super.onDestroy();
     }
 
     private void showLogin() {
@@ -225,8 +247,15 @@ public class MainActivity extends Activity {
 
         Button refresh = new Button(this);
         refresh.setText("Refresh queue");
-        refresh.setOnClickListener(v -> flushQueue());
+        refreshButton = refresh;
+        refresh.setOnClickListener(v -> refreshQueue());
         root.addView(refresh);
+
+        queueStatus = new TextView(this);
+        queueStatus.setTextSize(11);
+        queueStatus.setTextColor(Color.rgb(180, 83, 9));
+        queueStatus.setPadding(0, 8, 0, 0);
+        root.addView(queueStatus);
 
         locationView = new TextView(this);
         locationView.setTextSize(11);
@@ -265,6 +294,7 @@ public class MainActivity extends Activity {
         });
         footer.addView(nextButton);
         root.addView(footer);
+        registerNetworkCallback();
         refreshQueue();
         flushQueue();
         checkForUpdate();
@@ -375,14 +405,47 @@ public class MainActivity extends Activity {
     }
 
     private void refreshQueue() {
+        if (queueLoading) return;
+        queueLoading = true;
+        runOnUiThread(() -> {
+            queueStatus.setText("Loading…");
+            queueStatus.setTextColor(Color.rgb(102, 112, 133));
+            if (refreshButton != null) refreshButton.setEnabled(false);
+        });
         executor.execute(() -> {
             try {
                 JSONObject queue = new ApiClient(this).queue();
-                runOnUiThread(() -> renderQueue(queue));
+                runOnUiThread(() -> {
+                    queueLoading = false;
+                    queueStatus.setText("");
+                    if (refreshButton != null) refreshButton.setEnabled(true);
+                    renderQueue(queue);
+                });
             } catch (Exception error) {
-                runOnUiThread(() -> toast(error.getMessage()));
+                runOnUiThread(() -> {
+                    queueLoading = false;
+                    queueStatus.setText("Offline — could not load your jobs. It will retry when the connection returns.");
+                    queueStatus.setTextColor(Color.rgb(180, 83, 9));
+                    if (refreshButton != null) refreshButton.setEnabled(true);
+                });
             }
         });
+    }
+
+    private void registerNetworkCallback() {
+        ConnectivityManager manager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+        if (manager == null) return;
+        networkCallback = new ConnectivityManager.NetworkCallback() {
+            @Override
+            public void onAvailable(Network network) {
+                runOnUiThread(() -> {
+                    if (queueStatus != null && queueStatus.getText().toString().startsWith("Offline")) {
+                        refreshQueue();
+                    }
+                });
+            }
+        };
+        manager.registerDefaultNetworkCallback(networkCallback);
     }
 
     private static final class StopItem {
