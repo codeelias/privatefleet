@@ -33,15 +33,19 @@ import org.maplibre.android.maps.MapView;
 import org.maplibre.android.annotations.IconFactory;
 import org.maplibre.android.annotations.Marker;
 import org.maplibre.android.annotations.MarkerOptions;
+import org.maplibre.android.annotations.Polygon;
 import org.maplibre.android.annotations.PolygonOptions;
+import org.maplibre.android.annotations.Polyline;
 import org.maplibre.android.annotations.PolylineOptions;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -65,6 +69,10 @@ public class RouteMapActivity extends Activity {
     private Button followButton;
     private MapCacheManager cacheManager;
     private final Map<Long, RouteGeometry.Stop> markerStops = new HashMap<>();
+    private final Set<String> syncingStopIds = new HashSet<>();
+    private final List<Marker> stopMarkers = new ArrayList<>();
+    private final List<Polyline> routePolylines = new ArrayList<>();
+    private final List<Polygon> fencePolygons = new ArrayList<>();
     private RouteGeometry geometry = RouteGeometry.empty();
     private List<GeofenceInfo> fences = new ArrayList<>();
     private Marker positionMarker;
@@ -183,6 +191,22 @@ public class RouteMapActivity extends Activity {
         @Override
         public void run() {
             refreshPosition();
+            // Offline queue: retry while the map is open so completions and
+            // evidence don't wait for a return to the list screen.
+            if (CommandQueue.pending(RouteMapActivity.this) > 0) {
+                executor.execute(() -> {
+                    try {
+                        CommandQueue.Result result = CommandQueue.flush(RouteMapActivity.this);
+                        if (result.remaining == 0) {
+                            runOnUiThread(() -> {
+                                syncingStopIds.clear();
+                                loadRoute();
+                            });
+                        }
+                    } catch (Exception ignored) {
+                    }
+                });
+            }
             handler.postDelayed(this, 10_000);
         }
     };
@@ -264,6 +288,7 @@ public class RouteMapActivity extends Activity {
             if (fence.inside) insideAny = true;
         }
         if (insideAny) hud.append(" \u00b7 Inside zone");
+        if (!syncingStopIds.isEmpty()) hud.append(" \u00b7 ").append(syncingStopIds.size()).append(" action(s) waiting to sync");
         hudView.setText(hud.length() == 0 ? "No route assigned" : hud.toString());
     }
 
@@ -296,7 +321,25 @@ public class RouteMapActivity extends Activity {
 
     private void renderRoute(RouteGeometry loadedGeometry) {
         geometry = loadedGeometry;
+        // Repaint from server truth: remove all previous overlays first.
+        for (Marker marker : stopMarkers) {
+            map.removeMarker(marker);
+        }
+        stopMarkers.clear();
         markerStops.clear();
+        for (Polyline line : routePolylines) {
+            map.removePolyline(line);
+        }
+        routePolylines.clear();
+        // Confirmed terminal stops leave the syncing set (green now).
+        Set<String> confirmed = new HashSet<>();
+        for (RouteGeometry.Stop stop : geometry.stops) {
+            if ("completed".equals(stop.status) || "skipped".equals(stop.status) || "failed".equals(stop.status)) {
+                confirmed.add(stop.stopId);
+            }
+        }
+        syncingStopIds.removeAll(confirmed);
+
         if (lineManagerGeometryPoints().size() >= 2) {
             int splitIndex = geometry.points.size();
             RouteProgress.Result progress = RouteProgress.compute(
@@ -315,16 +358,16 @@ public class RouteMapActivity extends Activity {
                 if (index >= splitIndex) remaining.add(new LatLng(point[0], point[1]));
             }
             if (done.size() >= 2) {
-                map.addPolyline(new PolylineOptions()
+                routePolylines.add(map.addPolyline(new PolylineOptions()
                         .addAll(done)
                         .color(Color.parseColor("#94A3B8"))
-                        .width(3.5f));
+                        .width(3.5f)));
             }
             if (remaining.size() >= 2) {
-                map.addPolyline(new PolylineOptions()
+                routePolylines.add(map.addPolyline(new PolylineOptions()
                         .addAll(remaining)
                         .color(Color.parseColor("#EF842F"))
-                        .width(5.0f));
+                        .width(5.0f)));
             }
         }
         IconFactory icons = IconFactory.getInstance(this);
@@ -333,6 +376,7 @@ public class RouteMapActivity extends Activity {
                     .position(new LatLng(stop.latitude, stop.longitude))
                     .icon(icons.fromBitmap(pinBitmap(stop))));
             markerStops.put(marker.getId(), stop);
+            stopMarkers.add(marker);
         }
         if (!geometry.stops.isEmpty()) {
             RouteGeometry.Stop first = geometry.stops.get(0);
@@ -356,7 +400,8 @@ public class RouteMapActivity extends Activity {
         Canvas canvas = new Canvas(bitmap);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         boolean done = "completed".equals(stop.status) || "skipped".equals(stop.status) || "failed".equals(stop.status);
-        paint.setColor(done ? 0xFF16A34A : 0xFF276EF1);
+        boolean syncing = syncingStopIds.contains(stop.stopId);
+        paint.setColor(syncing ? 0xFFD97706 : done ? 0xFF16A34A : 0xFF276EF1);
         canvas.drawCircle(size / 2f, size / 2f, size / 2f - dp(3), paint);
         paint.setColor(Color.WHITE);
         paint.setTextSize(dp(13));
@@ -420,8 +465,21 @@ public class RouteMapActivity extends Activity {
         busy = true;
         executor.execute(() -> {
             try {
-                CommandSubmitter.command(this, kind, stop.jobId, stop.stopId, recipient, null);
-                runOnUiThread(() -> toast(kind + " sent"));
+                CommandQueue.Result result = CommandSubmitter.command(
+                        this, kind, stop.jobId, stop.stopId, recipient, null);
+                runOnUiThread(() -> {
+                    if (result.sent > 0 && result.remaining == 0) {
+                        toast(kind + " confirmed on the system");
+                        loadRoute(); // repaint pins from server truth
+                    } else if (result.remaining > 0) {
+                        syncingStopIds.add(stop.stopId);
+                        toast("No connection - saved offline. It will sync automatically.");
+                        renderRoute(geometry); // amber pin feedback now
+                    } else if (result.conflicts > 0) {
+                        toast("Dispatch changed this stop - refreshing.");
+                        loadRoute();
+                    }
+                });
             } catch (Exception error) {
                 runOnUiThread(() -> toast("Failed: " + error.getMessage()));
             } finally {
@@ -491,22 +549,107 @@ public class RouteMapActivity extends Activity {
     }
 
     private void promptRecipientAndComplete(RouteGeometry.Stop stop) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Complete delivery");
+        // The window must not close silently: it reports Sending, stays open
+        // on failure, and only closes with a clear confirmation or a visible
+        // offline warning.
+        Dialog dialog = new Dialog(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(dp(20), dp(20), dp(20), dp(20));
+        TextView title = new TextView(this);
+        title.setText("Complete delivery");
+        title.setTextSize(20);
+        layout.addView(title);
         EditText input = new EditText(this);
         input.setHint("Recipient name");
-        builder.setView(input);
-        builder.setPositiveButton("Complete", (d, w) ->
-                runCommand("complete", stop, input.getText().toString().trim()));
-        builder.setNegativeButton("Cancel", null);
-        builder.show();
+        layout.addView(input);
+        TextView status = new TextView(this);
+        status.setTextSize(12);
+        status.setPadding(0, dp(8), 0, dp(4));
+        layout.addView(status);
+        Button complete = new Button(this);
+        complete.setText("Complete");
+        complete.setOnClickListener(v -> {
+            String recipient = input.getText().toString().trim();
+            if (recipient.isEmpty()) {
+                status.setTextColor(Color.rgb(180, 83, 9));
+                status.setText("Recipient name is required.");
+                return;
+            }
+            complete.setEnabled(false);
+            status.setTextColor(Color.rgb(102, 112, 133));
+            status.setText("Sending to the system\u2026");
+            if (busy) {
+                status.setText("Another action is still in progress - try again.");
+                complete.setEnabled(true);
+                return;
+            }
+            busy = true;
+            executor.execute(() -> {
+                try {
+                    CommandQueue.Result result = CommandSubmitter.command(
+                            this, "complete", stop.jobId, stop.stopId, recipient, null);
+                    runOnUiThread(() -> {
+                        busy = false;
+                        if (result.sent > 0 && result.remaining == 0) {
+                            status.setTextColor(0xFF16A34A);
+                            status.setText("Completed and confirmed on the system.");
+                            loadRoute();
+                            handler.postDelayed(dialog::dismiss, 900);
+                        } else if (result.remaining > 0) {
+                            syncingStopIds.add(stop.stopId);
+                            renderRoute(geometry);
+                            status.setTextColor(Color.rgb(180, 83, 9));
+                            status.setText("No connection right now. Your completion is saved offline and will sync automatically - the pin shows amber until then.");
+                            complete.setEnabled(false);
+                            input.setEnabled(false);
+                            Button close = new Button(this);
+                            close.setText("OK - I understand");
+                            close.setOnClickListener(w -> dialog.dismiss());
+                            layout.addView(close);
+                        } else if (result.conflicts > 0) {
+                            status.setTextColor(Color.rgb(180, 83, 9));
+                            status.setText("Dispatch changed this stop. Refreshing the map.");
+                            loadRoute();
+                            handler.postDelayed(dialog::dismiss, 900);
+                        }
+                    });
+                } catch (Exception error) {
+                    runOnUiThread(() -> {
+                        busy = false;
+                        complete.setEnabled(true);
+                        status.setTextColor(Color.rgb(190, 30, 45));
+                        status.setText("Failed: " + error.getMessage());
+                    });
+                }
+            });
+        });
+        layout.addView(complete);
+        Button cancel = new Button(this);
+        cancel.setText("Cancel");
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        layout.addView(cancel);
+        dialog.setContentView(layout);
+        dialog.show();
     }
 
     private void submitEvidence(String kind, RouteGeometry.Stop stop, String field, String value) {
         executor.execute(() -> {
             try {
-                CommandSubmitter.evidence(this, kind, stop.jobId, stop.stopId, field, value);
-                runOnUiThread(() -> toast("Evidence saved - syncing"));
+                CommandQueue.Result result = CommandSubmitter.evidence(
+                        this, kind, stop.jobId, stop.stopId, field, value);
+                runOnUiThread(() -> {
+                    if (result.sent > 0 && result.remaining == 0) {
+                        toast("Evidence saved on the system");
+                    } else if (result.remaining > 0) {
+                        syncingStopIds.add(stop.stopId);
+                        toast("No connection - evidence saved offline, will sync automatically.");
+                        renderRoute(geometry);
+                    } else if (result.conflicts > 0) {
+                        toast("Conflict - refreshing.");
+                        loadRoute();
+                    }
+                });
             } catch (Exception error) {
                 runOnUiThread(() -> toast("Evidence failed: " + error.getMessage()));
             }

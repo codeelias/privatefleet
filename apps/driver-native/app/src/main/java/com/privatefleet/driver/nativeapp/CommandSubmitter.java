@@ -15,7 +15,7 @@ final class CommandSubmitter {
     private CommandSubmitter() {
     }
 
-    static void command(Context context, String kind, String jobId, String stopId,
+    static CommandQueue.Result command(Context context, String kind, String jobId, String stopId,
                         String recipient, String reasonCode) throws Exception {
         JSONObject command = new JSONObject();
         command.put("kind", kind);
@@ -27,10 +27,10 @@ final class CommandSubmitter {
         if (reasonCode != null) command.put("reasonCode", reasonCode);
         command.put("createdAt", java.time.Instant.now().toString());
         CommandQueue.enqueue(context, command);
-        CommandQueue.flush(context);
+        return CommandQueue.flush(context);
     }
 
-    static void evidence(Context context, String kind, String jobId, String stopId,
+    static CommandQueue.Result evidence(Context context, String kind, String jobId, String stopId,
                          String field, String value) throws Exception {
         JSONObject command = new JSONObject();
         command.put("kind", kind);
@@ -40,6 +40,6 @@ final class CommandSubmitter {
         command.put("commandId", UUID.randomUUID().toString());
         command.put("createdAt", java.time.Instant.now().toString());
         CommandQueue.enqueue(context, command);
-        CommandQueue.flush(context);
+        return CommandQueue.flush(context);
     }
 }

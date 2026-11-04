@@ -1,3 +1,8 @@
+### v1.80 - Driver map: server-truth pin colours, no silent closes (2026-11-04)
+- Pins repaint from the server immediately after a confirmed action (green only on system confirmation).
+- Queued-offline actions show an amber pin and a HUD 'waiting to sync' hint; the map retries the offline queue every 10s and turns pins green on drain.
+- Complete window no longer closes silently: Sending state, stays open on failure, explicit amber warning for offline-queued completions.
+- Overlays are removed before repainting (no duplicate pins).
 ### v1.79 - Delivery confidence score (differentiator) (2026-11-04)
 - Every terminal stop now carries an evidence-derived 0-100 confidence score with factor breakdown; dispatcher stop cards show the badge.
 - Verified live: 57/57 terminal stops scored on production. Gate green.
