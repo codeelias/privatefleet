@@ -1,3 +1,8 @@
+### v1.76 - Driver route map (offline-first) (2026-11-04)
+- Native 1.1.0: MapLibre vector map with OpenFreeMap liberty; Greater London tiles downloaded once and kept offline, refreshed progressively when connectivity allows; no cache + no network stays in list UI.
+- Tappable stop pins with full detail sheet: arrive, photo, signature, note and complete - all through the offline command/evidence queues.
+- New read-only driver endpoint GET /v1/driver/route-geometry (route line + stop sequence).
+- Verified on Phone 1 (map, orange route, blue pins) and emulator; full gate green (API 110/110, web 53/53).
 ### v1.75 - Native TLS trust fix, verified on Phone 1 (2026-11-04)
 - Bundled the on-prem CA scoped to api.privatefleet.home.arpa via network security config; public origins keep system trust.
 - Phone 1 now posts telemetry and loads its queue on 1.0.16 (versionCode 17).

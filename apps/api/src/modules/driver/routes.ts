@@ -15,6 +15,8 @@ import { AuthError, type AuthService } from "../auth/service.js";
 import { makeAuthGuard } from "../auth/guard.js";
 import type { AuthAttemptLimiter } from "../auth/rate-limit.js";
 import type { PgFleetService } from "../fleet/pg-service.js";
+import { sql } from "drizzle-orm";
+import { withTenant } from "../../db/client.js";
 
 function requireDriver(
   request: { auth?: { role: string; userId: string } },
@@ -86,6 +88,68 @@ export function registerDriverDeviceRoutes(
     }
     const tenantId = request.auth?.tenantId ?? "";
     return fleet.driverQueue(tenantId, driverId);
+  });
+
+  // Lightweight map feed: the published route line and its stop sequence for
+  // this driver. Read-only, driver-scoped by token identity.
+  app.get("/v1/driver/route-geometry", { preHandler: guard }, async (request, reply) => {
+    const driverId = requireDriver(request, reply);
+    if (!driverId) return reply;
+    const tenantId = request.auth?.tenantId ?? "";
+    return withTenant(handle, tenantId, async (db) => {
+      const routeRows = (await db.execute(sql`
+        SELECT id, geometry FROM routes
+        WHERE tenant_id = ${tenantId}
+          AND driver_id = ${driverId}
+          AND status IN ('published', 'in_progress')
+        ORDER BY version DESC
+        LIMIT 1
+      `)) as unknown as Array<{
+        id: string;
+        geometry: Array<{ latitude: number; longitude: number }> | null;
+      }>;
+      const route = routeRows[0];
+      if (!route) {
+        return { points: [], stops: [] };
+      }
+      const stopRows = (await db.execute(sql`
+        SELECT rs.sequence_no, js.id AS stop_id, js.job_id, js.stop_type, js.status,
+               js.address, js.latitude, js.longitude, js.window_end, j.reference
+        FROM route_stops rs
+        JOIN job_stops js ON js.id = rs.job_stop_id
+        JOIN jobs j ON j.id = js.job_id
+        WHERE rs.route_id = ${route.id}
+        ORDER BY rs.sequence_no
+      `)) as unknown as Array<{
+        sequence_no: number;
+        stop_id: string;
+        job_id: string;
+        stop_type: string;
+        status: string;
+        address: string;
+        latitude: number;
+        longitude: number;
+        window_end: Date | string | null;
+        reference: string;
+      }>;
+      return {
+        points: route.geometry ?? [],
+        stops: stopRows.map((row) => ({
+          sequence: row.sequence_no,
+          stopId: row.stop_id,
+          jobId: row.job_id,
+          reference: row.reference,
+          type: row.stop_type,
+          status: row.status,
+          address: row.address,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          ...(row.window_end
+            ? { windowEnd: new Date(row.window_end).toISOString() }
+            : {}),
+        })),
+      };
+    });
   });
 
   app.post("/v1/driver/shift/start", { preHandler: guard }, async (request, reply) => {
