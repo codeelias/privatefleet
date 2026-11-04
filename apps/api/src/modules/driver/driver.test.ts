@@ -210,6 +210,21 @@ describe("driver device login", () => {
       headers: authed(await driverLogin(fleet.driverB.id)),
     });
     expect((otherDriver.json() as { geofences: unknown[] }).geofences.length).toBe(0);
+
+    const stopState = await app.inject({
+      method: "GET",
+      url: `/v1/driver/jobs/${fleet.driverA.jobId}/stops/${fleet.driverA.stopId}/state`,
+      headers: authed(token),
+    });
+    expect(stopState.statusCode).toBe(200);
+    expect((stopState.json() as { status: string }).status).toBe("pending");
+
+    const foreignState = await app.inject({
+      method: "GET",
+      url: `/v1/driver/jobs/${fleet.driverA.jobId}/stops/${fleet.driverA.stopId}/state`,
+      headers: authed(await driverLogin(fleet.driverB.id)),
+    });
+    expect(foreignState.statusCode).toBe(404);
   });
 
   it("rejects a wrong PIN and an unknown driver without leaking details", async () => {

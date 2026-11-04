@@ -159,6 +159,44 @@ export function registerDriverDeviceRoutes(
     });
   });
 
+  // Single-stop state for targeted pin updates on the driver map: one tiny
+  // read instead of re-downloading the whole route after every action.
+  app.get(
+    "/v1/driver/jobs/:jobId/stops/:stopId/state",
+    { preHandler: guard },
+    async (request, reply) => {
+      const driverId = requireDriver(request, reply);
+      if (!driverId) return reply;
+      const params = z
+        .object({ jobId: z.string().uuid(), stopId: z.string().uuid() })
+        .parse(request.params);
+      return withTenant(handle, request.auth?.tenantId ?? "", async (db) => {
+        const rows = (await db.execute(sql`
+          SELECT js.id, js.status
+          FROM job_stops js
+          JOIN jobs j ON j.id = js.job_id
+          WHERE j.id = ${params.jobId} AND js.id = ${params.stopId}
+            AND j.assigned_driver_id = ${driverId}
+        `)) as unknown as Array<{ id: string; status: string }>;
+        if (!rows[0]) {
+          return reply.status(404).send({
+            type: "https://privatefleet.example/errors/stop_not_assigned",
+            title: "Stop not found",
+            status: 404,
+            code: "STOP_NOT_ASSIGNED",
+            detail: "This stop is not assigned to you",
+            uiMessage: "That stop is not part of your route.",
+          });
+        }
+        return {
+          jobId: params.jobId,
+          stopId: params.stopId,
+          status: rows[0].status,
+        };
+      });
+    },
+  );
+
   // Enabled fences that apply to this driver, with the driver's current
   // inside/outside state. Mirrors the evaluation scoping in tracking.
   app.get("/v1/driver/geofences", { preHandler: guard }, async (request, reply) => {
