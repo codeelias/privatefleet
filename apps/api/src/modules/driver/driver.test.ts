@@ -187,9 +187,9 @@ describe("driver device login", () => {
     };
     expect(body.points.length).toBe(2);
     expect(body.stops.length).toBe(1);
-    expect(body.stops[0].stopId).toBe(fleet.driverA.stopId);
-    expect(body.stops[0].legDistanceM).toBe(120);
-    expect(typeof body.stops[0].arrivalAt).toBe("string");
+    expect(body.stops[0]?.stopId).toBe(fleet.driverA.stopId);
+    expect(body.stops[0]?.legDistanceM).toBe(120);
+    expect(typeof body.stops[0]?.arrivalAt).toBe("string");
 
     const fences = await app.inject({
       method: "GET",
@@ -201,8 +201,8 @@ describe("driver device login", () => {
       geofences: Array<{ name: string; inside: boolean }>;
     };
     expect(fenceBody.geofences.length).toBe(1);
-    expect(fenceBody.geofences[0].name).toBe("Depot zone");
-    expect(fenceBody.geofences[0].inside).toBe(false);
+    expect(fenceBody.geofences[0]?.name).toBe("Depot zone");
+    expect(fenceBody.geofences[0]?.inside).toBe(false);
 
     const otherDriver = await app.inject({
       method: "GET",
