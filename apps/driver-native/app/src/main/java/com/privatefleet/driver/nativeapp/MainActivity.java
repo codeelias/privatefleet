@@ -35,8 +35,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -66,6 +68,7 @@ public class MainActivity extends Activity {
     private TextView queueStatus;
     private Button refreshButton;
     private volatile boolean queueLoading = false;
+    private Map<String, Integer> routeOrder = null;
     private ConnectivityManager.NetworkCallback networkCallback;
 
     @Override
@@ -421,6 +424,26 @@ public class MainActivity extends Activity {
         executor.execute(() -> {
             try {
                 JSONObject queue = new ApiClient(this).queue();
+                // Stable ordering: the published route sequence wins over
+                // live distance sorting, so the list never renumbers between
+                // refreshes (and matches the map pin numbers exactly).
+                try {
+                    JSONObject geometry = new ApiClient(this).routeGeometry();
+                    Map<String, Integer> order = new HashMap<>();
+                    JSONArray stops = geometry.optJSONArray("stops");
+                    if (stops != null) {
+                        for (int index = 0; index < stops.length(); index++) {
+                            JSONObject stop = stops.optJSONObject(index);
+                            if (stop != null) {
+                                order.put(stop.optString("stopId"),
+                                        stop.optInt("sequence", Integer.MAX_VALUE));
+                            }
+                        }
+                    }
+                    routeOrder = order.isEmpty() ? null : order;
+                } catch (Exception geometryError) {
+                    routeOrder = null;
+                }
                 runOnUiThread(() -> {
                     queueLoading = false;
                     queueStatus.setText("");
@@ -506,17 +529,27 @@ public class MainActivity extends Activity {
         }
 
         double[] here = LocationStore.load(this);
+        boolean routeOrderActive = routeOrder != null && !routeOrder.isEmpty();
         locationView.setText(here == null
                 ? "Location unavailable - showing route order"
-                : "Sorted by distance from last GPS fix");
+                : routeOrderActive ? "Route order (matches the map)" : "Sorted by distance from last GPS fix");
         for (StopItem item : stopItems) {
             item.distanceMetres = here == null ? Double.MAX_VALUE
                     : distanceMetres(here[0], here[1], item.latitude, item.longitude);
         }
-        stopItems.sort(Comparator
-                .comparing((StopItem item) -> !"arrived".equals(item.status))
-                .thenComparingDouble(item -> item.distanceMetres)
-                .thenComparing(item -> item.jobRef));
+        if (routeOrderActive) {
+            stopItems.sort(Comparator
+                    .comparing((StopItem item) -> !"arrived".equals(item.status))
+                    .thenComparingInt(item -> routeOrder.containsKey(item.stopId)
+                            ? routeOrder.get(item.stopId)
+                            : Integer.MAX_VALUE)
+                    .thenComparing(item -> item.jobRef));
+        } else {
+            stopItems.sort(Comparator
+                    .comparing((StopItem item) -> !"arrived".equals(item.status))
+                    .thenComparingDouble(item -> item.distanceMetres)
+                    .thenComparing(item -> item.jobRef));
+        }
         updateHeadsUp();
         renderPage();
     }

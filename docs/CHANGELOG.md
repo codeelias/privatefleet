@@ -1,3 +1,6 @@
+### v1.86 - Driver queue: stable route order (2026-11-04)
+- Root cause of the 'flipping numbers': the queue list re-sorted by live GPS distance on every refresh, so row numbers changed constantly; the server route (v123) never changed.
+- Queue now renders in published route order (matches map pin numbers exactly) with distance-sort only as a fallback when no route exists.
 ### v1.85 - Driver map: refreshes never move the camera (2026-11-04)
 - Root cause of 'stop numbers changing': every full refresh and reopen recentered the camera on pin 1, shifting the viewport to different pins. Server route v123 sequences are stable.
 - Camera now moves only on the first render (driver fix, else first incomplete stop); all later refreshes are viewport-neutral.
