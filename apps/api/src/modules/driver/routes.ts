@@ -114,7 +114,8 @@ export function registerDriverDeviceRoutes(
       }
       const stopRows = (await db.execute(sql`
         SELECT rs.sequence_no, js.id AS stop_id, js.job_id, js.stop_type, js.status,
-               js.address, js.latitude, js.longitude, js.window_end, j.reference
+               js.address, js.latitude, js.longitude, js.window_end, j.reference,
+               rs.leg_distance_m, rs.planned_arrival_at
         FROM route_stops rs
         JOIN job_stops js ON js.id = rs.job_stop_id
         JOIN jobs j ON j.id = js.job_id
@@ -131,6 +132,8 @@ export function registerDriverDeviceRoutes(
         longitude: number;
         window_end: Date | string | null;
         reference: string;
+        leg_distance_m: number | null;
+        planned_arrival_at: Date | string | null;
       }>;
       return {
         points: route.geometry ?? [],
@@ -144,9 +147,61 @@ export function registerDriverDeviceRoutes(
           address: row.address,
           latitude: row.latitude,
           longitude: row.longitude,
+          ...(row.leg_distance_m !== null ? { legDistanceM: row.leg_distance_m } : {}),
+          ...(row.planned_arrival_at
+            ? { arrivalAt: new Date(row.planned_arrival_at).toISOString() }
+            : {}),
           ...(row.window_end
             ? { windowEnd: new Date(row.window_end).toISOString() }
             : {}),
+        })),
+      };
+    });
+  });
+
+  // Enabled fences that apply to this driver, with the driver's current
+  // inside/outside state. Mirrors the evaluation scoping in tracking.
+  app.get("/v1/driver/geofences", { preHandler: guard }, async (request, reply) => {
+    const driverId = requireDriver(request, reply);
+    if (!driverId) return reply;
+    const tenantId = request.auth?.tenantId ?? "";
+    return withTenant(handle, tenantId, async (db) => {
+      const vehicleRows = (await db.execute(sql`
+        SELECT id FROM vehicles WHERE tenant_id = ${tenantId} AND driver_id = ${driverId}
+        LIMIT 1
+      `)) as unknown as Array<{ id: string }>;
+      const vehicleId = vehicleRows[0]?.id ?? null;
+      const fences = (await db.execute(sql`
+        SELECT id, name, geojson, job_id, driver_ids
+        FROM geofences
+        WHERE tenant_id = ${tenantId} AND enabled = true
+        ORDER BY name
+      `)) as unknown as Array<{
+        id: string;
+        name: string;
+        geojson: string;
+        job_id: string | null;
+        driver_ids: string[];
+      }>;
+      const applicable = fences.filter(
+        (fence) =>
+          !Array.isArray(fence.driver_ids) ||
+          fence.driver_ids.length === 0 ||
+          fence.driver_ids.includes(driverId),
+      );
+      const states = vehicleId
+        ? ((await db.execute(sql`
+            SELECT geofence_id, inside FROM geofence_states WHERE vehicle_id = ${vehicleId}
+          `)) as unknown as Array<{ geofence_id: string; inside: boolean }>)
+        : [];
+      const insideById = new Map(states.map((state) => [state.geofence_id, state.inside]));
+      return {
+        geofences: applicable.map((fence) => ({
+          id: fence.id,
+          name: fence.name,
+          geojson: fence.geojson,
+          inside: insideById.get(fence.id) ?? false,
+          ...(fence.job_id ? { jobId: fence.job_id } : {}),
         })),
       };
     });
