@@ -1,3 +1,9 @@
+### v1.90 - Wave 1 trust fundamentals (2026-11-05)
+- R1: idempotency reuse contract - real request hashes stored; same key + different body returns 409 IDEMPOTENCY_CONFLICT; replays return the stored result.
+- R2: append-only job timeline endpoint GET /v1/jobs/:jobId/timeline (actor, payload, timestamps in order).
+- R4: public tracking now returns an honest ETA window (fromMinutes/toMinutes) around the live estimate.
+- R5: fleet state vehicles carry a heartbeat-derived lifecycle (online/degraded/offline).
+- All additive, no schema change; gate green (API 120/120, web 53/53); verified live (timeline for G06-001, CAR-03 online / VAN-02/04 offline).
 ### v1.89 - Route instability fix: one active plan per driver (2026-11-05)
 - Supersede now retires published AND in_progress routes per driver; the driver map feed serves the newest plan even when completed and never falls back to an older open route (v121 zombie eliminated).
 - Migration retires stale in_progress routes and reconciles the J-191/J-202 closeRoute residue.

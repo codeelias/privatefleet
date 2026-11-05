@@ -166,6 +166,7 @@ describe("public customer tracking", () => {
       customerZoneName?: string;
       proof?: { photos: number; signatures: number };
       liveProgress?: { stopsAway: number; etaMinutes: number };
+      etaWindow?: { fromMinutes: number; toMinutes: number };
     };
     expect(body.jobReference).toBe("TRK-JOB");
     expect(body.status).toBe("in_progress");
@@ -179,6 +180,9 @@ describe("public customer tracking", () => {
     expect(body.liveProgress).toBeDefined();
     expect(body.liveProgress?.stopsAway).toBe(0);
     expect(typeof body.liveProgress?.etaMinutes).toBe("number");
+    expect(body.etaWindow).toBeDefined();
+    expect(body.etaWindow!.fromMinutes).toBeGreaterThan(0);
+    expect(body.etaWindow!.toMinutes).toBeGreaterThanOrEqual(body.etaWindow!.fromMinutes);
     expect(body.etaConfidence).toBeDefined();
     expect(body.remainingStops).toBe(1);
     expect(body.lastUpdateAt).toBeDefined();
@@ -230,5 +234,6 @@ describe("public customer tracking", () => {
     expect(limited).toBe(true);
   });
 });
+
 
 

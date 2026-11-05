@@ -134,6 +134,12 @@ export const VehicleDtoSchema = z.object({
   stale: z.boolean().default(false),
   /** Explicit location provenance; stale is never treated as live. */
   locationStatus: z.enum(["live", "stale", "unknown"]).optional(),
+  /**
+   * Heartbeat-derived lifecycle (docs/54 R5): online = fresh fix,
+   * degraded = recent but ageing, offline = no recent contact. Display
+   * states only - never phantom-live data.
+   */
+  lifecycle: z.enum(["online", "degraded", "offline"]).optional(),
   lastSeenAt: z.string().datetime().optional(),
   /** Device-reported horizontal accuracy in metres, when available. */
   accuracyMetres: z.number().nonnegative().max(5000).optional(),

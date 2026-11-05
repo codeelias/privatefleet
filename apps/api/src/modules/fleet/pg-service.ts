@@ -151,6 +151,18 @@ interface AlertRow {
 }
 
 const STALE_AFTER_MS = 60_000;
+const DEGRADED_AFTER_MS = 5 * 60_000;
+
+/** Heartbeat-derived lifecycle (docs/54 R5): display states only. */
+function vehicleLifecycle(
+  capturedAt: Date | string | null | undefined,
+): "online" | "degraded" | "offline" {
+  if (!capturedAt) return "offline";
+  const age = Date.now() - epoch(capturedAt);
+  if (age <= STALE_AFTER_MS) return "online";
+  if (age <= DEGRADED_AFTER_MS) return "degraded";
+  return "offline";
+}
 
 function iso(value: Date | string | null | undefined): string | undefined {
   if (value === null || value === undefined) {
@@ -328,6 +340,7 @@ export class PgFleetService {
                   Date.now() - epoch(vehicle.captured_at) > STALE_AFTER_MS
                 ? "stale"
                 : "live",
+          lifecycle: vehicleLifecycle(vehicle.captured_at),
           ...(iso(vehicle.captured_at) ? { lastSeenAt: iso(vehicle.captured_at) } : {}),
           ...(vehicle.accuracy_metres !== null ? { accuracyMetres: vehicle.accuracy_metres } : {}),
           ...(vehicle.heading_deg !== null ? { headingDeg: vehicle.heading_deg } : {}),
@@ -478,6 +491,7 @@ export class PgFleetService {
     jobId: string,
     driverId: string,
     idempotencyKey: string,
+    requestHash?: string,
   ): Promise<AssignResponse> {
     return this.idempotent(tenantId, idempotencyKey, "POST /v1/jobs/:id/assign", async (db) => {
       const jobRows = (await db.execute(
@@ -549,7 +563,7 @@ export class PgFleetService {
         status: "assigned" as const,
         etaImpactMinutes,
       };
-    });
+    }, requestHash);
   }
 
   async arrive(
@@ -559,6 +573,7 @@ export class PgFleetService {
     stopId: string,
     driverId: string,
     idempotencyKey: string | undefined,
+    requestHash?: string,
   ): Promise<{ stopId: string; status: string }> {
     return this.idempotent(tenantId, idempotencyKey, "POST /v1/jobs/:id/stops/:id/arrive", async (db) => {
       const rows = (await db.execute(
@@ -594,7 +609,7 @@ export class PgFleetService {
       });
       await this.advanceRouteLifecycle(db, tenantId, actorId, stopId);
       return { stopId, status: "arrived" };
-    });
+    }, requestHash);
   }
 
   async complete(
@@ -605,6 +620,7 @@ export class PgFleetService {
     driverId: string,
     details: { recipientName?: string | undefined; notes?: string | undefined },
     idempotencyKey: string | undefined,
+    requestHash?: string,
   ): Promise<{ stopId: string; status: string; jobStatus: string }> {
     return this.idempotent(tenantId, idempotencyKey, "POST /v1/jobs/:id/stops/:id/complete", async (db) => {
       const stop = await this.requireStop(db, jobId, stopId, driverId);
@@ -649,7 +665,7 @@ export class PgFleetService {
       });
       await this.advanceRouteLifecycle(db, tenantId, actorId, stopId);
       return { stopId, status: "completed", jobStatus };
-    });
+    }, requestHash);
   }
 
   async skip(
@@ -660,6 +676,7 @@ export class PgFleetService {
     driverId: string,
     failure: { reasonCode: FailureReasonCode; note?: string | undefined },
     idempotencyKey: string | undefined,
+    requestHash?: string,
   ): Promise<{ stopId: string; status: string; jobStatus: string; failureCode: FailureReasonCode }> {
     return this.idempotent(tenantId, idempotencyKey, "POST /v1/jobs/:id/stops/:id/skip", async (db) => {
       const stop = await this.requireStop(db, jobId, stopId, driverId);
@@ -739,7 +756,7 @@ export class PgFleetService {
         }),
       );
       return { stopId, status: "skipped", jobStatus, failureCode };
-    });
+    }, requestHash);
   }
 
   async actOnAlert(
@@ -1241,29 +1258,36 @@ export class PgFleetService {
   /**
    * Runs a command once per idempotency key; replays return the stored
    * response. The check and the write share one tenant transaction.
+   * When requestHash is supplied, reusing the key with a different hash
+   * raises IDEMPOTENCY_CONFLICT (409) - the documented reuse contract.
    */
   private async idempotent<T>(
     tenantId: string,
     idempotencyKey: string | undefined,
     endpoint: string,
     work: (db: Database) => Promise<T>,
+    requestHash?: string,
   ): Promise<T> {
     if (!idempotencyKey) {
       return withTenant(this.handle, tenantId, work);
     }
     return withTenant(this.handle, tenantId, async (db) => {
       const existing = (await db.execute(
-        sql`SELECT response, status_code FROM idempotency_keys
+        sql`SELECT response, request_hash, status_code FROM idempotency_keys
             WHERE tenant_id = ${tenantId} AND key = ${idempotencyKey}`,
-      )) as unknown as Array<{ response: T; status_code: number }>;
+      )) as unknown as Array<{ response: T; request_hash: string; status_code: number }>;
       const hit = existing[0];
       if (hit) {
+        const storedHash = hit.request_hash ?? "v1";
+        if (requestHash && storedHash !== "v1" && storedHash !== requestHash) {
+          throw new FleetError("IDEMPOTENCY_CONFLICT");
+        }
         return hit.response;
       }
       const result = await work(db);
       await db.execute(sql`
         INSERT INTO idempotency_keys (tenant_id, key, endpoint, request_hash, status_code, response)
-        VALUES (${tenantId}, ${idempotencyKey}, ${endpoint}, ${"v1"},
+        VALUES (${tenantId}, ${idempotencyKey}, ${endpoint}, ${requestHash ?? "v1"},
           ${200}, ${JSON.stringify(result)}::jsonb)
         ON CONFLICT (tenant_id, key) DO NOTHING
       `);
@@ -1271,8 +1295,44 @@ export class PgFleetService {
     });
   }
 
-  /** Publishes outbox rows written by this service (post-commit). */
-  async publishPending(tenantId: string): Promise<void> {
+  /**
+   * Append-only, per-entity timeline (docs/54 R2): the job_events ledger in
+   * order, with actor and payload - dispute and audit evidence.
+   */
+  async jobTimeline(
+    tenantId: string,
+    jobId: string,
+  ): Promise<Array<{
+    eventType: string;
+    actorType: string | null;
+    actorId: string | null;
+    payload: unknown;
+    occurredAt: string;
+  }>> {
+    return withTenant(this.handle, tenantId, async (db) => {
+      const rows = (await db.execute(sql`
+        SELECT type, actor_type, actor_id, payload, created_at
+        FROM job_events
+        WHERE tenant_id = ${tenantId} AND job_id = ${jobId}
+        ORDER BY created_at ASC
+      `)) as unknown as Array<{
+        type: string;
+        actor_type: string | null;
+        actor_id: string | null;
+        payload: unknown;
+        created_at: Date | string;
+      }>;
+      return rows.map((row) => ({
+        eventType: row.type,
+        actorType: row.actor_type,
+        actorId: row.actor_id,
+        payload: row.payload,
+        occurredAt: new Date(row.created_at).toISOString(),
+      }));
+    });
+  }
+
+  /** Publishes outbox rows written by this service (post-commit). */  async publishPending(tenantId: string): Promise<void> {
     const rows = (await this.handle.sql.begin(async (tx) => {
       await tx`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
       return tx`SELECT id, payload FROM outbox WHERE published_at IS NULL ORDER BY created_at LIMIT 50`;

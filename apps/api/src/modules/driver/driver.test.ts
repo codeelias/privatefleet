@@ -438,13 +438,48 @@ describe("seeded single-stop job (device acceptance fixture)", () => {
       payload: { driverId: job!.assignedDriverId },
     });
     expect(arrive.statusCode).toBe(200);
+    const completeKey = randomUUID();
     const complete = await app.inject({
       method: "POST",
       url: `/v1/jobs/${job!.id}/stops/${job!.stops[0]!.id}/complete`,
-      headers: { ...authed(driverToken), "idempotency-key": randomUUID() },
+      headers: { ...authed(driverToken), "idempotency-key": completeKey },
       payload: { driverId: job!.assignedDriverId, recipientName: "Seeded Recipient" },
     });
     expect(complete.statusCode).toBe(200);
+
+    // Idempotency contract (docs/54 R1): same key + same body replays the
+    // stored result; same key + different body is rejected with 409.
+    const replay = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${job!.id}/stops/${job!.stops[0]!.id}/complete`,
+      headers: { ...authed(driverToken), "idempotency-key": completeKey },
+      payload: { driverId: job!.assignedDriverId, recipientName: "Seeded Recipient" },
+    });
+    expect(replay.statusCode).toBe(200);
+    expect((replay.json() as { status: string }).status).toBe("completed");
+
+    const reuse = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${job!.id}/stops/${job!.stops[0]!.id}/complete`,
+      headers: { ...authed(driverToken), "idempotency-key": completeKey },
+      payload: { driverId: job!.assignedDriverId, recipientName: "Different Person" },
+    });
+    expect(reuse.statusCode).toBe(409);
+    expect((reuse.json() as { code: string }).code).toBe("IDEMPOTENCY_CONFLICT");
+
+    // Append-only timeline (docs/54 R2) exposes the event ledger in order.
+    const timeline = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/${job!.id}/timeline`,
+      headers: authed(driverToken),
+    });
+    expect(timeline.statusCode).toBe(200);
+    const events = timeline.json() as Array<{ eventType: string }>;
+    const types = events.map((entry) => entry.eventType);
+    expect(types).toContain("job.arrived");
+    expect(types).toContain("job.completed");
+    expect(types.indexOf("job.arrived")).toBeLessThan(types.indexOf("job.completed"));
+
     const finalState = await app.inject({
       method: "GET",
       url: "/v1/fleet/state",

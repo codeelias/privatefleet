@@ -267,6 +267,20 @@ export async function publicTracking(
       delayStatus,
       ...(remainingStops > 0 ? { remainingStops } : {}),
       ...(liveProgress ? { liveProgress } : {}),
+      ...(liveProgress
+        ? {
+            etaWindow: {
+              fromMinutes: Math.max(
+                1,
+                liveProgress.etaMinutes -
+                  Math.max(5, Math.ceil(liveProgress.etaMinutes * 0.25)),
+              ),
+              toMinutes:
+                liveProgress.etaMinutes +
+                Math.max(5, Math.ceil(liveProgress.etaMinutes * 0.25)),
+            },
+          }
+        : {}),
       ...(position?.capturedAt ? { lastUpdateAt: position.capturedAt } : {}),
       ...(inCustomerZone !== undefined ? { inCustomerZone } : {}),
       ...(customerZoneName ? { customerZoneName } : {}),

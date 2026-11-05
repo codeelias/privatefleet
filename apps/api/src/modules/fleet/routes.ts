@@ -6,6 +6,7 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import {
   AssignRequestSchema,
   FailureReasonCodeSchema,
@@ -73,6 +74,13 @@ function idempotencyKey(request: { headers: Record<string, unknown> }): string |
   return typeof raw === "string" && raw.length > 0 ? raw : undefined;
 }
 
+/** Hash of the raw request body for the idempotency reuse contract (docs/54 R1). */
+function requestHash(request: { body: unknown }): string {
+  return createHash("sha256")
+    .update(JSON.stringify(request.body ?? null))
+    .digest("hex");
+}
+
 export function registerFleetRoutes(
   app: FastifyInstance,
   auth: AuthService,
@@ -115,6 +123,7 @@ export function registerFleetRoutes(
       params.jobId,
       body.driverId,
       idempotencyKey(request) ?? `assign-${params.jobId}`,
+      requestHash(request),
     );
     await fleet.publishPending(tenantId);
     return result;
@@ -138,6 +147,7 @@ export function registerFleetRoutes(
         params.stopId,
         driverId,
         idempotencyKey(request),
+        requestHash(request),
       );
       await fleet.publishPending(tenantId);
       return result;
@@ -163,6 +173,7 @@ export function registerFleetRoutes(
         driverId,
         { recipientName: body.recipientName, notes: body.notes },
         idempotencyKey(request),
+        requestHash(request),
       );
       await fleet.publishPending(tenantId);
       return result;
@@ -191,6 +202,7 @@ export function registerFleetRoutes(
           note: body.note ?? body.reason,
         },
         idempotencyKey(request),
+        requestHash(request),
       );
       await fleet.publishPending(tenantId);
       return result;
@@ -271,7 +283,16 @@ export function registerFleetRoutes(
     await fleet.publishPending(tenantId);
     return result;
   });
+
+  // Append-only per-entity timeline (docs/54 R2): every job_events row in
+  // order - dispute resolution and audit evidence.
+  app.get("/v1/jobs/:jobId/timeline", { preHandler: guard }, async (request) => {
+    const params = JobParamSchema.parse({ jobId: (request.params as Params).jobId });
+    const tenantId = request.auth?.tenantId ?? "";
+    return fleet.jobTimeline(tenantId, params.jobId);
+  });
 }
+
 
 
 

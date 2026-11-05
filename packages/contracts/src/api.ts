@@ -188,6 +188,16 @@ export const PublicTrackingResponseSchema = z.object({
       etaMinutes: z.number().int().nonnegative(),
     })
     .optional(),
+  /**
+   * Honest ETA range (docs/54 R4): a conservative window around the live
+   * estimate, widening with distance - never an overconfident point.
+   */
+  etaWindow: z
+    .object({
+      fromMinutes: z.number().int().positive(),
+      toMinutes: z.number().int().positive(),
+    })
+    .optional(),
   /** Whether the ETA is a planned schedule or a live-blended estimate. */
   etaMethod: z.enum(["live", "planned"]).optional(),
   /** Trust level of the displayed arrival, derived from fix age. */
