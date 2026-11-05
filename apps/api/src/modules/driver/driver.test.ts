@@ -227,6 +227,74 @@ describe("driver device login", () => {
     expect(foreignState.statusCode).toBe(404);
   });
 
+  it("serves the newest plan even when completed and never falls back to an older open route", async () => {
+    // Structural rule (docs/53): the newest plan wins whatever its lifecycle,
+    // and stops belonging to other drivers are excluded from the feed.
+    const tenant = await registerTenant("Route Selection Co");
+    const pinHash = await argonHash("1234");
+    const driverId = randomUUID();
+    const vehicleId = randomUUID();
+    const jobId = randomUUID();
+    const stopId = randomUUID();
+    const otherDriverId = randomUUID();
+    const otherVehicleId = randomUUID();
+    const otherJobId = randomUUID();
+    const otherStopId = randomUUID();
+    const sql = migrator.sql;
+    await sql`INSERT INTO vehicles (id, tenant_id, registration, vehicle_type, status, driver_id)
+      VALUES (${vehicleId}, ${tenant.tenantId}, 'CAR-77', 'Van', 'on_route', ${driverId})`;
+    await sql`INSERT INTO vehicles (id, tenant_id, registration, vehicle_type, status, driver_id)
+      VALUES (${otherVehicleId}, ${tenant.tenantId}, 'CAR-78', 'Van', 'available', ${otherDriverId})`;
+    await sql`INSERT INTO drivers (id, tenant_id, full_name, status, pin_hash, vehicle_id)
+      VALUES (${driverId}, ${tenant.tenantId}, 'Sel Driver', 'on_route', ${pinHash}, ${vehicleId})`;
+    await sql`INSERT INTO drivers (id, tenant_id, full_name, status, pin_hash, vehicle_id)
+      VALUES (${otherDriverId}, ${tenant.tenantId}, 'Oth Driver', 'available', ${pinHash}, ${otherVehicleId})`;
+    await sql`INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status, assigned_driver_id, assigned_vehicle_id)
+      VALUES (${jobId}, ${tenant.tenantId}, 'SEL-1', 'Pickup', 'standard', 'assigned', ${driverId}, ${vehicleId})`;
+    await sql`INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status, assigned_driver_id, assigned_vehicle_id)
+      VALUES (${otherJobId}, ${tenant.tenantId}, 'SEL-2', 'Pickup', 'standard', 'assigned', ${otherDriverId}, ${otherVehicleId})`;
+    await sql`INSERT INTO job_stops (id, tenant_id, job_id, sequence, stop_type, address, latitude, longitude, window_start, window_end, status)
+      VALUES (${stopId}, ${tenant.tenantId}, ${jobId}, 1, 'pickup', 'Mine', 51.5, -0.1, now(), now() + interval '2 hours', 'completed')`;
+    await sql`INSERT INTO job_stops (id, tenant_id, job_id, sequence, stop_type, address, latitude, longitude, window_start, window_end, status)
+      VALUES (${otherStopId}, ${tenant.tenantId}, ${otherJobId}, 1, 'pickup', 'Theirs', 51.51, -0.11, now(), now() + interval '2 hours', 'pending')`;
+    const oldRouteId = randomUUID();
+    const newRouteId = randomUUID();
+    // Older route, still in_progress (the immortal-route defect shape).
+    await sql`INSERT INTO routes (id, tenant_id, route_date, driver_id, vehicle_id, status, version, geometry, published_at)
+      VALUES (${oldRouteId}, ${tenant.tenantId}, current_date, ${driverId}, ${vehicleId}, 'in_progress', 1,
+        '[{"latitude": 51.5, "longitude": -0.1}, {"latitude": 51.51, "longitude": -0.11}]'::jsonb, now() - interval '2 days')`;
+    await sql`INSERT INTO route_stops (id, tenant_id, route_id, job_stop_id, sequence_no)
+      VALUES (${randomUUID()}, ${tenant.tenantId}, ${oldRouteId}, ${stopId}, 1)`;
+    await sql`INSERT INTO route_stops (id, tenant_id, route_id, job_stop_id, sequence_no)
+      VALUES (${randomUUID()}, ${tenant.tenantId}, ${oldRouteId}, ${otherStopId}, 2)`;
+    // Newest plan, completed: must win over the older open route.
+    await sql`INSERT INTO routes (id, tenant_id, route_date, driver_id, vehicle_id, status, version, geometry, published_at)
+      VALUES (${newRouteId}, ${tenant.tenantId}, current_date, ${driverId}, ${vehicleId}, 'completed', 2,
+        '[{"latitude": 51.5, "longitude": -0.1}, {"latitude": 51.51, "longitude": -0.11}]'::jsonb, now() - interval '1 day')`;
+    await sql`INSERT INTO route_stops (id, tenant_id, route_id, job_stop_id, sequence_no)
+      VALUES (${randomUUID()}, ${tenant.tenantId}, ${newRouteId}, ${stopId}, 1)`;
+
+    const login = await app.inject({
+      method: "POST",
+      url: "/v1/auth/driver-login",
+      payload: { tenantSlug: tenant.slug, driverId, pin: "1234" },
+    });
+    const token = (login.json() as { tokens: { accessToken: string } }).tokens.accessToken;
+    const geometry = await app.inject({
+      method: "GET",
+      url: "/v1/driver/route-geometry",
+      headers: authed(token),
+    });
+    expect(geometry.statusCode).toBe(200);
+    const body = geometry.json() as {
+      stops: Array<{ stopId: string; status: string }>;
+    };
+    // Newest (completed) plan served; the other driver's stop excluded.
+    expect(body.stops).toHaveLength(1);
+    expect(body.stops[0]?.stopId).toBe(stopId);
+    expect(body.stops[0]?.status).toBe("completed");
+  });
+
   it("rejects a wrong PIN and an unknown driver without leaking details", async () => {
     const wrongPin = await app.inject({
       method: "POST",
