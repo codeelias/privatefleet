@@ -672,7 +672,8 @@ public class RouteMapActivity extends Activity {
         }
         addAction(layout, dialog, "Upload photo", () -> capturePhoto(stop));
         addAction(layout, dialog, "Recipient signature", () -> promptSignature(stop));
-        addAction(layout, dialog, "Add note", () -> promptNote(stop));
+        // Note: text notes have no evidence kind on the API (signature,
+        // photo, failure_photo only), so no note action is offered here.
         addAction(layout, dialog, "Complete delivery", () -> promptRecipientAndComplete(stop));
 
         dialog.show();
@@ -769,21 +770,6 @@ public class RouteMapActivity extends Activity {
         layout.addView(save);
         dialog.setContentView(layout);
         dialog.show();
-    }
-
-    private void promptNote(RouteGeometry.Stop stop) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Note for dispatch");
-        EditText input = new EditText(this);
-        builder.setView(input);
-        builder.setPositiveButton("Send", (d, w) -> {
-            String text = input.getText().toString().trim();
-            if (!text.isEmpty()) {
-                submitEvidence("evidence_note", stop, "note", text);
-            }
-        });
-        builder.setNegativeButton("Cancel", null);
-        builder.show();
     }
 
     private void promptRecipientAndComplete(RouteGeometry.Stop stop) {

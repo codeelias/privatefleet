@@ -630,6 +630,15 @@ public class MainActivity extends Activity {
         meta.setTextColor(Color.rgb(102, 112, 133));
         card.addView(meta);
 
+        if (routeOrder != null && !routeOrder.isEmpty() && !routeOrder.containsKey(item.stopId)) {
+            TextView unplanned = new TextView(this);
+            unplanned.setText("Not on today's plan - complete from here or ask dispatch to re-plan.");
+            unplanned.setTextSize(11);
+            unplanned.setTextColor(Color.rgb(180, 83, 9));
+            unplanned.setPadding(0, dp(4), 0, 0);
+            card.addView(unplanned);
+        }
+
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setPadding(0, dp(10), 0, 0);
