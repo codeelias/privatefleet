@@ -233,7 +233,7 @@ export class PgFleetService {
         SELECT vehicle_id, driver_id, version
                ${includeRoutes ? sql`, geometry, waypoints, legs` : sql``}
         FROM routes
-        WHERE status IN ('published', 'in_progress')
+        WHERE status IN ('published', 'in_progress', 'completed')
         ORDER BY version DESC
       `)) as unknown as RouteRow[];
       const latestByVehicle = new Map<string, RouteRow>();
@@ -390,7 +390,7 @@ export class PgFleetService {
       const rows = (await db.execute(sql`
         SELECT vehicle_id, driver_id, version, geometry, waypoints, legs
         FROM routes
-        WHERE status IN ('published', 'in_progress')
+        WHERE status IN ('published', 'in_progress', 'completed')
         ORDER BY version DESC
       `)) as unknown as RouteRow[];
       const latestByVehicle = new Map<string, RouteRow>();

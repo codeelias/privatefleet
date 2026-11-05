@@ -97,21 +97,32 @@ export function registerDriverDeviceRoutes(
     if (!driverId) return reply;
     const tenantId = request.auth?.tenantId ?? "";
     return withTenant(handle, tenantId, async (db) => {
+      // Structural rule (docs/53): a driver has exactly one active plan - the
+      // NEWEST plan, whatever its lifecycle. An older route that was left
+      // in_progress must never be served as a fallback (it serves stale and
+      // cross-driver work). 'completed' is included so the finished plan
+      // stays truthfully visible after the last stop closes.
       const routeRows = (await db.execute(sql`
-        SELECT id, geometry FROM routes
+        SELECT id, geometry, status, version FROM routes
         WHERE tenant_id = ${tenantId}
           AND driver_id = ${driverId}
-          AND status IN ('published', 'in_progress')
+          AND status IN ('published', 'in_progress', 'completed')
         ORDER BY version DESC
         LIMIT 1
       `)) as unknown as Array<{
         id: string;
         geometry: Array<{ latitude: number; longitude: number }> | null;
+        status: string;
+        version: number;
       }>;
       const route = routeRows[0];
       if (!route) {
         return { points: [], stops: [] };
       }
+      request.log.info(
+        { routeId: route.id, version: route.version, status: route.status, driverId },
+        "route.selected",
+      );
       const stopRows = (await db.execute(sql`
         SELECT rs.sequence_no, js.id AS stop_id, js.job_id, js.stop_type, js.status,
                js.address, js.latitude, js.longitude, js.window_end, j.reference,
@@ -120,6 +131,7 @@ export function registerDriverDeviceRoutes(
         JOIN job_stops js ON js.id = rs.job_stop_id
         JOIN jobs j ON j.id = js.job_id
         WHERE rs.route_id = ${route.id}
+          AND j.assigned_driver_id = ${driverId}
         ORDER BY rs.sequence_no
       `)) as unknown as Array<{
         sequence_no: number;

@@ -160,9 +160,10 @@ export async function createFleetProposal(
 ): Promise<FleetOptimizationProposal> {
   const policySnapshot = await getDispatchPolicy(handle, tenantId);
   return withTenant(handle, tenantId, async (db) => {
+    // Monotonic, status-agnostic version allocation (docs/53 C3).
     const versionRows = (await db.execute(sql`
       SELECT coalesce(max(version), 1) AS current
-      FROM routes WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress') AND version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})
+      FROM routes WHERE tenant_id = ${tenantId}
     `)) as unknown as Array<{ current: number }>;
     const expectedRouteVersion = Number(versionRows[0]?.current ?? 1);
 
@@ -792,7 +793,7 @@ export async function approveFleetProposal(
 
     const versionRows = (await db.execute(sql`
       SELECT coalesce(max(version), 1) AS current
-      FROM routes WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress') AND version = (SELECT max(version) FROM routes WHERE tenant_id = ${tenantId})
+      FROM routes WHERE tenant_id = ${tenantId}
     `)) as unknown as Array<{ current: number }>;
     const current = Number(versionRows[0]?.current ?? 1);
     const expected = expectedRouteVersion ?? stored.expectedRouteVersion;
@@ -825,8 +826,10 @@ export async function approveFleetProposal(
 
     await db.execute(sql`
       UPDATE routes SET status = 'superseded'
-      WHERE tenant_id = ${tenantId} AND status = 'published'
+      WHERE tenant_id = ${tenantId}
+        AND status IN ('published', 'in_progress')
         AND vehicle_id IN (${inList(vehicleIds)})
+        AND version < ${nextVersion}
     `);
 
     for (const route of stored.vehicles) {

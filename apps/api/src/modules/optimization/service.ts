@@ -304,10 +304,13 @@ export async function approveProposal(
       }
     }
 
+    // Monotonic, status-agnostic version allocation (docs/53 C3): the tenant
+    // max across ALL route statuses, so a terminal newest route can never
+    // collapse the counter back to 2.
     const versionRows = (await db.execute(sql`
       SELECT coalesce(max(version), 1) AS current
       FROM routes
-      WHERE tenant_id = ${tenantId} AND status IN ('published', 'in_progress')
+      WHERE tenant_id = ${tenantId}
     `)) as unknown as Array<{ current: number }>;
     const current = Number(versionRows[0]?.current ?? 1);
     if (expectedRouteVersion !== undefined && expectedRouteVersion !== current) {
@@ -352,7 +355,10 @@ export async function approveProposal(
 
     await db.execute(sql`
       UPDATE routes SET status = 'superseded'
-      WHERE tenant_id = ${tenantId} AND status = 'published' AND id <> ${route.id}
+      WHERE tenant_id = ${tenantId}
+        AND status IN ('published', 'in_progress')
+        AND version < ${nextVersion}
+        AND driver_id = ${result.driverId}
     `);
 
     const stopValues = result.stops.map((stop, index) => ({

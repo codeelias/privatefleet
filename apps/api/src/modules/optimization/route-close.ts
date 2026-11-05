@@ -56,15 +56,23 @@ export async function closeRoute(
         JOIN job_stops js ON js.id = rs.job_stop_id
         WHERE rs.route_id = ${route.id}
           AND js.status NOT IN ('completed', 'skipped', 'failed')
+          AND NOT EXISTS (
+            SELECT 1 FROM jobs j2
+            WHERE j2.id = js.job_id AND j2.status IN ('completed', 'cancelled')
+          )
       ), reset_stops AS (
         UPDATE job_stops
-        SET status = 'pending'
+        SET status = 'pending', arrived_at = NULL
         WHERE id IN (
           SELECT js.id
           FROM route_stops rs
           JOIN job_stops js ON js.id = rs.job_stop_id
           WHERE rs.route_id = ${route.id}
             AND js.status NOT IN ('completed', 'skipped', 'failed')
+            AND NOT EXISTS (
+              SELECT 1 FROM jobs j2
+              WHERE j2.id = js.job_id AND j2.status IN ('completed', 'cancelled')
+            )
         )
         RETURNING job_id
       )
