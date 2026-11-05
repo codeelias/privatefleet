@@ -1,3 +1,10 @@
+### v1.89 - Route instability fix: one active plan per driver (2026-11-05)
+- Supersede now retires published AND in_progress routes per driver; the driver map feed serves the newest plan even when completed and never falls back to an older open route (v121 zombie eliminated).
+- Migration retires stale in_progress routes and reconciles the J-191/J-202 closeRoute residue.
+- closeRoute no longer resets stops of completed/cancelled jobs and clears arrival state on reset stops.
+- Version counter is monotonic and status-agnostic at all allocation sites; fleet/web route feeds include the completed newest plan.
+- Driver feed excludes other drivers' jobs; queue badges 'Not on today's plan' for un-routed work; map note button removed (no API kind).
+- Verified live on phone: 60-stop v123 all-completed signature; queue 1 unplanned stop; gate green (API 120/120, web 53/53, native JUnit 24).
 ### v1.88 - Driver map: device-proof pin states (evidence-based) (2026-11-04)
 - Proven by pixel census across SDK 11.8.0/13.6.1, both artifacts and multiple colours: this Samsung GPU renders ONLY blue pin fills and white pixels; green/orange/amber/magenta fills never appear while labels do. Server data was correct throughout.
 - Pins now encode state in shapes that do render: white ring = arrived, white check = confirmed complete, ring = queued offline; colours remain for devices that render them.

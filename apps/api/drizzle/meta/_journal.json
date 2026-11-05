@@ -127,6 +127,21 @@
       "when": 1793671243250,
       "tag": "0017_harsh_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793818000000,
+      "tag": "0018_route_version_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793818100000,
+      "tag": "0019_retire_stale_route_state",
+      "breakpoints": true
     }
   ]
 }
+
