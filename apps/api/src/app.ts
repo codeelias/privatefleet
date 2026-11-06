@@ -82,6 +82,10 @@ const ERROR_MAP: Record<string, { status: number; uiMessage: string }> = {
     status: 409,
     uiMessage: "Different proof is already recorded for this stop.",
   },
+  GEOFENCE_GATE_BLOCKED: {
+    status: 422,
+    uiMessage: "You are too far from the stop to complete it. Move closer or ask dispatch to adjust the completion radius.",
+  },
   FAILURE_REASON_INVALID: {
     status: 400,
     uiMessage: "Choose a valid failure reason.",

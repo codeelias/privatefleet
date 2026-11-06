@@ -38,6 +38,7 @@ const FAILURE_REASON_LABELS: Record<FailureReasonCode, string> = {
 };
 import type { RealtimeBus } from "../../lib/realtime.js";
 import { scoreDelivery } from "./delivery-confidence.js";
+import { evaluateCompletionGate, type GateDecision } from "./completion-gate.js";
 import {
   buildImportCandidates,
   candidateToJob,
@@ -62,6 +63,7 @@ export class FleetError extends Error {
       | "EVIDENCE_REQUIRED"
       | "EVIDENCE_ALREADY_RECORDED"
       | "FAILURE_REASON_INVALID"
+      | "GEOFENCE_GATE_BLOCKED"
   ) {
     super(code);
   }
@@ -622,6 +624,10 @@ export class PgFleetService {
     idempotencyKey: string | undefined,
     requestHash?: string,
   ): Promise<{ stopId: string; status: string; jobStatus: string }> {
+    // Completion gate (docs/54 R3): pre-check outside the command transaction
+    // so a block still leaves its evidence in the timeline. Disabled when the
+    // policy has no radius; never blocks on missing or coarse GPS data.
+    await this.enforceCompletionGate(tenantId, jobId, stopId, driverId);
     return this.idempotent(tenantId, idempotencyKey, "POST /v1/jobs/:id/stops/:id/complete", async (db) => {
       const stop = await this.requireStop(db, jobId, stopId, driverId);
       if (stop.status !== "arrived" && stop.status !== "pending") {
@@ -1070,10 +1076,12 @@ export class PgFleetService {
     requireSignature: boolean;
     requirePhoto: boolean;
     requireFailurePhoto: boolean;
+    completionRadiusM: number | null;
+    completionMode: "warn" | "block";
   }> {
     const rows = (await db.execute(
       sql`SELECT service_type, require_recipient, require_signature, require_photo,
-                 require_failure_photo
+                 require_failure_photo, completion_radius_m, completion_mode
           FROM proof_policies
           WHERE tenant_id = ${tenantId} AND service_type IN (${serviceType}, '*')
           ORDER BY CASE WHEN service_type = ${serviceType} THEN 0 ELSE 1 END
@@ -1084,6 +1092,8 @@ export class PgFleetService {
       require_signature: boolean;
       require_photo: boolean;
       require_failure_photo: boolean;
+      completion_radius_m: number | null;
+      completion_mode: string | null;
     }>;
     const row = rows[0];
     return row
@@ -1093,6 +1103,8 @@ export class PgFleetService {
           requireSignature: row.require_signature,
           requirePhoto: row.require_photo,
           requireFailurePhoto: row.require_failure_photo,
+          completionRadiusM: row.completion_radius_m,
+          completionMode: row.completion_mode === "block" ? "block" : "warn",
         }
       : {
           serviceType: "*",
@@ -1100,7 +1112,98 @@ export class PgFleetService {
           requireSignature: false,
           requirePhoto: false,
           requireFailurePhoto: false,
+          completionRadiusM: null,
+          completionMode: "warn" as const,
         };
+  }
+
+  /**
+   * Completion gate (docs/54 R3): server-side distance check between the
+   * driver's vehicle and the stop, gated by the tenant proof policy.
+   * Accuracy-aware: a fix coarser than the radius never blocks (Onfleet
+   * model); a missing or stale fix never blocks. Every decision is recorded
+   * in the job timeline.
+   */
+  private async enforceCompletionGate(
+    tenantId: string,
+    jobId: string,
+    stopId: string,
+    driverId: string,
+  ): Promise<void> {
+    // Phase 1 (read-only transaction): decide. The transaction commits the
+    // moment it returns, so the evidence phase and the block throw below can
+    // never roll the decision back.
+    const decision = await withTenant(this.handle, tenantId, async (db): Promise<GateDecision | null> => {
+      const jobRows = (await db.execute(
+        sql`SELECT service_type FROM jobs WHERE id = ${jobId}`,
+      )) as unknown as Array<{ service_type: string }>;
+      const policy = await this.resolvePolicy(db, tenantId, jobRows[0]?.service_type ?? "*");
+      const radius = policy.completionRadiusM;
+      if (!radius || radius <= 0) return null; // gate disabled
+
+      const stopRows = (await db.execute(
+        sql`SELECT latitude, longitude FROM job_stops WHERE id = ${stopId}`,
+      )) as unknown as Array<{ latitude: number; longitude: number }>;
+      const stop = stopRows[0];
+      if (!stop) return null;
+
+      const vehicleRows = (await db.execute(sql`
+        SELECT v.latitude, v.longitude, v.captured_at,
+               lp.accuracy_metres
+        FROM vehicles v
+        LEFT JOIN LATERAL (
+          SELECT accuracy_metres FROM location_points
+          WHERE vehicle_id = v.id
+          ORDER BY captured_at DESC LIMIT 1
+        ) lp ON true
+        WHERE v.driver_id = ${driverId}
+        LIMIT 1
+      `)) as unknown as Array<{
+        latitude: number | null;
+        longitude: number | null;
+        captured_at: Date | string | null;
+        accuracy_metres: number | null;
+      }>;
+      const vehicle = vehicleRows[0];
+
+      // Pure decision module (completion-gate.ts) - DB only feeds it here.
+      return evaluateCompletionGate(
+        { radiusM: radius, mode: policy.completionMode },
+        {
+          latitude: vehicle?.latitude ?? null,
+          longitude: vehicle?.longitude ?? null,
+          capturedAt: vehicle?.captured_at ?? null,
+          accuracyMetres: vehicle?.accuracy_metres ?? null,
+        },
+        stop,
+        Date.now(),
+      );
+    });
+
+    if (!decision || decision.action === "allow") return;
+
+    // Phase 2: evidence in its OWN committed transaction so it survives even
+    // when the decision is a block (the throw happens after the commit).
+    const record = (type: string, payload: Record<string, unknown>) =>
+      withTenant(this.handle, tenantId, (db) =>
+        db.execute(sql`
+          INSERT INTO job_events (tenant_id, job_id, type, actor_type, actor_id, payload)
+          VALUES (${tenantId}, ${jobId}, ${type}, 'system', ${driverId}, ${JSON.stringify(payload)}::jsonb)
+        `),
+      );
+    if (decision.action === "skip") {
+      await record("geofence.gate_skipped", { reason: decision.reason, stopId });
+      return;
+    }
+    if (decision.action === "block") {
+      await record("geofence.blocked", {
+        stopId, distanceMetres: decision.distanceMetres,
+      });
+      throw new FleetError("GEOFENCE_GATE_BLOCKED");
+    }
+    await record("geofence.warning", {
+      stopId, distanceMetres: decision.distanceMetres,
+    });
   }
 
   private async requireStop(
