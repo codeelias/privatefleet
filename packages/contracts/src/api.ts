@@ -209,11 +209,18 @@ export const PublicTrackingResponseSchema = z.object({
   /** True when the vehicle is inside an enabled geofence linked to this job. */
   inCustomerZone: z.boolean().optional(),
   customerZoneName: z.string().optional(),
-  /** Privacy-safe proof summary: counts only, never personal media. */
+  /**
+   * Privacy-safe proof summary: counts plus token-scoped photo ids. Photos
+   * are fetched from the token-scoped proof endpoint - never embedded here,
+   * never personal media beyond the delivery itself.
+   */
   proof: z
     .object({
       photos: z.number().int().nonnegative(),
       signatures: z.number().int().nonnegative(),
+      photoIds: z
+        .array(z.object({ id: IdSchema, capturedAt: z.string().datetime() }))
+        .default([]),
       lastRecordedAt: z.string().datetime().optional(),
     })
     .optional(),
