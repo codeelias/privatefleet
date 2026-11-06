@@ -1,3 +1,7 @@
+### v1.93 - Position hold rebuilt on a containment invariant (2026-11-06)
+- Problem: the 1.4.4 drift-release thresholds were independent tunables; with a coarse initial fix the hold could latch tens of metres from the truth and stop following the live GPS.
+- Architectural fix (docs/55): the held position is emitted only while the live fix lies within the combined uncertainty of both measurements (capped at 60 m); a strictly better fix is always adopted; the moment containment breaks, the live fix is emitted even mid-hysteresis. The invariant is enforced by a fuzz property test (50 trials x 60 steps), so this class of regression fails the suite.
+- 29/29 JUnit tests pass. 1.4.5 published; installation pending the phone's return to adb.
 ### v1.92 - Completion gate R3 + modularity discipline (2026-11-06)
 - New pure decision module completion-gate.ts (8 unit tests): per-tenant completion radius with warn/block modes; accuracy-aware (coarse fix never blocks), staleness-aware (missing/stale fix never blocks); every decision recorded in the job timeline in its own committed transaction.
 - Policy columns completion_radius_m/completion_mode on proof_policies - gate OFF by default (radius NULL), zero behaviour change until a tenant opts in.
