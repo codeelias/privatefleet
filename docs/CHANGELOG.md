@@ -1,3 +1,7 @@
+### v1.91 - Stationary hold no longer latches a stale position (2026-11-06)
+- Root cause: StationaryGate released the hold only on speed >= 2.5 m/s or large per-sample displacement; slow moves (walking/stop-and-go at zero GPS speed) kept the old position frozen forever (~200 m off).
+- Fix: bounded drift release - a live fix more than max(3x hold accuracy, 40 m) from the held coordinate releases the hold regardless of speed. Unit-tested (drift release + scatter never releases).
+- Verified live: server rows moved from the frozen 51.570696,-0.106248 to the device's real vicinity within minutes of installing 1.4.4.
 ### v1.90 - Wave 1 trust fundamentals (2026-11-05)
 - R1: idempotency reuse contract - real request hashes stored; same key + different body returns 409 IDEMPOTENCY_CONFLICT; replays return the stored result.
 - R2: append-only job timeline endpoint GET /v1/jobs/:jobId/timeline (actor, payload, timestamps in order).

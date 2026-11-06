@@ -46,6 +46,14 @@ public final class StationaryGate {
     private static final double SPEED_MOVING_MPS = 2.5;
     private static final double SPEED_STILL_MPS = 1.0;
     private static final double HOLD_REFINE_M = 15.0;
+    /**
+     * The hold must smooth scatter, never latch a stale position: if the live
+     * fix drifts further than this from the held coordinate (scaled by the
+     * hold's own accuracy), the gate releases to MOVING regardless of the
+     * per-sample speed - slow moves (walking, stop-and-go) read speed 0 and
+     * would otherwise hold the previous location forever.
+     */
+    private static final double HOLD_RELEASE_MIN_M = 40.0;
 
     private State state = State.UNKNOWN;
     private int stillVotes = 0;
@@ -61,6 +69,11 @@ public final class StationaryGate {
         double large = Math.max(2 * accuracyMetres, 25.0);
         boolean still = (!hasSpeed || speedMps <= SPEED_STILL_MPS) && displacementMetres <= small;
         boolean moving = (hasSpeed && speedMps >= SPEED_MOVING_MPS) || displacementMetres > large;
+        boolean driftFromHold =
+                hasHold && displacementMetres(holdLatitude, holdLongitude, latitude, longitude)
+                    > Math.max(3 * holdAccuracy, HOLD_RELEASE_MIN_M);
+        moving = moving || driftFromHold;
+        still = still && !driftFromHold;
 
         stillVotes = still ? stillVotes + 1 : 0;
         moveVotes = moving ? moveVotes + 1 : 0;
