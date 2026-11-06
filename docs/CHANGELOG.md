@@ -1,3 +1,7 @@
+### v1.94 - R7: customer sees the delivery photo (2026-11-06)
+- The public tracking page now lists token-scoped photo ids and renders thumbnails from the new endpoint /v1/public/tracking/:token/proof/:evidenceId.
+- Security: served only under the unguessable tracking token, scoped to that token's own job, photo kinds only, content hash re-verified before serving (tampered files are refused), no-store headers, per-token rate limit shared with the page endpoint.
+- Live-verified on production: G01-001 page proof.photos=1, photo endpoint 200 image/jpeg 59,840 bytes (matches stored byte_size), wrong token 404. Gate: API 131/131, web 53/53.
 ### v1.93 - Position hold rebuilt on a containment invariant (2026-11-06)
 - Problem: the 1.4.4 drift-release thresholds were independent tunables; with a coarse initial fix the hold could latch tens of metres from the truth and stop following the live GPS.
 - Architectural fix (docs/55): the held position is emitted only while the live fix lies within the combined uncertainty of both measurements (capped at 60 m); a strictly better fix is always adopted; the moment containment breaks, the live fix is emitted even mid-hysteresis. The invariant is enforced by a fuzz property test (50 trials x 60 steps), so this class of regression fails the suite.
