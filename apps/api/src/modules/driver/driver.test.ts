@@ -716,6 +716,118 @@ describe("driver actions reach dispatch", () => {
     `) as unknown as Array<{ count: number }>;
     expect(events[0]?.count).toBe(1);
   });
+
+  it("enforces the completion gate with accuracy-aware skip and warn mode", async () => {
+    const token = await driverLogin(fleet.driverC.id);
+    // Relax the Pickup policy and enable a 200 m block-mode gate.
+    await migrator.sql`
+      INSERT INTO proof_policies
+        (tenant_id, service_type, require_recipient, require_signature, require_photo, require_failure_photo, completion_radius_m, completion_mode)
+      VALUES (${fleet.tenantId}, 'Pickup', false, false, false, false, 200, 'block')
+      ON CONFLICT (tenant_id, service_type) DO UPDATE SET
+        require_recipient = false, require_signature = false, require_photo = false,
+        require_failure_photo = false, completion_radius_m = 200, completion_mode = 'block'
+    `;
+    const jobA = randomUUID();
+    const stopA = randomUUID();
+    const jobB = randomUUID();
+    const stopB = randomUUID();
+    await migrator.sql`
+      INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status, assigned_driver_id, assigned_vehicle_id)
+      VALUES (${jobA}, ${fleet.tenantId}, ${"GAT-" + randomUUID().slice(0, 4)}, 'Pickup', 'standard', 'assigned', ${fleet.driverC.id}, ${fleet.driverC.vehicleId})
+    `;
+    await migrator.sql`
+      INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status, assigned_driver_id, assigned_vehicle_id)
+      VALUES (${jobB}, ${fleet.tenantId}, ${"GAT-" + randomUUID().slice(0, 4)}, 'Pickup', 'standard', 'assigned', ${fleet.driverC.id}, ${fleet.driverC.vehicleId})
+    `;
+    await migrator.sql`
+      INSERT INTO job_stops (id, tenant_id, job_id, sequence, stop_type, address, latitude, longitude, window_start, window_end, status)
+      VALUES (${stopA}, ${fleet.tenantId}, ${jobA}, 1, 'pickup', 'Gate A', 51.5, -0.1, now(), now() + interval '2 hours', 'pending')
+    `;
+    await migrator.sql`
+      INSERT INTO job_stops (id, tenant_id, job_id, sequence, stop_type, address, latitude, longitude, window_start, window_end, status)
+      VALUES (${stopB}, ${fleet.tenantId}, ${jobB}, 1, 'pickup', 'Gate B', 51.5, -0.1, now(), now() + interval '2 hours', 'pending')
+    `;
+    // Vehicle ~222 m from the stops, fresh fix, no accuracy record yet.
+    await migrator.sql`UPDATE vehicles SET latitude = 51.502, longitude = -0.1, captured_at = now() WHERE id = ${fleet.driverC.vehicleId}`;
+
+    const arriveA = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${jobA}/stops/${stopA}/arrive`,
+      headers: { ...authed(token), "idempotency-key": randomUUID() },
+      payload: { driverId: fleet.driverC.id },
+    });
+    expect(arriveA.statusCode).toBe(200);
+
+    const blocked = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${jobA}/stops/${stopA}/complete`,
+      headers: { ...authed(token), "idempotency-key": randomUUID() },
+      payload: { driverId: fleet.driverC.id, recipientName: "Gate Recipient" },
+    });
+    expect(blocked.statusCode).toBe(422);
+    expect((blocked.json() as { code: string }).code).toBe("GEOFENCE_GATE_BLOCKED");
+
+    const blockedTimeline = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/${jobA}/timeline`,
+      headers: authed(fleet.ownerToken),
+    });
+    const blockedTypes = (blockedTimeline.json() as Array<{ eventType: string }>).map((e) => e.eventType);
+    expect(blockedTypes).toContain("geofence.blocked");
+
+    // Coarse fix coarser than the radius: the gate must skip, not block.
+    await migrator.sql`
+      INSERT INTO location_points (tenant_id, vehicle_id, captured_at, latitude, longitude, accuracy_metres, movement_state, sequence_no)
+      VALUES (${fleet.tenantId}, ${fleet.driverC.vehicleId}, now(), 51.502, -0.1, 6000, 'stationary', 1)
+    `;
+    const skippedGate = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${jobA}/stops/${stopA}/complete`,
+      headers: { ...authed(token), "idempotency-key": randomUUID() },
+      payload: { driverId: fleet.driverC.id, recipientName: "Gate Recipient" },
+    });
+    expect(skippedGate.statusCode).toBe(200);
+    const skippedTimeline = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/${jobA}/timeline`,
+      headers: authed(fleet.ownerToken),
+    });
+    expect((skippedTimeline.json() as Array<{ eventType: string }>).map((e) => e.eventType)).toContain("geofence.gate_skipped");
+
+    // Warn mode: completion proceeds and the timeline records the warning.
+    // Remove the coarse-fix record first so the gate reaches the distance check.
+    await migrator.sql`DELETE FROM location_points WHERE vehicle_id = ${fleet.driverC.vehicleId}`;
+    await migrator.sql`UPDATE proof_policies SET completion_mode = 'warn' WHERE tenant_id = ${fleet.tenantId} AND service_type = 'Pickup'`;
+    const arriveB = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${jobB}/stops/${stopB}/arrive`,
+      headers: { ...authed(token), "idempotency-key": randomUUID() },
+      payload: { driverId: fleet.driverC.id },
+    });
+    expect(arriveB.statusCode).toBe(200);
+    const warned = await app.inject({
+      method: "POST",
+      url: `/v1/jobs/${jobB}/stops/${stopB}/complete`,
+      headers: { ...authed(token), "idempotency-key": randomUUID() },
+      payload: { driverId: fleet.driverC.id, recipientName: "Gate Recipient" },
+    });
+    expect(warned.statusCode).toBe(200);
+    const warnedTimeline = await app.inject({
+      method: "GET",
+      url: `/v1/jobs/${jobB}/timeline`,
+      headers: authed(fleet.ownerToken),
+    });
+    expect((warnedTimeline.json() as Array<{ eventType: string }>).map((e) => e.eventType)).toContain("geofence.warning");
+
+    // Restore the strict policy used by the other tests in this file.
+    await migrator.sql`
+      UPDATE proof_policies
+      SET require_recipient = true, require_signature = true, require_photo = true,
+          require_failure_photo = true, completion_radius_m = NULL, completion_mode = 'warn'
+      WHERE tenant_id = ${fleet.tenantId} AND service_type = 'Pickup'
+    `;
+  });
 });
 
 
