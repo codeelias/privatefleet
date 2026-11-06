@@ -3,11 +3,22 @@ package com.privatefleet.driver.nativeapp;
 /**
  * Movement-state classifier and stable-position holder.
  *
- * Pure logic, no filtering math: it decides whether the vehicle is
- * STATIONARY, MOVING or UNKNOWN from speed, displacement and accuracy, with
- * hysteresis, and holds the displayed position while stationary so the pin
- * does not dance with GPS scatter. Position honesty is preserved: the held
- * coordinate is a real measurement with its own accuracy, never fabricated.
+ * Architecture (docs/55): pure logic, no Android deps, and - crucially -
+ * honest by INVARIANT, not by tuning:
+ *
+ *   1. Containment: while a hold exists, it is kept only while the live fix
+ *      lies within the combined uncertainty of the two measurements
+ *      (holdAccuracy + liveAccuracy, capped at HOLD_MAX_LATCH_M). Beyond
+ *      that they are statistically different places and the hold releases
+ *      regardless of speed or per-sample displacement.
+ *   2. Best-fix adoption: a fix that is strictly more accurate than the
+ *      hold, and still contained, replaces the hold - so the displayed
+ *      position always tracks the best available measurement, never the
+ *      first one.
+ *   3. Speed/step hysteresis is retained for genuine motion.
+ *
+ * StationaryGateTest asserts the invariant as a property test, so a
+ * regression in this class fails the suite instead of reaching a driver.
  */
 public final class StationaryGate {
     public enum State {
@@ -45,15 +56,9 @@ public final class StationaryGate {
     private static final int VOTES_TO_SWITCH = 2;
     private static final double SPEED_MOVING_MPS = 2.5;
     private static final double SPEED_STILL_MPS = 1.0;
-    private static final double HOLD_REFINE_M = 15.0;
-    /**
-     * The hold must smooth scatter, never latch a stale position: if the live
-     * fix drifts further than this from the held coordinate (scaled by the
-     * hold's own accuracy), the gate releases to MOVING regardless of the
-     * per-sample speed - slow moves (walking, stop-and-go) read speed 0 and
-     * would otherwise hold the previous location forever.
-     */
-    private static final double HOLD_RELEASE_MIN_M = 40.0;
+    /** Upper bound on the containment uncertainty (two 100 m fixes must not
+     *  allow a 200 m latch). Product decision, documented. */
+    static final double HOLD_MAX_LATCH_M = 60.0;
 
     private State state = State.UNKNOWN;
     private int stillVotes = 0;
@@ -69,11 +74,15 @@ public final class StationaryGate {
         double large = Math.max(2 * accuracyMetres, 25.0);
         boolean still = (!hasSpeed || speedMps <= SPEED_STILL_MPS) && displacementMetres <= small;
         boolean moving = (hasSpeed && speedMps >= SPEED_MOVING_MPS) || displacementMetres > large;
-        boolean driftFromHold =
-                hasHold && displacementMetres(holdLatitude, holdLongitude, latitude, longitude)
-                    > Math.max(3 * holdAccuracy, HOLD_RELEASE_MIN_M);
-        moving = moving || driftFromHold;
-        still = still && !driftFromHold;
+        if (hasHold) {
+            double fromHold = displacementMetres(holdLatitude, holdLongitude, latitude, longitude);
+            double uncertainty = Math.min(holdAccuracy + accuracyMetres, HOLD_MAX_LATCH_M);
+            if (fromHold > uncertainty) {
+                // Invariant 1: statistically a different place - release.
+                moving = true;
+                still = false;
+            }
+        }
 
         stillVotes = still ? stillVotes + 1 : 0;
         moveVotes = moving ? moveVotes + 1 : 0;
@@ -106,7 +115,11 @@ public final class StationaryGate {
                 break;
         }
 
-        if (state == State.STATIONARY && hasHold) {
+        // The hold is displayed only while the live fix is contained in it.
+        // The moment containment breaks (moving == true), the live fix is
+        // emitted even if the state vote is still one short of MOVING -
+        // display honesty beats anti-bounce hysteresis.
+        if (state == State.STATIONARY && hasHold && !moving) {
             return new Result(holdLatitude, holdLongitude, holdAccuracy, state, true);
         }
         return new Result(latitude, longitude, (float) accuracyMetres, state, false);
@@ -119,13 +132,17 @@ public final class StationaryGate {
         hasHold = true;
     }
 
+    /**
+     * Invariant 2: adopt a strictly more accurate measurement of the same
+     * place. There is no proximity gate beyond the containment check already
+     * applied in apply(): a better fix IS the truth.
+     */
     private void refineHold(double latitude, double longitude, float accuracy) {
         if (!hasHold) {
             setHold(latitude, longitude, accuracy);
             return;
         }
-        double metres = displacementMetres(holdLatitude, holdLongitude, latitude, longitude);
-        if (metres <= HOLD_REFINE_M && accuracy < holdAccuracy * 0.8) {
+        if (accuracy < holdAccuracy) {
             setHold(latitude, longitude, accuracy);
         }
     }
