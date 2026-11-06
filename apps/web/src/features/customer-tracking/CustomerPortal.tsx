@@ -26,7 +26,12 @@ export interface PortalProps {
   lastUpdateAt?: string;
   inCustomerZone?: boolean;
   customerZoneName?: string;
-  proof?: { photos: number; signatures: number; lastRecordedAt?: string };
+  proof?: {
+    photos: number;
+    signatures: number;
+    photoIds?: Array<{ id: string; capturedAt: string }>;
+    lastRecordedAt?: string;
+  };
 }
 
 const STEPS = [

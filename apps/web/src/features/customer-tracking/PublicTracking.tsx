@@ -218,6 +218,19 @@ export function PublicTracking({ token }: { token: string }) {
               {data.proof.signatures > 0 ? `${data.proof.signatures} signature${data.proof.signatures === 1 ? "" : "s"} recorded` : "no signature"}
               {data.proof.lastRecordedAt ? ` · ${new Date(data.proof.lastRecordedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}
             </p>
+            {data.proof.photoIds.length > 0 && (
+              <div className="mt-3 flex gap-2 overflow-x-auto">
+                {data.proof.photoIds.map((photo) => (
+                  <img
+                    key={photo.id}
+                    src={`/v1/public/tracking/${encodeURIComponent(token)}/proof/${photo.id}`}
+                    alt={`Delivery photo ${new Date(photo.capturedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`}
+                    className="h-20 w-20 shrink-0 rounded-lg border border-[#27272A] object-cover"
+                    loading="lazy"
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 
