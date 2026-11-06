@@ -15,7 +15,7 @@ for ($i = 1; $i -le $Attempts; $i++) {
   $out = pnpm --filter @privatefleet/api exec vitest run @suiteArgs --reporter=dot 2>&1 | Out-String
   $tail = ($out -split "`n" | Select-Object -Last 10) -join "`n"
   Write-Output $tail
-  if ($out -match "Tests\s+\d+\s+passed" -and $out -notmatch "ECONNREFUSED" -and $out -notmatch "failed \(") {
+  if ($out -match "Test Files\s+\d+ passed \(\d+\)" -and $out -notmatch "failed" -and $out -notmatch "ECONNREFUSED") {
     Write-Output "PASS on attempt $i"
     exit 0
   }

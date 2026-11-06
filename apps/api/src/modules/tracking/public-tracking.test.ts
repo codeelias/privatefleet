@@ -3,7 +3,9 @@
  * expiry/revocation, rate limiting and no cross-tenant leakage.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { buildApp } from "../../app.js";
 import { loadConfig, migrationDatabaseUrl } from "../../config.js";
 import { closeDb, createDb, type DbHandle } from "../../db/client.js";
@@ -28,6 +30,9 @@ let token = "";
 let jobId = "";
 let publicToken = "";
 let trackingTokenId = "";
+let proofPhotoId = "";
+let proofPhotoBytes: Buffer = Buffer.alloc(0);
+let proofPhotoPath = "";
 
 function authed(): { authorization: string } {
   return { authorization: `Bearer ${token}` };
@@ -112,10 +117,20 @@ beforeAll(async () => {
   });
   expect(area.statusCode).toBe(200);
 
+  // Real photo bytes on disk for the token-scoped proof endpoint (R7).
+  proofPhotoBytes = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5, 6, 7, 8,
+  ]);
+  const photoStorageKey = `${tenantId}/${stopId}/${randomUUID()}.png`;
+  const photoHash = createHash("sha256").update(proofPhotoBytes).digest("hex");
+  proofPhotoId = randomUUID();
   await migrator.sql`
     INSERT INTO stop_evidence (id, tenant_id, job_id, stop_id, kind, storage_key, content_hash, mime_type, byte_size, captured_at)
-    VALUES (${randomUUID()}, ${tenantId}, ${jobId}, ${stopId}, 'photo', 'evidence/photo.jpg', 'sha256:test', 'image/jpeg', 12, now())
+    VALUES (${proofPhotoId}, ${tenantId}, ${jobId}, ${stopId}, 'photo', ${photoStorageKey}, ${photoHash}, 'image/png', ${proofPhotoBytes.length}, now())
   `;
+  proofPhotoPath = join(config.evidenceDir, ...photoStorageKey.split("/"));
+  await mkdir(dirname(proofPhotoPath), { recursive: true });
+  await writeFile(proofPhotoPath, proofPhotoBytes);
   await migrator.sql`
     INSERT INTO stop_evidence (id, tenant_id, job_id, stop_id, kind, storage_key, content_hash, mime_type, byte_size, captured_at)
     VALUES (${randomUUID()}, ${tenantId}, ${jobId}, ${stopId}, 'signature', 'evidence/signature.svg', 'sha256:sig', 'image/svg+xml', 8, now())
@@ -164,7 +179,11 @@ describe("public customer tracking", () => {
       lastUpdateAt?: string;
       inCustomerZone?: boolean;
       customerZoneName?: string;
-      proof?: { photos: number; signatures: number };
+      proof?: {
+        photos: number;
+        signatures: number;
+        photoIds?: Array<{ id: string; capturedAt: string }>;
+      };
       liveProgress?: { stopsAway: number; etaMinutes: number };
       etaWindow?: { fromMinutes: number; toMinutes: number };
     };
@@ -190,7 +209,36 @@ describe("public customer tracking", () => {
     expect(body.customerZoneName).toBe("Delivery area");
     expect(body.proof?.photos).toBe(1);
     expect(body.proof?.signatures).toBe(1);
+    expect(body.proof?.photoIds?.some((photo) => photo.id === proofPhotoId)).toBe(true);
     expect(JSON.stringify(body)).not.toContain("phone");
+  });
+
+  it("serves the delivery photo through the token-scoped proof endpoint", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/public/tracking/${publicToken}/proof/${proofPhotoId}`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toContain("image/png");
+    expect(res.headers["cache-control"]).toContain("no-store");
+    expect(Buffer.compare(res.rawPayload, proofPhotoBytes)).toBe(0);
+  });
+
+  it("refuses the photo for an invalid token and a tampered file", async () => {
+    const wrongToken = await app.inject({
+      method: "GET",
+      url: `/v1/public/tracking/not-a-real-token-0000000000/proof/${proofPhotoId}`,
+    });
+    expect(wrongToken.statusCode).toBe(404);
+
+    // Tamper the stored bytes: the content hash check must refuse to serve.
+    await writeFile(proofPhotoPath, Buffer.from([9, 9, 9, 9, 9, 9, 9, 9]));
+    const tampered = await app.inject({
+      method: "GET",
+      url: `/v1/public/tracking/${publicToken}/proof/${proofPhotoId}`,
+    });
+    expect(tampered.statusCode).toBe(404);
+    await writeFile(proofPhotoPath, proofPhotoBytes); // restore
   });
 
   it("rejects invalid and revoked tokens and rate limits bursts", async () => {
