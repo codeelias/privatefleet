@@ -8,7 +8,8 @@ import { z } from "zod";
 import type { AuthService } from "../auth/service.js";
 import { makeAuthGuard } from "../auth/guard.js";
 import type { DbHandle } from "../../db/client.js";
-import { createTrackingToken, publicTracking, revokeTrackingToken } from "./public-tracking.js";
+import type { EvidenceStore } from "../evidence/storage.js";
+import { createTrackingToken, publicProofPhoto, publicTracking, revokeTrackingToken } from "./public-tracking.js";
 
 const CreateBodySchema = z.object({ jobId: z.string().uuid() });
 const TokenParamSchema = z.object({ token: z.string().min(20).max(64) });
@@ -40,6 +41,7 @@ export function registerPublicTrackingRoutes(
   app: FastifyInstance,
   auth: AuthService,
   handle: DbHandle,
+  store: EvidenceStore,
 ): void {
   const guard = makeAuthGuard(auth);
   const limiter = new TokenRateLimiter(10_000, 10);
@@ -119,5 +121,39 @@ export function registerPublicTrackingRoutes(
       });
     }
     return result;
+  });
+
+  // Token-scoped proof photo (docs/54 R7): the delivery photo itself, served
+  // only under the unguessable tracking token, hash-verified before serving.
+  app.get("/v1/public/tracking/:token/proof/:evidenceId", async (request, reply) => {
+    reply.header("cache-control", "no-store");
+    const params = TokenParamSchema.parse(request.params);
+    const evidenceParams = z.object({ evidenceId: z.string().uuid() }).parse(request.params);
+    if (!limiter.allow(params.token)) {
+      reply.header("retry-after", "1");
+      return reply.status(429).send({
+        type: "https://privatefleet.example/errors/tracking_rate_limited",
+        title: "Too many requests",
+        status: 429,
+        code: "TRACKING_RATE_LIMITED",
+        detail: "The tracking page is refreshing too quickly",
+        uiMessage: "Please wait a moment and refresh again.",
+      });
+    }
+    const photo = await publicProofPhoto(handle, store, params.token, evidenceParams.evidenceId);
+    if (!photo) {
+      return reply.status(404).send({
+        type: "https://privatefleet.example/errors/tracking_not_found",
+        title: "Proof photo unavailable",
+        status: 404,
+        code: "TRACKING_NOT_FOUND",
+        detail: "The photo is not available under this tracking link",
+        uiMessage: "This photo is no longer available.",
+      });
+    }
+    return reply
+      .header("content-type", photo.mimeType)
+      .header("content-length", photo.bytes.length)
+      .send(photo.bytes);
   });
 }

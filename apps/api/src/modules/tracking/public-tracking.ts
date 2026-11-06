@@ -9,6 +9,7 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { PublicTrackingResponse } from "@privatefleet/contracts";
 import { withTenant, type DbHandle } from "../../db/client.js";
+import type { EvidenceStore } from "../evidence/storage.js";
 import { computeLiveProgress } from "./route-progress.js";
 
 const TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -16,6 +17,28 @@ const STALE_AFTER_MS = 60_000;
 
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+/** Token lookup with expiry/revocation validation - shared by the page and
+ *  the proof-photo endpoint so both are scoped identically. */
+async function tokenContext(
+  handle: DbHandle,
+  token: string,
+): Promise<{ tenantId: string; jobId: string } | null> {
+  const tokenRow = (await handle.sql`
+    SELECT tenant_id, job_id, expires_at, revoked_at
+    FROM public_tracking_token_by_hash(${hashToken(token)})
+  `) as unknown as Array<{
+    tenant_id: string;
+    job_id: string;
+    expires_at: Date | string;
+    revoked_at: Date | string | null;
+  }>;
+  const row = tokenRow[0];
+  if (!row) return null;
+  const expires = new Date(row.expires_at).getTime();
+  if (row.revoked_at !== null || Date.now() > expires) return null;
+  return { tenantId: row.tenant_id, jobId: row.job_id };
 }
 
 export async function createTrackingToken(
@@ -60,19 +83,9 @@ export async function publicTracking(
   handle: DbHandle,
   token: string,
 ): Promise<PublicTrackingResponse | null> {
-  const tokenRow = (await handle.sql`
-    SELECT tenant_id, job_id, expires_at, revoked_at
-    FROM public_tracking_token_by_hash(${hashToken(token)})
-  `) as unknown as Array<{
-    tenant_id: string;
-    job_id: string;
-    expires_at: Date | string;
-    revoked_at: Date | string | null;
-  }>;
-  const row = tokenRow[0];
-  if (!row) return null;
-  const expires = new Date(row.expires_at).getTime();
-  if (row.revoked_at !== null || Date.now() > expires) return null;
+  const context = await tokenContext(handle, token);
+  if (!context) return null;
+  const row = { tenant_id: context.tenantId, job_id: context.jobId };
 
   return withTenant(handle, row.tenant_id, async (db) => {
     const jobs = (await db.execute(sql`
@@ -151,17 +164,31 @@ export async function publicTracking(
       WHERE job_id = ${row.job_id}
       GROUP BY kind
     `)) as unknown as Array<{ kind: string; last_captured: Date | string | null }>;
+    const photoRows = (await db.execute(sql`
+      SELECT id, captured_at
+      FROM stop_evidence
+      WHERE job_id = ${row.job_id}
+        AND kind IN ('photo', 'failure_photo')
+      ORDER BY captured_at ASC
+    `)) as unknown as Array<{ id: string; captured_at: Date | string | null }>;
     const photos = evidenceRows.filter((entry) => entry.kind === "photo" || entry.kind === "failure_photo").length;
     const signatures = evidenceRows.filter((entry) => entry.kind === "signature").length;
     const lastRecorded = evidenceRows
       .map((entry) => (entry.last_captured ? new Date(entry.last_captured).getTime() : null))
       .filter((value): value is number => value !== null)
       .sort((a, b) => b - a)[0];
+    const photoIds = photoRows
+      .filter((photo) => photo.captured_at !== null)
+      .map((photo) => ({
+        id: photo.id,
+        capturedAt: new Date(photo.captured_at!).toISOString(),
+      }));
     const proof =
       photos > 0 || signatures > 0
         ? {
             photos,
             signatures,
+            photoIds,
             ...(lastRecorded ? { lastRecordedAt: new Date(lastRecorded).toISOString() } : {}),
           }
         : undefined;
@@ -296,6 +323,50 @@ export async function publicTracking(
         ...(stop.completed_at ? { completedAt: new Date(stop.completed_at).toISOString() } : {}),
       })),
     };
+  });
+}
+
+/**
+ * Token-scoped proof photo bytes (docs/54 R7). Only photo/failure_photo
+ * evidence of the token's own job is served; the stored content hash is
+ * re-verified before serving so a tampered file can never leave the server.
+ */
+export async function publicProofPhoto(
+  handle: DbHandle,
+  store: EvidenceStore,
+  token: string,
+  evidenceId: string,
+): Promise<{ bytes: Buffer; mimeType: string } | null> {
+  const context = await tokenContext(handle, token);
+  if (!context) return null;
+  const row = { tenant_id: context.tenantId, job_id: context.jobId };
+  return withTenant(handle, row.tenant_id, async (db) => {
+    const rows = (await db.execute(sql`
+      SELECT id, kind, mime_type, storage_key, content_hash
+      FROM stop_evidence
+      WHERE id = ${evidenceId}
+        AND tenant_id = ${row.tenant_id}
+        AND job_id = ${row.job_id}
+        AND kind IN ('photo', 'failure_photo')
+      LIMIT 1
+    `)) as unknown as Array<{
+      id: string;
+      kind: string;
+      mime_type: string;
+      storage_key: string;
+      content_hash: string;
+    }>;
+    const evidence = rows[0];
+    if (!evidence) return null;
+    let bytes: Buffer;
+    try {
+      bytes = await store.read(evidence.storage_key);
+    } catch {
+      return null; // file missing: behave as if the evidence does not exist
+    }
+    const actualHash = createHash("sha256").update(bytes).digest("hex");
+    if (actualHash !== evidence.content_hash) return null; // integrity failure
+    return { bytes, mimeType: evidence.mime_type };
   });
 }
 

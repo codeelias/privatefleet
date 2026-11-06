@@ -368,7 +368,8 @@ export function buildApp(config: AppConfig): {
       verifyToken: (token) => auth.verifyAccess(token),
     });
     const fleet = new PgFleetService(db, bus);
-    const evidence = new EvidenceService(db, new EvidenceStore(config.evidenceDir));
+    const evidenceStore = new EvidenceStore(config.evidenceDir);
+    const evidence = new EvidenceService(db, evidenceStore);
     const authAttemptLimiter = new AuthAttemptLimiter({
       windowMs: config.authAttemptWindowSeconds * 1000,
       maxAccountFailures: config.authMaxAttemptsAccount,
@@ -380,7 +381,7 @@ export function buildApp(config: AppConfig): {
     registerEvidenceRoutes(app, auth, fleet, evidence);
     registerReportRoutes(app, auth, db);
     registerGeofenceRoutes(app, auth, db);
-    registerPublicTrackingRoutes(app, auth, db);
+    registerPublicTrackingRoutes(app, auth, db, evidenceStore);
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter, db);
     registerTrackingRoutes(app, auth, bus, db);
     registerPositioningDiagnosticsRoutes(app, auth);
