@@ -1,3 +1,8 @@
+### v1.92 - Completion gate R3 + modularity discipline (2026-11-06)
+- New pure decision module completion-gate.ts (8 unit tests): per-tenant completion radius with warn/block modes; accuracy-aware (coarse fix never blocks), staleness-aware (missing/stale fix never blocks); every decision recorded in the job timeline in its own committed transaction.
+- Policy columns completion_radius_m/completion_mode on proof_policies - gate OFF by default (radius NULL), zero behaviour change until a tenant opts in.
+- Adopted docs/55 modularity discipline: one change = one module, documented crossings, per-module tests, separate commits per slice.
+- Gate: API 129/129, web 53/53. Deployed once, verified live (columns present, gate off, v123 intact).
 ### v1.91 - Stationary hold no longer latches a stale position (2026-11-06)
 - Root cause: StationaryGate released the hold only on speed >= 2.5 m/s or large per-sample displacement; slow moves (walking/stop-and-go at zero GPS speed) kept the old position frozen forever (~200 m off).
 - Fix: bounded drift release - a live fix more than max(3x hold accuracy, 40 m) from the held coordinate releases the hold regardless of speed. Unit-tested (drift release + scatter never releases).
