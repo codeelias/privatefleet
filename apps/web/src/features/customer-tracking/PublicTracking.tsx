@@ -166,13 +166,28 @@ export function PublicTracking({ token }: { token: string }) {
               : data.status.replace("_", " ")}
         </p>
         <p className="mt-1 text-sm text-[#A1A1AA]">
-          {data.eta
-            ? `${data.liveProgress ? "Live estimate" : "Estimated"} arrival ${new Date(data.eta).toLocaleTimeString("en-GB", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}`
-            : "Estimated arrival unavailable"}
+          {data.deliveryWindow
+            ? `${data.deliveryWindow.stage === "arriving" ? "Arriving" : "Expected"} ${new Date(
+                data.deliveryWindow.from,
+              ).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} - ${new Date(
+                data.deliveryWindow.to,
+              ).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
+            : data.eta
+              ? `${data.liveProgress ? "Live estimate" : "Estimated"} arrival ${new Date(data.eta).toLocaleTimeString("en-GB", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}`
+              : "Estimated arrival unavailable"}
         </p>
+        {data.deliveryWindow && (
+          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#71717A]">
+            {data.deliveryWindow.stage === "scheduled"
+              ? "Confirmed window"
+              : data.deliveryWindow.stage === "enroute"
+                ? "Window updated - driver on the way"
+                : "Window updated - you are next"}
+          </p>
+        )}
         {data.inCustomerZone && (
           <p className="mt-2 inline-flex rounded-full bg-[#1E3A8A]/40 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#93C5FD]">
             {data.customerZoneName ? `In your area - ${data.customerZoneName}` : "In your area"}
