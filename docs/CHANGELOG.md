@@ -1,3 +1,8 @@
+### v2.00 - R9: mid-day re-plan published to drivers (2026-11-07)
+- New POST /v1/optimization/replan: plans a driver's remaining open stops from their live position and publishes atomically as the next version. Composed from the existing, independently tested pieces (createProposal + approveProposal) - the publish path itself was not modified.
+- Publishing uses the one-active-plan invariant: the new version supersedes the driver's older plans and the driver feed serves it immediately. Idempotent re-runs return the same route. With nothing left open, honest 409 REPLAN_NOTHING_OPEN.
+- Web: 'Re-plan remaining work' button per driver with the result summary.
+- Gate: API 146/146, web 53/53. Live-verified on production: Sarah v124 published (26 stops, 127.9 km), v123/v121 superseded, her driver feed serves v124.
 ### v1.99 - R11: analytics pack (2026-11-07)
 - New /v1/reports/analytics: completed/skipped/failed counts, on-time %, average planned-vs-actual delta, planned distance, per-driver performance. Percentages and averages are null when nothing is measurable - never assumed.
 - Live check caught double-counting (972 vs 113 stops; 4651 vs 292 km): analytics now counts each stop once on its NEWEST plan and sums each driver's newest plan only (docs/53 invariant applied to reporting). The 0% on-time figure is the true statistic of the synthetic dataset (0 on-time / 64 early / 53 late), verified against the source table.
