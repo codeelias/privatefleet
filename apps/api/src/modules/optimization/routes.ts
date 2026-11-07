@@ -9,6 +9,7 @@ import { makeAuthGuard } from "../auth/guard.js";
 import type { DbHandle } from "../../db/client.js";
 import { RoutingError, type RoutingClients } from "../routing/types.js";
 import { approveProposal, createProposal, OptimizationError } from "./service.js";
+import { replanForDriver } from "./replan.js";
 import { approveFleetProposal, createFleetProposal } from "./fleet-service.js";
 import { closeRoute, RouteCloseError } from "./route-close.js";
 import { getAssignmentRecommendations } from "./recommendation-service.js";
@@ -59,8 +60,7 @@ export function registerOptimizationRoutes(
 ): void {
   const guard = makeAuthGuard(auth);
 
-  app.post("/v1/optimization/run", { preHandler: guard }, async (request, reply) => {
-    if (!requireDispatcher(request, reply)) {
+  app.post("/v1/optimization/run", { preHandler: guard }, async (request, reply) => {    if (!requireDispatcher(request, reply)) {
       return reply;
     }
     const tenantId = request.auth?.tenantId ?? "";
@@ -111,6 +111,58 @@ export function registerOptimizationRoutes(
           detail: "The solver could not place every shipment",
           uiMessage: "This plan cannot be completed within the constraints. Adjust assignments.",
         });
+      }
+      throw err;
+    }
+  });
+
+  // Mid-day re-plan (docs/54 R9): plan the driver's remaining open stops and
+  // publish atomically - the new version supersedes the older plan and the
+  // driver feed serves it immediately. Composed from the existing pieces.
+  app.post("/v1/optimization/replan", { preHandler: guard }, async (request, reply) => {
+    if (!requireDispatcher(request, reply)) {
+      return reply;
+    }
+    const tenantId = request.auth?.tenantId ?? "";
+    const body = RunBodySchema.parse(request.body);
+    try {
+      return await replanForDriver(handle, clientsProvider(), tenantId, body.driverId);
+    } catch (err) {
+      if (err instanceof RoutingError) {
+        const status = err.code === "ROUTING_NOT_CONFIGURED" ? 503 : 502;
+        return reply.status(status).send({
+          type: `https://privatefleet.example/errors/${err.code.toLowerCase()}`,
+          title: "Routing unavailable",
+          status,
+          code: err.code,
+          detail: err.message,
+          uiMessage:
+            err.code === "ROUTING_NOT_CONFIGURED"
+              ? "Live routing is not configured on this deployment. Manual dispatch still works."
+              : "The routing engine could not complete this plan. Try again in a moment.",
+        });
+      }
+      if (err instanceof OptimizationError) {
+        if (err.code === "DRIVER_NOT_FOUND") {
+          return reply.status(404).send({
+            type: "https://privatefleet.example/errors/driver-not-found",
+            title: "Driver not found",
+            status: 404,
+            code: err.code,
+            detail: "The driver does not exist in this tenant",
+            uiMessage: "That driver could not be found. Refresh and try again.",
+          });
+        }
+        if (err.code === "NO_ASSIGNED_STOPS") {
+          return reply.status(409).send({
+            type: "https://privatefleet.example/errors/nothing-to-replan",
+            title: "Nothing left to re-plan",
+            status: 409,
+            code: "REPLAN_NOTHING_OPEN",
+            detail: "The driver has no open pickup/dropoff pairs left",
+            uiMessage: "This driver has nothing left to deliver. Nothing was published.",
+          });
+        }
       }
       throw err;
     }
