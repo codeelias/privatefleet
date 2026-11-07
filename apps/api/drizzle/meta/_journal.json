@@ -148,9 +148,17 @@
       "when": 1794001000000,
       "tag": "0020_completion_gate",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794103000000,
+      "tag": "0021_customer_notifications",
+      "breakpoints": true
     }
   ]
 }
+
 
 
 
