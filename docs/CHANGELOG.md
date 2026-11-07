@@ -1,3 +1,7 @@
+### v2.01 - Geofence UX repairs (2026-11-07)
+- Bodyless DELETE 400: the web client always sent content-type application/json; Fastify rejects empty JSON bodies instantly (FST_ERR_CTP_EMPTY_JSON_BODY - the exact 'request was not understood' message). The client now declares the type only when a body exists - fixes all bodyless requests in one place. Regression test added.
+- Geofence editor crash: editFence passed a single point array to fitBounds instead of two-corner bounds - maplibre threw LngLatLike. Bounds are now computed as [west,south]-[east,north]. Both were pre-existing latent bugs, fixed at their single call sites; no API changes.
+- Gate: API 146/146, web tests green. Full web dist synced.
 ### v2.00 - R9: mid-day re-plan published to drivers (2026-11-07)
 - New POST /v1/optimization/replan: plans a driver's remaining open stops from their live position and publishes atomically as the next version. Composed from the existing, independently tested pieces (createProposal + approveProposal) - the publish path itself was not modified.
 - Publishing uses the one-active-plan invariant: the new version supersedes the driver's older plans and the driver feed serves it immediately. Idempotent re-runs return the same route. With nothing left open, honest 409 REPLAN_NOTHING_OPEN.
