@@ -4,9 +4,9 @@
  * "Preview as Customer" button opening the standalone portal in a new
  * tab (simulated tracking-token URL - the public endpoint is Phase 6).
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FleetState } from "@privatefleet/contracts";
-import { api } from "../../shared/api/client";
+import { api, type NotificationRow } from "../../shared/api/client";
 import { CustomerPortal } from "./CustomerPortal";
 import { Panel } from "../../shared/ui/Panel";
 import { StatusChip } from "../../shared/ui/StatusChip";
@@ -24,12 +24,33 @@ export function TrackingHub({ state }: { state: FleetState }) {
   const [trackingJobId, setTrackingJobId] = useState(state.jobs[0]?.id ?? "");
   const [trackingLink, setTrackingLink] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [attempts, setAttempts] = useState<NotificationRow[]>([]);
   const targetJob = state.jobs.find((j) => j.reference === "J-198") ?? state.jobs[0];
+
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .notifications()
+      .then((res) => {
+        if (!cancelled) setAttempts(res.notifications.slice(0, 6));
+      })
+      .catch(() => undefined); // the panel is best-effort; never block the screen
+    return () => {
+      cancelled = true;
+    };
+  }, [trackingLink]);
+
+  function notifyPayload(): { recipientEmail: string } | undefined {
+    return notifications && recipientEmail.trim().length > 0
+      ? { recipientEmail: recipientEmail.trim() }
+      : undefined;
+  }
 
   async function createTrackingLink(): Promise<void> {
     setLinkError(null);
     try {
-      const created = await api.createTrackingToken(trackingJobId);
+      const created = await api.createTrackingToken(trackingJobId, notifyPayload());
       setTrackingLink(`${window.location.origin}${created.url}`);
     } catch (err) {
       setLinkError(err instanceof Error ? err.message : "Link could not be created");
@@ -44,7 +65,7 @@ export function TrackingHub({ state }: { state: FleetState }) {
     // No link yet: create a real token for the selected job, then open it.
     setLinkError(null);
     void api
-      .createTrackingToken(trackingJobId || targetJob?.id || "")
+      .createTrackingToken(trackingJobId || targetJob?.id || "", notifyPayload())
       .then((created) => {
         setTrackingLink(`${window.location.origin}${created.url}`);
         window.open(`${window.location.origin}${created.url}`, "_blank", "noopener");
@@ -143,7 +164,7 @@ export function TrackingHub({ state }: { state: FleetState }) {
           <Panel title="Customer notifications">
             <div className="space-y-3 text-sm">
               <label className="flex items-center justify-between">
-                <span>Send ETA updates automatically</span>
+                <span>Send delivery updates automatically</span>
                 <input
                   type="checkbox"
                   checked={notifications}
@@ -151,21 +172,32 @@ export function TrackingHub({ state }: { state: FleetState }) {
                   className="h-4 w-4 accent-[#EF842F]"
                 />
               </label>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-text-secondary">Update cadence</span>
-                <select
-                  className="rounded-lg border border-command-border bg-command-bg px-2 py-1 text-xs"
-                  defaultValue="on_change"
-                >
-                  <option value="on_change">On status change</option>
-                  <option value="every_15">Every 15 min</option>
-                  <option value="manual">Manual only</option>
-                </select>
-                <StatusChip tone="neutral" label="ETA DELTA > 5 MIN" />
-              </div>
+              <input
+                type="email"
+                value={recipientEmail}
+                onChange={(event) => setRecipientEmail(event.target.value)}
+                placeholder="Customer email (sent on dispatch, arrival, completion)"
+                className="w-full rounded-lg border border-command-border bg-command-bg px-3 py-2 text-xs"
+              />
               <p className="text-xs text-text-secondary">
-                Notify on en route, delay and near-arrival transitions.
+                Consent is per tracking link. Every attempt is recorded with its true
+                status - delivery is never claimed without confirmation.
               </p>
+              {attempts.length > 0 && (
+                <ul className="space-y-1.5 border-t border-command-border pt-2">
+                  {attempts.map((row) => (
+                    <li key={row.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-text-secondary">
+                        {row.subject} → {row.recipient}
+                      </span>
+                      <StatusChip
+                        tone={row.status === "sent" ? "success" : row.status === "failed" ? "danger" : "neutral"}
+                        label={row.status.toUpperCase()}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </Panel>
 

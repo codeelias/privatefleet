@@ -28,6 +28,19 @@ import type {
   ScenariosList,
 } from "@privatefleet/contracts";
 
+export interface NotificationRow {
+  id: string;
+  jobId: string;
+  eventType: string;
+  channel: string;
+  recipient: string;
+  subject: string;
+  status: string;
+  detail?: string | null;
+  createdAt: string;
+  sentAt?: string | null;
+}
+
 export class AuthExpiredError extends Error {
   constructor() {
     super("Your session has expired. Please sign in again.");
@@ -275,11 +288,16 @@ export const api = {
     }),
   deleteGeofence: (id: string) =>
     request<{ deleted: boolean }>("/v1/geofences/" + id, { method: "DELETE" }),
-  createTrackingToken: (jobId: string) =>
+  createTrackingToken: (jobId: string, notify?: { recipientEmail: string }) =>
     request<TrackingTokenCreate>("/v1/tracking-tokens", {
       method: "POST",
-      body: JSON.stringify({ jobId }),
+      body: JSON.stringify({
+        jobId,
+        ...(notify ? { notifyEnabled: true, recipientEmail: notify.recipientEmail } : {}),
+      }),
     }),
+  notifications: () =>
+    request<{ notifications: NotificationRow[] }>("/v1/notifications"),
   revokeTrackingToken: (tokenId: string) =>
     request<{ revoked: boolean }>(`/v1/tracking-tokens/${tokenId}`, {
       method: "DELETE",
