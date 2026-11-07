@@ -1,3 +1,7 @@
+### v1.96 - Web deploy repaired; wholesale dist sync (2026-11-07)
+- Incident: the R8 deploy copied only a few web chunks while the build re-hashed lazy chunks; the browser fetched missing assets, got the SPA HTML fallback and failed with a MIME error on the dispatcher.
+- Repair: full dist synced to the host; every referenced asset verified 200 with the correct MIME type (index, vendors, MapCanvas, TrackingHub, GeofenceEditor, PublicTracking, maplibre/leaflet JS+CSS).
+- Prevention: scripts/deploy-web.ps1 now syncs the whole dist; docs/55 deploy rule updated - never per-file web copies.
 ### v1.95 - R8: escalating delivery window (2026-11-07)
 - The customer page now shows a delivery window that narrows by stage: 1-hour around the planned ETA while scheduled, ~25% band once the driver is en route, and a tight 10-minute slot when the job is the driver's next stop. Width is always derived from the same estimate - precision is never invented.
 - Honesty guards: a stale plan (ETA in the past) shows no window, no ETA and delayStatus unknown instead of past dates or a false 'on time'.

@@ -51,6 +51,8 @@ deferred, never forced.
 - [ ] Tests: module unit tests + at most one integration test per crossing.
 - [ ] Gate (typecheck + unit + integration + verify script) is green.
 - [ ] Deploy is ONE deploy; live verification follows; rollback = revert commit.
+- [ ] Web deploys sync the WHOLE dist via `scripts/deploy-web.ps1` - never
+      per-file copies (partial dist = MIME errors on the dispatcher).
 
 ## Reference implementations
 
