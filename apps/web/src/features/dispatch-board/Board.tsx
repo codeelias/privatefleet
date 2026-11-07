@@ -145,6 +145,11 @@ function QueueItem({ job, onSelect }: { job: JobDto; onSelect: () => void }) {
   const pickup = job.stops.find((stop) => stop.stopType === "pickup");
   const delivery = job.stops.find((stop) => stop.stopType === "dropoff");
   const window = windowFor(job);
+  const risk = job.stops.some((stop) => stop.risk === "late")
+    ? "late"
+    : job.stops.some((stop) => stop.risk === "at_risk")
+      ? "at_risk"
+      : null;
   return (
     <button
       ref={setNodeRef}
@@ -177,6 +182,17 @@ function QueueItem({ job, onSelect }: { job: JobDto; onSelect: () => void }) {
         <span className={`shrink-0 rounded-full border px-1.5 py-px text-[8px] font-bold uppercase tracking-[0.08em] ${priorityTone(job.priority)}`}>
           {priorityLabel(job.priority)}
         </span>
+        {risk && (
+          <span
+            className={`shrink-0 rounded-full border px-1.5 py-px text-[8px] font-bold uppercase tracking-[0.08em] ${
+              risk === "late"
+                ? "border-status-danger/40 bg-status-danger/10 text-status-danger"
+                : "border-status-warning/40 bg-status-warning/10 text-status-warning"
+            }`}
+          >
+            {risk === "late" ? "LATE" : "AT RISK"}
+          </span>
+        )}
       </div>
       <p className="mt-1 truncate text-[11px] text-text-primary">
         {pickup?.address ?? "Pickup TBC"} <span aria-hidden="true">{"\u2192"}</span>{" "}
