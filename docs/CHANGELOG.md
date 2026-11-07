@@ -1,3 +1,7 @@
+### v1.95 - R8: escalating delivery window (2026-11-07)
+- The customer page now shows a delivery window that narrows by stage: 1-hour around the planned ETA while scheduled, ~25% band once the driver is en route, and a tight 10-minute slot when the job is the driver's next stop. Width is always derived from the same estimate - precision is never invented.
+- Honesty guards: a stale plan (ETA in the past) shows no window, no ETA and delayStatus unknown instead of past dates or a false 'on time'.
+- Gate: API 132/132, web 53/53. Live-verified: stale-plan job shows no window/eta/unknown; completed job shows none; web serving the new chunk.
 ### v1.94 - R7: customer sees the delivery photo (2026-11-06)
 - The public tracking page now lists token-scoped photo ids and renders thumbnails from the new endpoint /v1/public/tracking/:token/proof/:evidenceId.
 - Security: served only under the unguessable tracking token, scoped to that token's own job, photo kinds only, content hash re-verified before serving (tampered files are refused), no-store headers, per-token rate limit shared with the page endpoint.
