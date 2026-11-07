@@ -8,6 +8,7 @@
  * itself fails the session is cleared and the app returns to login.
  */
 import type {
+  AnalyticsReport,
   AssignResponse,
   AssignmentPreview,
   AuthSession,
@@ -298,6 +299,8 @@ export const api = {
     }),
   notifications: () =>
     request<{ notifications: NotificationRow[] }>("/v1/notifications"),
+  analytics: (query = "") =>
+    request<AnalyticsReport>(`/v1/reports/analytics${query}`),
   revokeTrackingToken: (tokenId: string) =>
     request<{ revoked: boolean }>(`/v1/tracking-tokens/${tokenId}`, {
       method: "DELETE",

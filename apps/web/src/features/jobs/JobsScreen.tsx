@@ -5,6 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  AnalyticsReport,
   DeliveryPerformanceReport,
   FleetState,
   JobDto,
@@ -39,6 +40,7 @@ export function JobsScreen({
   const [reportError, setReportError] = useState<string | null>(null);
   const [report, setReport] = useState<DeliveryPerformanceReport | null>(null);
   const [reportFilter, setReportFilter] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsReport | null>(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
@@ -213,6 +215,11 @@ export function JobsScreen({
     } finally {
       setReportBusy(false);
     }
+    // Analytics summary is best-effort and always fleet-wide (not job-scoped).
+    void api
+      .analytics()
+      .then(setAnalytics)
+      .catch(() => setAnalytics(null));
   }
 
   async function downloadReport(): Promise<void> {
@@ -429,6 +436,7 @@ export function JobsScreen({
           busy={reportBusy}
           error={reportError}
           report={report}
+          analytics={analytics}
           filtered={reportFilter !== null}
           onClose={() => setReportOpen(false)}
           onDownload={() => void downloadReport()}
@@ -627,10 +635,20 @@ function JobDetailDrawer({
   );
 }
 
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-command-border bg-command-raised/40 px-3 py-2">
+      <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-text-secondary">{label}</p>
+      <p className="mt-0.5 text-sm font-bold text-text-primary">{value}</p>
+    </div>
+  );
+}
+
 function PerformanceModal({
   busy,
   error,
   report,
+  analytics,
   filtered,
   onClose,
   onDownload,
@@ -638,6 +656,7 @@ function PerformanceModal({
   busy: boolean;
   error: string | null;
   report: DeliveryPerformanceReport | null;
+  analytics: AnalyticsReport | null;
   filtered: boolean;
   onClose: () => void;
   onDownload: () => void;
@@ -682,6 +701,31 @@ function PerformanceModal({
             <p role="alert" className="rounded-lg bg-status-danger/10 px-3 py-2 text-xs text-status-danger">
               {error}
             </p>
+          )}
+          {analytics && !filtered && (
+            <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <StatCard label="Completed" value={String(analytics.totals.stopsCompleted)} />
+              <StatCard
+                label="On time"
+                value={analytics.totals.onTimePct === null ? "-" : `${analytics.totals.onTimePct}%`}
+              />
+              <StatCard
+                label="Avg delta"
+                value={
+                  analytics.totals.avgArrivalDeltaS === null
+                    ? "-"
+                    : `${analytics.totals.avgArrivalDeltaS > 0 ? "+" : ""}${Math.round(analytics.totals.avgArrivalDeltaS / 60)} min`
+                }
+              />
+              <StatCard
+                label="Distance"
+                value={`${analytics.totals.totalDistanceKm.toLocaleString("en-GB")} km`}
+              />
+              <StatCard
+                label="Skipped / failed"
+                value={`${analytics.totals.stopsSkipped} / ${analytics.totals.stopsFailed}`}
+              />
+            </div>
           )}
           {report && (
             <div className="overflow-x-auto rounded-xl border border-command-border">
