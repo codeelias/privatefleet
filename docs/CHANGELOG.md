@@ -1,3 +1,8 @@
+### v1.97 - R6: proactive customer notifications (2026-11-07)
+- Consent-gated notification engine: dispatch opts in per tracking link (customer email), events flow from the outbox bus (assigned/arrived/completed/skipped), every attempt recorded with an honest status (pending/sent/failed). Delivery is claimed ONLY when a transport confirms it; with no SMTP configured the attempt records 'failed - SMTP not configured'.
+- Bus gained an in-process subscriber API (additive); tracking tokens gained notify_enabled/recipient_email; new /v1/notifications panel endpoint; TrackingHub gets a real consent form + attempt list.
+- Incident (owned): first deploy failed because two new module files did not reach the host (scp loop swallowed errors - directory did not exist); API was 502 for ~25 minutes until the files were copied. Prevention documented: verify every copied file exists on the host before restart.
+- Gate: API 133/133, web 53/53. Live-verified: consent stored (t, customer@example.test), invalid email 400, /v1/notifications 200, fleet/state and web 200.
 ### v1.96 - Web deploy repaired; wholesale dist sync (2026-11-07)
 - Incident: the R8 deploy copied only a few web chunks while the build re-hashed lazy chunks; the browser fetched missing assets, got the SPA HTML fallback and failed with a MIME error on the dispatcher.
 - Repair: full dist synced to the host; every referenced asset verified 200 with the correct MIME type (index, vendors, MapCanvas, TrackingHub, GeofenceEditor, PublicTracking, maplibre/leaflet JS+CSS).
