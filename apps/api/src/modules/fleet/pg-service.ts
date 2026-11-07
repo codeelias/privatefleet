@@ -39,6 +39,7 @@ const FAILURE_REASON_LABELS: Record<FailureReasonCode, string> = {
 import type { RealtimeBus } from "../../lib/realtime.js";
 import { scoreDelivery } from "./delivery-confidence.js";
 import { evaluateCompletionGate, type GateDecision } from "./completion-gate.js";
+import { stopRisk } from "./stop-risk.js";
 import {
   buildImportCandidates,
   candidateToJob,
@@ -97,6 +98,7 @@ interface StopRow {
   failure_note: string | null;
   evidence_kinds: string[] | null;
   gps_gap_m: number | null;
+  planned_arrival_at: Date | string | null;
 }
 
 interface DriverRow {
@@ -200,6 +202,7 @@ export class PgFleetService {
         sql`SELECT s.id, s.job_id, s.sequence, s.stop_type, s.address, s.latitude, s.longitude, s.status,
                    s.window_start, s.window_end, s.arrived_at, s.completed_at, s.failure_code, s.failure_note,
                    ev.kinds AS evidence_kinds,
+                   plan.planned_arrival_at,
                    CASE WHEN s.completed_at IS NULL THEN NULL ELSE (
                      SELECT MIN(ST_Distance(
                        ST_MakePoint(lp.longitude, lp.latitude)::geography,
@@ -214,6 +217,15 @@ export class PgFleetService {
             LEFT JOIN LATERAL (
               SELECT array_agg(DISTINCT kind) AS kinds FROM stop_evidence WHERE stop_id = s.id
             ) ev ON true
+            LEFT JOIN LATERAL (
+              SELECT rs.planned_arrival_at
+              FROM route_stops rs
+              JOIN routes r ON r.id = rs.route_id
+              WHERE rs.job_stop_id = s.id
+                AND r.status IN ('published', 'in_progress', 'completed')
+              ORDER BY r.version DESC
+              LIMIT 1
+            ) plan ON true
             ORDER BY s.job_id, s.sequence`,
       )) as unknown as StopRow[];
       const drivers = (await db.execute(
@@ -291,6 +303,12 @@ export class PgFleetService {
               failureCode: stop.failure_code,
             })
           : undefined;
+        const risk = stopRisk({
+          status: stop.status,
+          plannedArrivalAt: stop.planned_arrival_at,
+          windowEnd: stop.window_end,
+          nowMs: Date.now(),
+        });
         const list = stopsByJob.get(stop.job_id) ?? [];
         list.push({
           id: stop.id,
@@ -306,6 +324,10 @@ export class PgFleetService {
           ...(iso(stop.completed_at) ? { completedAt: iso(stop.completed_at) } : {}),
           ...(stop.failure_code ? { failureCode: stop.failure_code } : {}),
           ...(stop.failure_note ? { failureNote: stop.failure_note } : {}),
+          ...(iso(stop.planned_arrival_at)
+            ? { plannedArrivalAt: iso(stop.planned_arrival_at) }
+            : {}),
+          ...(risk ? { risk } : {}),
           ...(confidence ? { deliveryConfidence: confidence } : {}),
         });
         stopsByJob.set(stop.job_id, list);

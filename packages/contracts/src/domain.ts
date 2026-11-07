@@ -88,6 +88,10 @@ export const JobStopDtoSchema = z.object({
   completedAt: z.string().datetime().optional(),
   failureCode: z.string().optional(),
   failureNote: z.string().optional(),
+  /** Planned arrival from the driver's newest route plan, when present. */
+  plannedArrivalAt: z.string().datetime().optional(),
+  /** Display-only at-risk flag (docs/54 R10); never blocks anything. */
+  risk: z.enum(["late", "at_risk", "on_track", "unknown"]).optional(),
   /**
    * Evidence-derived delivery confidence for terminal stops: score 0-100
    * plus the contributing factors. Only present for completed / skipped /
