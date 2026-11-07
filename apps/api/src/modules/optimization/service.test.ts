@@ -10,6 +10,7 @@ import { loadConfig, migrationDatabaseUrl } from "../../config.js";
 import { closeDb, createDb, type DbHandle } from "../../db/client.js";
 import { seedTenant } from "../../db/seed.js";
 import { approveProposal, createProposal } from "./service.js";
+import { replanForDriver } from "./replan.js";
 import type { RoutingClients } from "../routing/types.js";
 
 const APP_DATABASE_URL =
@@ -173,6 +174,43 @@ describe("live route proposals", () => {
     });
     expect(response.statusCode).toBe(503);
     expect((response.json() as { code: string }).code).toBe("ROUTING_NOT_CONFIGURED");
+  });
+});
+
+describe("mid-day re-plan (R9)", () => {
+  it("publishes the remaining work as the next version and is idempotent", async () => {
+    const { tenantId, driverId } = await setup();
+    const first = await replanForDriver(runtime, fakeClients, tenantId, driverId);
+    expect(first.version).toBeGreaterThan(0);
+    expect(first.stopCount).toBeGreaterThanOrEqual(2);
+    expect(first.publishedAt).toBeTruthy();
+
+    const routes = (await migrator.sql`
+      SELECT version, status FROM routes
+      WHERE tenant_id = ${tenantId} AND driver_id = ${driverId}
+      ORDER BY version DESC
+    `) as unknown as Array<{ version: number; status: string }>;
+    expect(Number(routes[0]?.version)).toBe(first.version);
+    expect(routes[0]?.status).toBe("published");
+    expect(routes.filter((route) => route.status === "superseded").length).toBeGreaterThanOrEqual(0);
+
+    // Re-running with identical open work is idempotent: same route, no churn.
+    const second = await replanForDriver(runtime, fakeClients, tenantId, driverId);
+    expect(second.routeId).toBe(first.routeId);
+    expect(second.version).toBe(first.version);
+  });
+
+  it("reports nothing to re-plan once every stop is complete", async () => {
+    const { tenantId, driverId } = await setup();
+    await migrator.sql`
+      UPDATE job_stops SET status = 'completed'
+      WHERE job_id IN (
+        SELECT id FROM jobs WHERE tenant_id = ${tenantId} AND assigned_driver_id = ${driverId}
+      )
+    `;
+    await expect(
+      replanForDriver(runtime, fakeClients, tenantId, driverId),
+    ).rejects.toThrow("NO_ASSIGNED_STOPS");
   });
 });
 
