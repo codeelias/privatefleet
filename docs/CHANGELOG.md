@@ -1,3 +1,7 @@
+### v1.98 - R10: at-risk scoring (2026-11-07)
+- Pure stop-risk module (late/at_risk/on_track/unknown) derived from the driver's newest plan vs the stop window; the fleet snapshot carries plannedArrivalAt + risk per stop; the dispatch board shows LATE / AT RISK chips.
+- Honesty: stale plans (arrival already past) and closed windows are 'unknown', never risky - the live check caught 28 false 'at_risk' flags from Nov-2 plans and the fix reduced production flags to 0 (correct: no live job currently has time pressure).
+- Gate: API 139/139, web 53/53. Deployed with verify-before-restart; healthz 200.
 ### v1.97 - R6: proactive customer notifications (2026-11-07)
 - Consent-gated notification engine: dispatch opts in per tracking link (customer email), events flow from the outbox bus (assigned/arrived/completed/skipped), every attempt recorded with an honest status (pending/sent/failed). Delivery is claimed ONLY when a transport confirms it; with no SMTP configured the attempt records 'failed - SMTP not configured'.
 - Bus gained an in-process subscriber API (additive); tracking tokens gained notify_enabled/recipient_email; new /v1/notifications panel endpoint; TrackingHub gets a real consent form + attempt list.

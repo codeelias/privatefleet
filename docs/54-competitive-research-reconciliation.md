@@ -1,7 +1,7 @@
 # 54 - Competitive research reconciliation: what wins customer spend and trust
 
 Date: 2026-11-05
-Status: Wave 1 implemented and deployed 2026-11-05 (R1 idempotency reuse 409, R2 job timeline endpoint, R4 ETA window, R5 driver lifecycle). R3 shipped (warn/block, accuracy-aware, timeline-evidenced). R7 shipped (token-scoped proof photo). R8 shipped (escalating window + stale-plan honesty). R6 shipped (consent-gated notifications, honest statuses; SMTP transport lands with a real mail server). R9-R15 remain backlog.
+Status: Wave 1 implemented and deployed 2026-11-05 (R1 idempotency reuse 409, R2 job timeline endpoint, R4 ETA window, R5 driver lifecycle). R3 shipped (warn/block, accuracy-aware, timeline-evidenced). R7 shipped (token-scoped proof photo). R8 shipped (escalating window + stale-plan honesty). R6 shipped (consent-gated notifications, honest statuses; SMTP transport lands with a real mail server). R10 shipped (at-risk scoring with stale-plan honesty). R9, R11-R15 remain backlog.
 
 ## Method
 
