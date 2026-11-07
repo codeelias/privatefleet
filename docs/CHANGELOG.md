@@ -1,3 +1,8 @@
+### v1.99 - R11: analytics pack (2026-11-07)
+- New /v1/reports/analytics: completed/skipped/failed counts, on-time %, average planned-vs-actual delta, planned distance, per-driver performance. Percentages and averages are null when nothing is measurable - never assumed.
+- Live check caught double-counting (972 vs 113 stops; 4651 vs 292 km): analytics now counts each stop once on its NEWEST plan and sums each driver's newest plan only (docs/53 invariant applied to reporting). The 0% on-time figure is the true statistic of the synthetic dataset (0 on-time / 64 early / 53 late), verified against the source table.
+- Web: five honest summary cards atop the delivery-performance modal.
+- Gate: API 144/144, web 53/53. Deployed with verify-before-restart; healthz 200.
 ### v1.98 - R10: at-risk scoring (2026-11-07)
 - Pure stop-risk module (late/at_risk/on_track/unknown) derived from the driver's newest plan vs the stop window; the fleet snapshot carries plannedArrivalAt + risk per stop; the dispatch board shows LATE / AT RISK chips.
 - Honesty: stale plans (arrival already past) and closed windows are 'unknown', never risky - the live check caught 28 false 'at_risk' flags from Nov-2 plans and the fix reduced production flags to 0 (correct: no live job currently has time pressure).
