@@ -151,9 +151,11 @@ export async function publicTracking(
     const delayStatus =
       etaValue === null || windowEndValue === null
         ? "unknown"
-        : etaValue > windowEndValue
-          ? "late"
-          : "on_time";
+        : etaValue < Date.now()
+          ? "unknown" // stale plan: no live comparison is possible
+          : etaValue > windowEndValue
+            ? "late"
+            : "on_time";
     const remainingStops = stops.filter(
       (stop) => stop.status === "pending" || stop.status === "arrived",
     ).length;
@@ -285,10 +287,37 @@ export async function publicTracking(
       }
     }
 
+    // Escalating window (docs/54 R8): width follows what we actually know -
+    // 1h around the planned ETA while scheduled, ~25% band while en route,
+    // a tight 10-minute slot when this job is the driver's next stop.
+    let deliveryWindow:
+      | { from: string; to: string; stage: "scheduled" | "enroute" | "arriving" }
+      | undefined;
+    if (liveProgress) {
+      const base = Date.now() + liveProgress.etaMinutes * 60_000;
+      const widthMs =
+        liveProgress.stopsAway === 0
+          ? 5 * 60_000
+          : Math.max(10, Math.ceil(liveProgress.etaMinutes * 0.25)) * 60_000;
+      deliveryWindow = {
+        from: new Date(base - widthMs).toISOString(),
+        to: new Date(base + widthMs).toISOString(),
+        stage: liveProgress.stopsAway === 0 ? "arriving" : "enroute",
+      };
+    } else if (etaValue !== null && etaValue + 30 * 60_000 > Date.now()) {
+      deliveryWindow = {
+        from: new Date(etaValue - 30 * 60_000).toISOString(),
+        to: new Date(etaValue + 30 * 60_000).toISOString(),
+        stage: "scheduled",
+      };
+    }
+
     return {
       jobReference: job.reference,
       status: job.status,
-      ...(etaValue !== null ? { eta: new Date(etaValue).toISOString() } : {}),
+      ...(etaValue !== null && etaValue > Date.now()
+        ? { eta: new Date(etaValue).toISOString() }
+        : {}),
       etaMethod: "planned" as const,
       etaConfidence,
       delayStatus,
@@ -315,6 +344,7 @@ export async function publicTracking(
       ...(job.full_name ? { driverName: job.full_name } : {}),
       ...(job.registration ? { vehicleRegistration: job.registration } : {}),
       ...(position ? { position } : {}),
+      ...(deliveryWindow ? { deliveryWindow } : {}),
       stops: stops.map((stop) => ({
         sequence: Number(stop.sequence),
         address: stop.address,
