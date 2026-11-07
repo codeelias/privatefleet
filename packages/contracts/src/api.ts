@@ -102,6 +102,30 @@ export const DeliveryPerformanceReportSchema = z.object({
 });
 export type DeliveryPerformanceReport = z.infer<typeof DeliveryPerformanceReportSchema>;
 
+/** Analytics summary (docs/54 R11): aggregates, never assumed - percentages
+ *  are null when there is nothing to measure. */
+export const AnalyticsReportSchema = z.object({
+  generatedAt: z.string().datetime(),
+  range: z.object({ from: z.string().optional(), to: z.string().optional() }),
+  totals: z.object({
+    stopsCompleted: z.number().int().nonnegative(),
+    stopsSkipped: z.number().int().nonnegative(),
+    stopsFailed: z.number().int().nonnegative(),
+    onTimePct: z.number().min(0).max(100).nullable(),
+    avgArrivalDeltaS: z.number().nullable(),
+    totalDistanceKm: z.number().nonnegative(),
+  }),
+  byDriver: z.array(
+    z.object({
+      driverId: IdSchema,
+      driverName: z.string(),
+      stopsCompleted: z.number().int().nonnegative(),
+      onTimePct: z.number().min(0).max(100).nullable(),
+    }),
+  ),
+});
+export type AnalyticsReport = z.infer<typeof AnalyticsReportSchema>;
+
 export const TripSegmentSchema = z.object({
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime(),
