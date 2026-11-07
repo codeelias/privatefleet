@@ -198,6 +198,18 @@ export const PublicTrackingResponseSchema = z.object({
       toMinutes: z.number().int().positive(),
     })
     .optional(),
+  /**
+   * Escalating delivery window (docs/54 R8): the window the customer is
+   * promised, narrowing by stage as the driver approaches. The width at each
+   * stage is derived from the same estimate - precision is never invented.
+   */
+  deliveryWindow: z
+    .object({
+      from: z.string().datetime(),
+      to: z.string().datetime(),
+      stage: z.enum(["scheduled", "enroute", "arriving"]),
+    })
+    .optional(),
   /** Whether the ETA is a planned schedule or a live-blended estimate. */
   etaMethod: z.enum(["live", "planned"]).optional(),
   /** Trust level of the displayed arrival, derived from fix age. */
