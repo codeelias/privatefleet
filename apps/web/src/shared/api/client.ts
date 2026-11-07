@@ -90,7 +90,12 @@ async function rawRequest<T>(path: string, init?: RequestInit): Promise<T> {
       : init ?? {};
   const res = await fetch(path, {
     ...normalized,
-    headers: { "content-type": "application/json", ...normalized.headers },
+    // A JSON content type with an EMPTY body makes Fastify reject the request
+    // (400) - only declare the type when a body is actually sent.
+    headers: {
+      ...(normalized.body !== undefined ? { "content-type": "application/json" } : {}),
+      ...normalized.headers,
+    },
   });
   if (!res.ok) {
     throw await parseError(res);
@@ -107,7 +112,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     return fetch(path, {
       ...normalized,
       headers: {
-        "content-type": "application/json",
+        ...(normalized.body !== undefined ? { "content-type": "application/json" } : {}),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...normalized.headers,
       },

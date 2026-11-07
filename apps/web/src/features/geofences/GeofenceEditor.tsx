@@ -319,8 +319,13 @@ export function GeofenceEditor({
     setError(null);
     const points = geojsonToVertices(fence.geojson);
     if (points.length > 0 && mapRef.current) {
+      const lngs = points.map((point) => point.lng);
+      const lats = points.map((point) => point.lat);
       mapRef.current.fitBounds(
-        [points.map((point) => [point.lng, point.lat])] as unknown as [[number, number], [number, number]],
+        [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+        ] as [[number, number], [number, number]],
         { padding: 60, maxZoom: 16 },
       );
     }
