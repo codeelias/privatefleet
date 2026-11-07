@@ -34,6 +34,8 @@ import { registerGeofenceRoutes } from "./modules/geofences/routes.js";
 import { registerPositioningDiagnosticsRoutes } from "./modules/positioning/routes.js";
 import { registerDiagnosticsRoutes } from "./modules/diagnostics/routes.js";
 import { registerPublicTrackingRoutes } from "./modules/tracking/public-tracking-routes.js";
+import { NotificationService, UnconfiguredTransport } from "./modules/notifications/service.js";
+import { registerNotificationRoutes } from "./modules/notifications/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
 export interface DemoContext {
@@ -382,6 +384,12 @@ export function buildApp(config: AppConfig): {
     registerReportRoutes(app, auth, db);
     registerGeofenceRoutes(app, auth, db);
     registerPublicTrackingRoutes(app, auth, db, evidenceStore);
+    const notifications = new NotificationService(
+      db,
+      new UnconfiguredTransport(), // SMTP lands with the first real mail server
+    );
+    notifications.start(bus);
+    registerNotificationRoutes(app, auth, notifications);
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter, db);
     registerTrackingRoutes(app, auth, bus, db);
     registerPositioningDiagnosticsRoutes(app, auth);

@@ -11,7 +11,13 @@ import type { DbHandle } from "../../db/client.js";
 import type { EvidenceStore } from "../evidence/storage.js";
 import { createTrackingToken, publicProofPhoto, publicTracking, revokeTrackingToken } from "./public-tracking.js";
 
-const CreateBodySchema = z.object({ jobId: z.string().uuid() });
+const CreateBodySchema = z.object({
+  jobId: z.string().uuid(),
+  notifyEnabled: z.boolean().default(false),
+  recipientEmail: z.string().email().optional(),
+}).refine((value) => !value.notifyEnabled || Boolean(value.recipientEmail), {
+  message: "A recipient email is required when notifications are enabled",
+});
 const TokenParamSchema = z.object({ token: z.string().min(20).max(64) });
 const IdParamSchema = z.object({ id: z.string().uuid() });
 
@@ -60,7 +66,10 @@ export function registerPublicTrackingRoutes(
     const body = CreateBodySchema.parse(request.body);
     const tenantId = request.auth?.tenantId ?? "";
     try {
-      const created = await createTrackingToken(handle, tenantId, body.jobId);
+      const created = await createTrackingToken(handle, tenantId, body.jobId, {
+        notifyEnabled: body.notifyEnabled,
+        ...(body.recipientEmail ? { recipientEmail: body.recipientEmail } : {}),
+      });
       return { ...created, url: `/track/${created.token}` };
     } catch {
       return reply.status(404).send({

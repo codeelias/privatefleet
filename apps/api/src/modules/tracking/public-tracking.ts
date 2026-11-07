@@ -45,6 +45,7 @@ export async function createTrackingToken(
   handle: DbHandle,
   tenantId: string,
   jobId: string,
+  notify?: { notifyEnabled: boolean; recipientEmail?: string },
 ): Promise<{ id: string; token: string; expiresAt: string }> {
   return withTenant(handle, tenantId, async (db) => {
     const jobs = (await db.execute(
@@ -56,9 +57,14 @@ export async function createTrackingToken(
     const token = randomBytes(32).toString("base64url");
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
     const id = randomUUID();
+    const notifyEnabled = notify?.notifyEnabled === true;
+    const recipientEmail = notifyEnabled && notify?.recipientEmail
+      ? notify.recipientEmail
+      : null;
     await db.execute(sql`
-      INSERT INTO tracking_tokens (id, tenant_id, job_id, token_hash, expires_at)
-      VALUES (${id}, ${tenantId}, ${jobId}, ${hashToken(token)}, ${expiresAt.toISOString()})
+      INSERT INTO tracking_tokens (id, tenant_id, job_id, token_hash, expires_at, notify_enabled, recipient_email)
+      VALUES (${id}, ${tenantId}, ${jobId}, ${hashToken(token)}, ${expiresAt.toISOString()},
+        ${notifyEnabled}, ${recipientEmail})
     `);
     return { id, token, expiresAt: expiresAt.toISOString() };
   });
