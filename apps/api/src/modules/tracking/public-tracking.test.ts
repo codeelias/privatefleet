@@ -241,6 +241,58 @@ describe("public customer tracking", () => {
     await writeFile(proofPhotoPath, proofPhotoBytes); // restore
   });
 
+  it("narrows the window by stage and falls back to the scheduled window", async () => {
+    type WindowBody = {
+      deliveryWindow?: { from: string; to: string; stage: string };
+    };
+    const live = await app.inject({
+      method: "GET",
+      url: `/v1/public/tracking/${publicToken}`,
+    });
+    const liveBody = live.json() as WindowBody;
+    expect(liveBody.deliveryWindow?.stage).toBe("arriving");
+    const liveWidth =
+      Date.parse(liveBody.deliveryWindow!.to) - Date.parse(liveBody.deliveryWindow!.from);
+    expect(liveWidth).toBe(10 * 60_000); // tight 10-minute slot when next
+
+    // Stale vehicle fix: no live progress -> the honest scheduled 1h window.
+    await migrator.sql`
+      UPDATE vehicles SET captured_at = now() - interval '10 minutes'
+      WHERE id = (SELECT assigned_vehicle_id FROM jobs WHERE id = ${jobId})
+    `;
+    const scheduled = await app.inject({
+      method: "GET",
+      url: `/v1/public/tracking/${publicToken}`,
+    });
+    const scheduledBody = scheduled.json() as WindowBody;
+    expect(scheduledBody.deliveryWindow?.stage).toBe("scheduled");
+    const scheduledWidth =
+      Date.parse(scheduledBody.deliveryWindow!.to) -
+      Date.parse(scheduledBody.deliveryWindow!.from);
+    expect(scheduledWidth).toBe(60 * 60_000); // 1-hour window around planned ETA
+
+    // A stale plan must never surface a window in the past.
+    await migrator.sql`
+      UPDATE route_stops SET planned_arrival_at = now() - interval '1 hour'
+      WHERE job_stop_id = (SELECT id FROM job_stops WHERE job_id = ${jobId})
+    `;
+    const stalePlan = await app.inject({
+      method: "GET",
+      url: `/v1/public/tracking/${publicToken}`,
+    });
+    const staleBody = stalePlan.json() as WindowBody & { delayStatus?: string };
+    expect(staleBody.deliveryWindow).toBeUndefined();
+    expect(staleBody.delayStatus).toBe("unknown"); // a stale plan is not "on time"
+    await migrator.sql`
+      UPDATE route_stops SET planned_arrival_at = now() + interval '20 minutes'
+      WHERE job_stop_id = (SELECT id FROM job_stops WHERE job_id = ${jobId})
+    `;
+    await migrator.sql`
+      UPDATE vehicles SET captured_at = now()
+      WHERE id = (SELECT assigned_vehicle_id FROM jobs WHERE id = ${jobId})
+    `;
+  });
+
   it("rejects invalid and revoked tokens and rate limits bursts", async () => {
     const missing = await app.inject({
       method: "GET",
