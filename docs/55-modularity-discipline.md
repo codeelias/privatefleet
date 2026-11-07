@@ -53,6 +53,9 @@ deferred, never forced.
 - [ ] Deploy is ONE deploy; live verification follows; rollback = revert commit.
 - [ ] Web deploys sync the WHOLE dist via `scripts/deploy-web.ps1` - never
       per-file copies (partial dist = MIME errors on the dispatcher).
+- [ ] After every file copy to the host: verify the file EXISTS remotely
+      (dir/list) BEFORE restarting the service. A missing new module = API
+      502. scp failures must never be swallowed.
 
 ## Reference implementations
 
