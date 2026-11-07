@@ -89,6 +89,7 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
   const [busy, setBusy] = useState(false);
   const [approving, setApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [replanStatus, setReplanStatus] = useState<string | null>(null);
   const [policy, setPolicy] = useState<DispatchPolicyView | null>(null);
   const [policyError, setPolicyError] = useState<string | null>(null);
   const [recommendations, setRecommendations] = useState<RecommendationResponse | null>(null);
@@ -202,6 +203,27 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
     (job) => job.status !== "completed" && job.status !== "cancelled",
   );
 
+  async function replan() {
+    if (!driverId) return;
+    setBusy(true);
+    setError(null);
+    setReplanStatus(null);
+    try {
+      const result = await api.replan(driverId);
+      setReplanStatus(
+        `Re-planned: version ${result.version} - ${result.stopCount} stops, ${(result.distanceMetres / 1000).toFixed(1)} km. The driver's map now follows this plan.`,
+      );
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 409) {
+        setError("Nothing left to re-plan: this driver has no open pickup/dropoff pairs. Nothing was published.");
+      } else {
+        setError(err instanceof Error ? err.message : "Re-plan failed");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function optimise() {
     setBusy(true);
     setError(null);
@@ -292,9 +314,18 @@ export function OptimizationScreen({ state }: { state: FleetState }) {
             <button type="button" onClick={() => void optimise()} disabled={busy || (!live && !driverId) || (live && !hasPendingWork)} className="min-h-9 rounded-lg bg-brand-primary px-4 text-[12px] font-bold text-on-brand hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50">
               {busy && !run && !liveRun ? "Optimising..." : live ? (hasPendingWork ? "Optimise fleet" : "No jobs to optimise") : "Optimise routes"}
             </button>
+            {!live && (
+              <button type="button" onClick={() => void replan()} disabled={busy || !driverId} className="min-h-9 rounded-lg border border-brand-primary/50 px-4 text-[12px] font-bold text-brand-primary hover:bg-brand-primary/10 disabled:cursor-not-allowed disabled:opacity-50">
+                {busy ? "Re-planning..." : "Re-plan remaining work"}
+              </button>
+            )}
           </div>
         </div>
       </header>
+
+      {replanStatus && (
+        <p className="mx-4 mt-3 rounded-lg border border-status-success/40 bg-status-success/10 px-3 py-2 text-[11px] text-status-success">{replanStatus}</p>
+      )}
 
       {error && (
         <p className="mx-4 mt-3 rounded-lg border border-status-danger/40 bg-status-danger/10 px-3 py-2 text-[11px] text-status-danger">{error}</p>

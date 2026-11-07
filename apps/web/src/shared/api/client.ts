@@ -25,6 +25,7 @@ import type {
   GeofenceList,
   LiveOptimizationProposal,
   OptimizationProposal,
+  ReplanResponse,
   ScenarioName,
   ScenariosList,
 } from "@privatefleet/contracts";
@@ -385,6 +386,11 @@ export const api = {
     }),
   runOptimization: (driverId: string) =>
     request<OptimizationProposal>("/v1/optimization/run", {
+      method: "POST",
+      body: JSON.stringify({ driverId }),
+    }),
+  replan: (driverId: string) =>
+    request<ReplanResponse>("/v1/optimization/replan", {
       method: "POST",
       body: JSON.stringify({ driverId }),
     }),
