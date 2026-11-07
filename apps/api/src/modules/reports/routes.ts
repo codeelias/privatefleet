@@ -8,6 +8,7 @@ import type { AuthService } from "../auth/service.js";
 import { makeAuthGuard } from "../auth/guard.js";
 import type { DbHandle } from "../../db/client.js";
 import { deliveryPerformance, deliveryPerformanceCsv } from "./delivery-performance.js";
+import { analyticsReport } from "./analytics.js";
 import { stopsReport, tripsReport } from "./segmentation.js";
 
 const QuerySchema = z.object({
@@ -95,6 +96,28 @@ export function registerReportRoutes(app: FastifyInstance, auth: AuthService, ha
         .send(deliveryPerformanceCsv(report));
     }
     return report;
+  });
+
+  app.get("/v1/reports/analytics", { preHandler: guard }, async (request, reply) => {
+    if (request.auth?.role === "driver") {
+      return reply.status(403).send({
+        type: "https://privatefleet.example/errors/report_staff_only",
+        title: "Request could not be completed",
+        status: 403,
+        code: "REPORT_STAFF_ONLY",
+        detail: "Reports require a staff account",
+        uiMessage: "Ask dispatch for the analytics report.",
+      });
+    }
+    const query = QuerySchema.parse(request.query ?? {});
+    const range = resolveRange(query.from, query.to, 7);
+    if ("error" in range) {
+      return sendRangeError(reply);
+    }
+    return analyticsReport(handle, request.auth?.tenantId ?? "", {
+      from: range.from,
+      to: range.to,
+    });
   });
 
   app.get("/v1/reports/trips", { preHandler: guard }, async (request, reply) => {
