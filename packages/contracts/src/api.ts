@@ -150,6 +150,17 @@ export const TrackingTokenCreateSchema = z.object({
 });
 export type TrackingTokenCreate = z.infer<typeof TrackingTokenCreateSchema>;
 
+/** Optional customer-notification consent carried on a tracking token (R6). */
+export const TrackingTokenNotifySchema = z
+  .object({
+    notifyEnabled: z.boolean().default(false),
+    recipientEmail: z.string().email().optional(),
+  })
+  .refine((value) => !value.notifyEnabled || Boolean(value.recipientEmail), {
+    message: "A recipient email is required when notifications are enabled",
+  });
+export type TrackingTokenNotify = z.infer<typeof TrackingTokenNotifySchema>;
+
 export const PublicTrackingStopSchema = z.object({
   sequence: z.number().int(),
   address: z.string(),

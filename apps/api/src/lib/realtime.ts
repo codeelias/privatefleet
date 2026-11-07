@@ -19,6 +19,11 @@ export interface RealtimeBus {
   publishBusiness(event: EventEnvelope): void;
   /** Telemetry is tenant-scoped: it can never leak to another room. */
   publishTelemetry(tenantId: string, position: VehiclePosition): void;
+  /**
+   * In-process fan-out for business events (docs/54 R6): modules subscribe
+   * without knowing about each other. Returns an unsubscribe function.
+   */
+  subscribeBusiness(subscriber: (event: EventEnvelope) => void): () => void;
   /** Closes the Socket.IO server (used on shutdown and in tests). */
   close(): Promise<void>;
 }
@@ -81,10 +86,24 @@ export function createRealtimeBus(
   };
   const coalesceMs = options.coalesceMs ?? 0;
   const pending = new Map<string, PendingTelemetry>();
+  const subscribers = new Set<(event: EventEnvelope) => void>();
 
   return {
     publishBusiness(event) {
       io.to(`tenant:${event.tenantId}`).emit("event", event);
+      for (const subscriber of subscribers) {
+        try {
+          subscriber(event);
+        } catch {
+          // A failing subscriber must never break publishing for others.
+        }
+      }
+    },
+    subscribeBusiness(subscriber) {
+      subscribers.add(subscriber);
+      return () => {
+        subscribers.delete(subscriber);
+      };
     },
     async close() {
       await io.close();

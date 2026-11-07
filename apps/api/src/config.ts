@@ -29,6 +29,10 @@ const EnvSchema = z.object({
   OSRM_BASE_URL: z.string().url().optional(),
   VROOM_BASE_URL: z.string().url().optional(),
   EVIDENCE_DIR: z.string().optional(),
+  /** Optional SMTP URL for customer notifications; unset = notifications are
+   *  recorded with status failed + detail 'SMTP not configured' (never a
+   *  false claim of delivery). */
+  SMTP_URL: z.string().optional(),
   IMPORT_SERVICE_CENTER_LAT: z.coerce.number().min(-90).max(90).default(51.5074),
   IMPORT_SERVICE_CENTER_LNG: z.coerce.number().min(-180).max(180).default(-0.1278),
   IMPORT_SERVICE_RADIUS_METERS: z.coerce.number().int().positive().default(80_000),
@@ -53,6 +57,7 @@ export interface AppConfig {
   osrmBaseUrl: string | undefined;
   vroomBaseUrl: string | undefined;
   evidenceDir: string;
+  smtpUrl: string | undefined;
   importServiceArea: { latitude: number; longitude: number; radiusMeters: number };
   name: string;
   version: string;
@@ -91,6 +96,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     osrmBaseUrl: data.OSRM_BASE_URL,
     vroomBaseUrl: data.VROOM_BASE_URL,
     evidenceDir: data.EVIDENCE_DIR ?? `${process.cwd()}/.data/evidence`,
+    smtpUrl: data.SMTP_URL,
     importServiceArea: {
       latitude: data.IMPORT_SERVICE_CENTER_LAT,
       longitude: data.IMPORT_SERVICE_CENTER_LNG,
