@@ -450,8 +450,7 @@ export const FleetOptimizationProposalSchema = z.object({
   runId: IdSchema,
   demoMode: z.literal(false),
   engine: z.literal("osrm+vroom"),
-  engineVersion: z.string(),
-  status: z.literal("succeeded"),
+  engineVersion: z.string(),  status: z.literal("succeeded"),
   scope: z.enum(["fleet", "subset"]),
   published: z.boolean(),
   publishedAt: z.string().datetime().optional(),
@@ -505,6 +504,18 @@ export const FleetOptimizationProposalSchema = z.object({
     .optional(),
 });
 export type FleetOptimizationProposal = z.infer<typeof FleetOptimizationProposalSchema>;
+
+/** Mid-day re-plan result (docs/54 R9): the published replacement plan. */
+export const ReplanResponseSchema = z.object({
+  runId: IdSchema,
+  routeId: IdSchema,
+  version: z.number().int().positive(),
+  publishedAt: z.string().datetime(),
+  distanceMetres: z.number().nonnegative(),
+  durationSeconds: z.number().nonnegative(),
+  stopCount: z.number().int().nonnegative(),
+});
+export type ReplanResponse = z.infer<typeof ReplanResponseSchema>;
 
 export const RouteWaypointSchema = z.object({
   /** Stable within a route version: routeId:waypoint:<sequence>. */
