@@ -1,3 +1,8 @@
+### v2.02 - P0 execution begins (2026-11-08)
+- docs/56 frozen as v1 product authority (baseline 5d6846a).
+- P0.1: pin tap targets enlarged via transparent padding around the byte-identical 36dp pin (screen position unchanged under any SDK anchor semantics); tap toast now shows the address. 1.4.6 on Phone 1; dense-route tap verification pending.
+- P0.3: backup restoration drill PASSED on the production host (13/13 table counts matched at the dump instant, 155/155 evidence hashes, scratch DB dropped).
+- P0.2: pending Phone 2 connection.
 ### v2.01 - Geofence UX repairs (2026-11-07)
 - Bodyless DELETE 400: the web client always sent content-type application/json; Fastify rejects empty JSON bodies instantly (FST_ERR_CTP_EMPTY_JSON_BODY - the exact 'request was not understood' message). The client now declares the type only when a body exists - fixes all bodyless requests in one place. Regression test added.
 - Geofence editor crash: editFence passed a single point array to fitBounds instead of two-corner bounds - maplibre threw LngLatLike. Bounds are now computed as [west,south]-[east,north]. Both were pre-existing latent bugs, fixed at their single call sites; no API changes.
