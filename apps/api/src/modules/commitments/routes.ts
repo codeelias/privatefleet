@@ -152,9 +152,14 @@ export function registerCommitmentRoutes(
           const evidence = stopIds.length === 0
             ? []
             : ((await db.execute(sql`
-                SELECT stop_id, kind, captured_at FROM stop_evidence
+                SELECT stop_id, kind, captured_at, created_at FROM stop_evidence
                 WHERE tenant_id = ${tenantId} AND stop_id IN ${stopIds}
-              `)) as unknown as Array<{ stop_id: string; kind: string; captured_at: Date | string }>);
+              `)) as unknown as Array<{
+                stop_id: string;
+                kind: string;
+                captured_at: Date | string;
+                created_at: Date | string;
+              }>);
           const policy = (await db.execute(sql`
             SELECT service_type, require_recipient, require_signature, require_photo, require_failure_photo
             FROM proof_policies
@@ -186,6 +191,9 @@ export function registerCommitmentRoutes(
             const capturedAt = stopEvidence
               .map((row) => new Date(row.captured_at).getTime())
               .reduce<number | null>((max, t) => (max === null || t > max ? t : max), null);
+            const serverReceivedAt = stopEvidence
+              .map((row) => new Date(row.created_at).getTime())
+              .reduce<number | null>((max, t) => (max === null || t > max ? t : max), null);
             const stopRevisions = revisions
               .filter((revision) => revision.stop_id === stop.id)
               .map((revision) => {
@@ -207,6 +215,7 @@ export function registerCommitmentRoutes(
                 status: stop.status,
                 jobCancelled: cancelled,
                 completedCapturedAt: capturedAt === null ? null : new Date(capturedAt).toISOString(),
+                serverReceivedAt: serverReceivedAt === null ? null : new Date(serverReceivedAt).toISOString(),
                 windowStart: new Date(stop.window_start).toISOString(),
                 windowEnd: new Date(stop.window_end).toISOString(),
                 evidenceKinds: stopEvidence.map((row) => row.kind),

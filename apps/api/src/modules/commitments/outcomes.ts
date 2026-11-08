@@ -66,20 +66,36 @@ export function deriveExceptionResolution(
   const confirmed = events.filter(
     (event) => (event.payload as { stage?: string }).stage === "confirmed",
   );
-  const failed = confirmed.find(
-    (event) => (event.payload as { outcome?: string }).outcome === "failed",
-  );
-  if (failed) {
+  const latestByOutcome = (outcome: "failed" | "resolved") => {
+    const matches = confirmed
+      .filter((event) => (event.payload as { outcome?: string }).outcome === outcome)
+      .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
+    return matches[0];
+  };
+  const latestFailed = latestByOutcome("failed");
+  const latestResolved = latestByOutcome("resolved");
+  // A failed attempt stays historically failed (append-only) but must never
+  // permanently block a SUBSEQUENT successful recovery: when both exist, the
+  // later outcome governs; a later failure governs over an earlier success.
+  if (latestFailed && latestResolved) {
+    if (new Date(latestResolved.occurredAt).getTime() > new Date(latestFailed.occurredAt).getTime()) {
+      return {
+        state: "resolved",
+        resolutionNote:
+          (latestResolved.payload as { resolutionNote?: string }).resolutionNote ?? undefined,
+        basis: "evidence",
+      };
+    }
     return { state: "response_failed", basis: "evidence" };
   }
-  const evidencedResolved = confirmed.find(
-    (event) => (event.payload as { outcome?: string }).outcome === "resolved",
-  );
-  if (evidencedResolved) {
+  if (latestFailed) {
+    return { state: "response_failed", basis: "evidence" };
+  }
+  if (latestResolved) {
     return {
       state: "resolved",
       resolutionNote:
-        (evidencedResolved.payload as { resolutionNote?: string }).resolutionNote ?? undefined,
+        (latestResolved.payload as { resolutionNote?: string }).resolutionNote ?? undefined,
       basis: "evidence",
     };
   }
@@ -99,6 +115,7 @@ export interface CommitmentStopFacts {
   status: string;
   jobCancelled: boolean;
   completedCapturedAt: string | null; // device-captured evidence time (docs/56)
+  serverReceivedAt: string | null; // server receipt of that evidence (server clock)
   windowStart: string;
   windowEnd: string;
   evidenceKinds: string[];
@@ -122,18 +139,32 @@ export interface DerivedCommitmentOutcome {
   revisedTiming: TimingOutcome | "not_applicable";
 }
 
+/**
+ * Timing with INDEPENDENT corroboration (docs/56): a device-reported
+ * timestamp is never trusted on its own. The true event time lies in the
+ * interval [device captured_at, server receipt created_at]; the server clock
+ * brackets the device clock. A timing class is asserted only when BOTH ends
+ * of the interval agree with it - any straddle, or a missing endpoint,
+ * returns timing_unverified. This can only widen to unverified, never
+ * falsely verify.
+ */
 function timingOf(
   capturedAt: string | null,
+  serverReceivedAt: string | null,
   windowStart: string,
   windowEnd: string,
 ): TimingOutcome {
-  if (capturedAt == null) return "timing_unverified";
-  const t = new Date(capturedAt).getTime();
+  if (capturedAt == null || serverReceivedAt == null) return "timing_unverified";
+  const deviceT = new Date(capturedAt).getTime();
+  const serverT = new Date(serverReceivedAt).getTime();
+  const lower = Math.min(deviceT, serverT);
+  const upper = Math.max(deviceT, serverT);
   const start = new Date(windowStart).getTime();
   const end = new Date(windowEnd).getTime();
-  if (t < start) return "early";
-  if (t > end) return "late";
-  return "within_window";
+  if (upper < start) return "early";
+  if (lower > end) return "late";
+  if (lower >= start && upper <= end) return "within_window";
+  return "timing_unverified"; // interval straddles a boundary: not corroborated
 }
 
 /**
@@ -153,7 +184,7 @@ export function deriveCommitmentOutcome(stop: CommitmentStopFacts): DerivedCommi
 
   const completed = operational === "completed";
   const originalTiming: TimingOutcome = completed
-    ? timingOf(stop.completedCapturedAt, stop.windowStart, stop.windowEnd)
+    ? timingOf(stop.completedCapturedAt, stop.serverReceivedAt, stop.windowStart, stop.windowEnd)
     : "not_applicable";
 
   let revisedTiming: TimingOutcome | "not_applicable" = "not_applicable";
@@ -166,7 +197,7 @@ export function deriveCommitmentOutcome(stop: CommitmentStopFacts): DerivedCommi
     if (applicable.length > 0) {
       const latest = applicable[applicable.length - 1];
       if (latest) {
-        revisedTiming = timingOf(stop.completedCapturedAt, latest.windowStart, latest.windowEnd);
+        revisedTiming = timingOf(stop.completedCapturedAt, stop.serverReceivedAt, latest.windowStart, latest.windowEnd);
       }
     }
   }

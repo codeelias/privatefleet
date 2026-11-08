@@ -7,41 +7,54 @@ import { describe, expect, it } from "vitest";
 import { deriveCommitmentOutcome, deriveExceptionResolution } from "./outcomes.js";
 import type { ResponseEventRow } from "./response-actions.js";
 
-function event(payload: Record<string, unknown>): ResponseEventRow {
+function event(payload: Record<string, unknown>, occurredAt?: string): ResponseEventRow {
   return {
     id: payload.id as string ?? "e1",
     episodeId: "ep1",
     type: "response.other",
     actorId: "a1",
     payload,
-    occurredAt: new Date(0).toISOString(),
+    occurredAt: occurredAt ?? new Date(0).toISOString(),
   };
 }
 
 describe("deriveExceptionResolution", () => {
-  it("a failed confirmed response can NEVER derive resolved", () => {
+  it("a failed initial attempt never blocks a subsequent successful recovery", () => {
+    // Reviewer sequence: contact failed -> reassign confirmed -> evidence resolved.
     const resolution = deriveExceptionResolution(
       { status: "open" },
       [
-        event({ stage: "confirmed", outcome: "failed" }),
-        event({ stage: "confirmed", outcome: "resolved" }), // even with a resolved event later
+        event({ id: "f1", stage: "confirmed", outcome: "failed" }, "2026-11-08T10:00:00.000Z"),
+        event({ id: "r1", stage: "confirmed", outcome: "resolved", resolutionNote: "new driver progressing" }, "2026-11-08T10:30:00.000Z"),
       ],
-    );
-    expect(resolution.state).not.toBe("resolved");
-    expect(resolution.state).toBe("response_failed");
-  });
-
-  it("derives resolved from confirmed response evidence", () => {
-    const resolution = deriveExceptionResolution(
-      { status: "open" },
-      [event({ stage: "confirmed", outcome: "resolved", resolutionNote: "driver took the parcel" })],
     );
     expect(resolution.state).toBe("resolved");
     expect(resolution.basis).toBe("evidence");
-    expect(resolution.resolutionNote).toBe("driver took the parcel");
+    expect(resolution.resolutionNote).toBe("new driver progressing");
+    // The failed event itself stays in the append-only store (history is
+    // never mutated - the store keeps every event; see response-actions tests).
   });
 
-  it("episode-level resolved carries its note; closed never implies recovery", () => {
+  it("a failed outcome with no later success can never derive resolved", () => {
+    const resolution = deriveExceptionResolution(
+      { status: "open" },
+      [event({ stage: "confirmed", outcome: "failed" })],
+    );
+    expect(resolution.state).toBe("response_failed");
+  });
+
+  it("a failure occurring AFTER a success governs (latest outcome wins)", () => {
+    const resolution = deriveExceptionResolution(
+      { status: "open" },
+      [
+        event({ stage: "confirmed", outcome: "resolved" }, "2026-11-08T10:00:00.000Z"),
+        event({ stage: "confirmed", outcome: "failed" }, "2026-11-08T10:30:00.000Z"),
+      ],
+    );
+    expect(resolution.state).toBe("response_failed");
+  });
+
+  it("episode-level resolved (threat cleared) dominates; closed never implies recovery", () => {
     expect(deriveExceptionResolution({ status: "resolved", resolutionNote: "threat_cleared" }, []).state).toBe("resolved");
     const closed = deriveExceptionResolution({ status: "closed", closeReason: "duplicate" }, [event({ stage: "confirmed", outcome: "resolved" })]);
     expect(closed.state).toBe("closed");
@@ -60,6 +73,7 @@ describe("deriveCommitmentOutcome", () => {
     status: "completed",
     jobCancelled: false,
     completedCapturedAt: "2026-11-08T10:00:00.000Z",
+    serverReceivedAt: "2026-11-08T10:00:30.000Z",
     windowStart: "2026-11-08T09:00:00.000Z",
     windowEnd: "2026-11-08T11:00:00.000Z",
     evidenceKinds: ["photo"],
@@ -74,14 +88,27 @@ describe("deriveCommitmentOutcome", () => {
     expect(outcome.evidenceCompleteness).toBe("complete");
   });
 
-  it("timing_unverified when no captured evidence time - server receipt is never used", () => {
-    const outcome = deriveCommitmentOutcome({ ...base, completedCapturedAt: null });
-    expect(outcome.timing).toBe("timing_unverified");
+  it("a device timestamp alone can NEVER verify timing - corroboration required", () => {
+    expect(deriveCommitmentOutcome({ ...base, serverReceivedAt: null }).timing).toBe("timing_unverified");
+    expect(deriveCommitmentOutcome({ ...base, completedCapturedAt: null }).timing).toBe("timing_unverified");
   });
 
-  it("early and late from captured evidence time", () => {
-    expect(deriveCommitmentOutcome({ ...base, completedCapturedAt: "2026-11-08T08:30:00.000Z" }).timing).toBe("early");
-    expect(deriveCommitmentOutcome({ ...base, completedCapturedAt: "2026-11-08T12:00:00.000Z" }).timing).toBe("late");
+  it("early and late require BOTH endpoints outside the window", () => {
+    expect(deriveCommitmentOutcome({
+      ...base, completedCapturedAt: "2026-11-08T08:30:00.000Z", serverReceivedAt: "2026-11-08T08:30:30.000Z",
+    }).timing).toBe("early");
+    expect(deriveCommitmentOutcome({
+      ...base, completedCapturedAt: "2026-11-08T12:00:00.000Z", serverReceivedAt: "2026-11-08T12:00:30.000Z",
+    }).timing).toBe("late");
+  });
+
+  it("an interval straddling a window boundary is timing_unverified, never guessed", () => {
+    expect(deriveCommitmentOutcome({
+      ...base, completedCapturedAt: "2026-11-08T08:59:00.000Z", serverReceivedAt: "2026-11-08T09:30:00.000Z",
+    }).timing).toBe("timing_unverified");
+    expect(deriveCommitmentOutcome({
+      ...base, completedCapturedAt: "2026-11-08T10:59:00.000Z", serverReceivedAt: "2026-11-08T11:30:00.000Z",
+    }).timing).toBe("timing_unverified");
   });
 
   it("skipped is unconfirmed, not terminal not_delivered; failed is not_delivered; cancelled is cancelled", () => {
@@ -100,6 +127,7 @@ describe("deriveCommitmentOutcome", () => {
     const outcome = deriveCommitmentOutcome({
       ...base,
       completedCapturedAt: "2026-11-08T11:30:00.000Z", // late against the ORIGINAL window
+      serverReceivedAt: "2026-11-08T11:30:30.000Z",
       revisions: [
         {
           windowStart: "2026-11-08T11:00:00.000Z",
@@ -121,3 +149,4 @@ describe("deriveCommitmentOutcome", () => {
     expect(outcome.evidenceCompleteness).toBe("not_applicable");
   });
 });
+
