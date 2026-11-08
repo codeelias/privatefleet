@@ -36,6 +36,7 @@ import { registerDiagnosticsRoutes } from "./modules/diagnostics/routes.js";
 import { registerPublicTrackingRoutes } from "./modules/tracking/public-tracking-routes.js";
 import { NotificationService, UnconfiguredTransport } from "./modules/notifications/service.js";
 import { registerNotificationRoutes } from "./modules/notifications/routes.js";
+import { registerCommitmentRoutes } from "./modules/commitments/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
 
 export interface DemoContext {
@@ -390,6 +391,7 @@ export function buildApp(config: AppConfig): {
     );
     notifications.start(bus);
     registerNotificationRoutes(app, auth, notifications);
+    registerCommitmentRoutes(app, auth, db);
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter, db);
     registerTrackingRoutes(app, auth, bus, db);
     registerPositioningDiagnosticsRoutes(app, auth);
