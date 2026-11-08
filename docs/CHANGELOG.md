@@ -1,3 +1,6 @@
+### v2.06 - Off-site backup replication repaired (2026-11-08)
+- Root cause: the backup task ran as SYSTEM/deploy while GoogleDriveFS mounts G: per interactive user. Task Run As changed to the interactive user (Amela) by the owner.
+- Verified: two consecutive runs logged targets including G:\My Drive\PrivateFleet_Backups with no WARN (the script appends G: only after the copy succeeds; SHA256 checksums recorded). The G: leg had never landed since the log began (29 Oct) - backups were single-site until this fix; D: had succeeded nightly throughout.
 ### v2.05 - Slice 2 reconciliation (2026-11-08)
 - Lifecycle corrected to the frozen docs/56: a demonstrably cleared threat (2 consecutive clears) now RESOLVES (status resolved, resolved_at, resolution_note 'threat_cleared'); closed is reserved for duplicate/invalidated/superseded.
 - Opening evidence preserved: opened_reasons/opened_plan_version are set once and never overwritten by context refresh (migration 0023).
