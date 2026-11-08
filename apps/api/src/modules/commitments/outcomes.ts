@@ -66,38 +66,30 @@ export function deriveExceptionResolution(
   const confirmed = events.filter(
     (event) => (event.payload as { stage?: string }).stage === "confirmed",
   );
-  const latestByOutcome = (outcome: "failed" | "resolved") => {
-    const matches = confirmed
-      .filter((event) => (event.payload as { outcome?: string }).outcome === outcome)
-      .sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime());
-    return matches[0];
-  };
-  const latestFailed = latestByOutcome("failed");
-  const latestResolved = latestByOutcome("resolved");
-  // A failed attempt stays historically failed (append-only) but must never
-  // permanently block a SUBSEQUENT successful recovery: when both exist, the
-  // later outcome governs; a later failure governs over an earlier success.
-  if (latestFailed && latestResolved) {
-    if (new Date(latestResolved.occurredAt).getTime() > new Date(latestFailed.occurredAt).getTime()) {
-      return {
-        state: "resolved",
-        resolutionNote:
-          (latestResolved.payload as { resolutionNote?: string }).resolutionNote ?? undefined,
-        basis: "evidence",
-      };
-    }
-    return { state: "response_failed", basis: "evidence" };
-  }
-  if (latestFailed) {
-    return { state: "response_failed", basis: "evidence" };
-  }
-  if (latestResolved) {
+  const resolvedEvidence = confirmed.filter(
+    (event) => (event.payload as { outcome?: string }).outcome === "resolved",
+  );
+  const failedEvidence = confirmed.filter(
+    (event) => (event.payload as { outcome?: string }).outcome === "failed",
+  );
+  // A confirmed recovery RESOLVES the episode and the resolution stands:
+  // later failed actions (for example a failed customer notification after a
+  // successful reassignment) are preserved in the timeline but never revoke
+  // an established recovery. A failed outcome matters only when there is NO
+  // successful recovery evidence at all.
+  if (resolvedEvidence.length > 0) {
+    const latestResolved = [...resolvedEvidence].sort(
+      (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
+    )[0];
     return {
       state: "resolved",
       resolutionNote:
-        (latestResolved.payload as { resolutionNote?: string }).resolutionNote ?? undefined,
+        (latestResolved?.payload as { resolutionNote?: string } | undefined)?.resolutionNote ?? undefined,
       basis: "evidence",
     };
+  }
+  if (failedEvidence.length > 0) {
+    return { state: "response_failed", basis: "evidence" };
   }
   if (confirmed.length > 0) {
     return { state: "response_in_progress", basis: "none" };
@@ -114,8 +106,16 @@ export function deriveExceptionResolution(
 export interface CommitmentStopFacts {
   status: string;
   jobCancelled: boolean;
-  completedCapturedAt: string | null; // device-captured evidence time (docs/56)
-  serverReceivedAt: string | null; // server receipt of that evidence (server clock)
+  /**
+   * Independent handover evidence (docs/56): a SERVER-clock bracket from
+   * records other than the device-reported timestamp - the receipt time of a
+   * position fix within the completion radius (server clock) and the receipt
+   * time of the completion evidence (server clock). Device and server
+   * timestamps being close together proves only that RECORDS arrived close
+   * together, never when the physical handover occurred - so null (no
+   * independent bracket) always yields timing_unverified.
+   */
+  handoverBracket: { start: string; end: string } | null;
   windowStart: string;
   windowEnd: string;
   evidenceKinds: string[];
@@ -140,31 +140,25 @@ export interface DerivedCommitmentOutcome {
 }
 
 /**
- * Timing with INDEPENDENT corroboration (docs/56): a device-reported
- * timestamp is never trusted on its own. The true event time lies in the
- * interval [device captured_at, server receipt created_at]; the server clock
- * brackets the device clock. A timing class is asserted only when BOTH ends
- * of the interval agree with it - any straddle, or a missing endpoint,
- * returns timing_unverified. This can only widen to unverified, never
- * falsely verify.
+ * Timing requires an independently corroborated handover bracket: BOTH ends
+ * are server-clock records (position-fix receipt + evidence receipt). A
+ * timing class is asserted only when the whole bracket agrees; any straddle
+ * or a missing bracket returns timing_unverified.
  */
 function timingOf(
-  capturedAt: string | null,
-  serverReceivedAt: string | null,
+  bracket: { start: string; end: string } | null,
   windowStart: string,
   windowEnd: string,
 ): TimingOutcome {
-  if (capturedAt == null || serverReceivedAt == null) return "timing_unverified";
-  const deviceT = new Date(capturedAt).getTime();
-  const serverT = new Date(serverReceivedAt).getTime();
-  const lower = Math.min(deviceT, serverT);
-  const upper = Math.max(deviceT, serverT);
+  if (bracket == null) return "timing_unverified";
+  const lower = new Date(bracket.start).getTime();
+  const upper = new Date(bracket.end).getTime();
   const start = new Date(windowStart).getTime();
   const end = new Date(windowEnd).getTime();
   if (upper < start) return "early";
   if (lower > end) return "late";
   if (lower >= start && upper <= end) return "within_window";
-  return "timing_unverified"; // interval straddles a boundary: not corroborated
+  return "timing_unverified"; // straddles a boundary: not corroborated
 }
 
 /**
@@ -184,20 +178,20 @@ export function deriveCommitmentOutcome(stop: CommitmentStopFacts): DerivedCommi
 
   const completed = operational === "completed";
   const originalTiming: TimingOutcome = completed
-    ? timingOf(stop.completedCapturedAt, stop.serverReceivedAt, stop.windowStart, stop.windowEnd)
+    ? timingOf(stop.handoverBracket, stop.windowStart, stop.windowEnd)
     : "not_applicable";
 
   let revisedTiming: TimingOutcome | "not_applicable" = "not_applicable";
-  if (completed && stop.revisions.length > 0) {
+  if (completed && stop.handoverBracket != null && stop.revisions.length > 0) {
     // Latest revision whose effective time is not after the completion time.
-    const t = stop.completedCapturedAt == null ? Number.POSITIVE_INFINITY : new Date(stop.completedCapturedAt).getTime();
+    const t = new Date(stop.handoverBracket.end).getTime();
     const applicable = stop.revisions.filter(
       (revision) => revision.effectiveAt == null || new Date(revision.effectiveAt).getTime() <= t,
     );
     if (applicable.length > 0) {
       const latest = applicable[applicable.length - 1];
       if (latest) {
-        revisedTiming = timingOf(stop.completedCapturedAt, stop.serverReceivedAt, latest.windowStart, latest.windowEnd);
+        revisedTiming = timingOf(stop.handoverBracket, latest.windowStart, latest.windowEnd);
       }
     }
   }
