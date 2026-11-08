@@ -62,15 +62,22 @@ the off-host cloud copy is failing, leaving a single-site backup.
 ## Acceptance gate status
 
 ```text
-P0.1  implemented + deployed + partially verified  (dense-route tap test pending)
-P0.2  DEFERRED BY OWNER — device not available
-P0.3  DB drill PASS · evidence files covered by nightly encrypted backup ·
-      decryption-path drill pending (key off-host) · cloud copy failing
+P0.1  COMPLETE — accepted by review 2026-11-08 (8/8 exact-coordinate PASS,
+      neighbouring independence, padded targets, zero state changes;
+      docs/58). Retained limitations: P/D pins coincident at city zoom
+      (zoom-in needed); follow-mode tap behaviour not independently
+      demonstrated; TelemetryService permission-ordering defect recorded
+      separately (fix shipped in 1.4.9, commit 86c5782).
+P0.2  OWNER-DEFERRED — device not available
+P0.3  DB drill PASS · off-site G: copy GREEN (dual targets verified)
+      encrypted-archive decryption drill pending (key machine)
+P1    slice 1 + slice 2 done; slice 2 lifecycle reconciliation ALREADY
+      SHIPPED (v2.05): threat_cleared -> status 'resolved' + resolution_note,
+      per docs/56 (deployed + tested, commit 0384718).
 ```
 
 P1 (Commitment Recovery v1): authorised BY OWNER DIRECTIVE (2026-11-08) to
-proceed while the two device-dependent P0 items (P0.1 dense-route tap, P0.2
-second device) and the parked G: item remain open. P0 is NOT complete; the
-directive does not close it. Statuses stay separate: deployment is verified,
-automated episode creation/recurrence are tested, live positive episode
-creation is NOT yet demonstrated.
+proceed while the device-dependent P0 items remain open. P0 is NOT complete
+as a whole; the directive does not close it. Statuses stay separate:
+deployment is verified, automated episode creation/recurrence are tested,
+live positive episode creation is NOT yet demonstrated.
