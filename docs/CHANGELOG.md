@@ -1,3 +1,7 @@
+### v2.03 - P1 begins: Commitment Risk Engine, pure slice (2026-11-08)
+- Owner directive: proceed past the parked G: cloud-copy gap (external-disk D: backup confirmed working). P1 started under docs/55.
+- New pure module commitments/commitment-risk.ts: explainable threat assessment (planned_breach late; window_pressure at_risk; stationary_diminishing_margin at_risk with fresh-fix and thin-margin guards). Stale plans and stale fixes never scored; fingerprints are scope+threat-class only (plan version is provenance, never identity). 11 unit tests.
+- P0 status unchanged in docs/57: P0.1 dense-route tap pending, P0.2 owner-deferred, P0.3 DB drill PASS + parked cloud gap.
 ### v2.02 - P0 execution begins (2026-11-08)
 - docs/56 frozen as v1 product authority (baseline 5d6846a).
 - P0.1: pin tap targets enlarged via transparent padding around the byte-identical 36dp pin (screen position unchanged under any SDK anchor semantics); tap toast now shows the address. 1.4.6 on Phone 1; dense-route tap verification pending.
