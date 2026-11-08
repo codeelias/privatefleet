@@ -70,10 +70,12 @@ const ACTIVE = sql`status IN ('open','investigating','response_in_progress')`;
 
 /**
  * Apply one assessment. Idempotent by construction: the partial unique index
- * admits one active episode per fingerprint. Threat observations refresh
- * context (reasons, plan provenance) and reset the clear counter; consecutive
- * clear observations (CLEARS_TO_CLOSE) close the episode with the recorded
- * reason 'threat_cleared'.
+ * admits one active episode per fingerprint. Threat observations refresh the
+ * LATEST context (reasons, plan provenance) without touching the OPENING
+ * evidence (opened_reasons, opened_plan_version). A demonstrably cleared
+ * threat (consecutive clears) is RESOLVED with the recorded resolution note
+ * 'threat_cleared' - docs/56: resolved = threat addressed, supported by
+ * evidence; closed is reserved for duplicate/invalidated/superseded.
  */
 export async function applyAssessment(
   handle: DbHandle,
@@ -87,11 +89,13 @@ export async function applyAssessment(
     if (assessment.kind === "threat") {
       await db.execute(sql`
         INSERT INTO exception_episodes
-          (tenant_id, job_id, stop_id, threat_class, level, fingerprint, reasons, plan_version, status)
+          (tenant_id, job_id, stop_id, threat_class, level, fingerprint, reasons, plan_version,
+           opened_reasons, opened_plan_version, status)
         VALUES
           (${tenantId}, ${jobId}, ${assessment.scopeId}, ${assessment.threatClass},
            ${assessment.level}, ${assessment.fingerprint}, ${JSON.stringify(assessment.reasons)}::jsonb,
-           ${planVersion}, 'open')
+           ${planVersion},
+           ${JSON.stringify(assessment.reasons)}::jsonb, ${planVersion}, 'open')
         ON CONFLICT (tenant_id, fingerprint) WHERE status IN ('open','investigating','response_in_progress')
         DO NOTHING
       `);
@@ -112,9 +116,9 @@ export async function applyAssessment(
       return rows[0] ? toRow(rows[0]) : null;
     }
 
-    // No threat: every open episode for this stop moves one step closer to an
-    // explicitly recorded close. Consecutive clears are required, so a single
-    // transient observation can never close an episode.
+    // No threat: every open episode for this stop moves one step closer to a
+    // recorded RESOLUTION. Consecutive clears are required, so a single
+    // transient observation can never resolve an episode.
     const incremented = (await db.execute(sql`
       UPDATE exception_episodes
       SET clear_count = clear_count + 1
@@ -125,7 +129,7 @@ export async function applyAssessment(
       if (Number(row.clear_count) >= CLEARS_TO_CLOSE) {
         await db.execute(sql`
           UPDATE exception_episodes
-          SET status = 'closed', closed_at = now(), close_reason = 'threat_cleared'
+          SET status = 'resolved', resolved_at = now(), resolution_note = 'threat_cleared'
           WHERE id = ${row.id} AND status = 'open'
         `);
       }
@@ -165,15 +169,22 @@ export async function activeEpisodes(
   });
 }
 
+export interface CommitmentLogger {
+  warn(msg: string, extra?: unknown): void;
+}
+
 /**
  * Evaluate the driver's open stops against their live fix (docs/56: risk over
  * LIVE data only). Loads everything in one read transaction, then applies
  * each assessment in its own transaction - never nested, never blocking.
+ * Failures never propagate to telemetry, but they are ALWAYS logged through
+ * the supplied logger (background failures must never disappear silently).
  */
 export async function evaluateDriverCommitments(
   handle: DbHandle,
   tenantId: string,
   driverId: string,
+  logger?: CommitmentLogger,
 ): Promise<void> {
   const context = await withTenant(handle, tenantId, async (db) => {
     const fixRows = (await db.execute(sql`
@@ -253,8 +264,14 @@ export async function evaluateDriverCommitments(
         fixAccuracyMetres: fix.accuracy_metres,
         stationarySinceMs,
       }, stop.version);
-    } catch {
-      // Best-effort: episode evaluation must never disturb telemetry ingest.
+    } catch (error) {
+      // Best-effort: episode evaluation must never disturb telemetry ingest -
+      // but the failure must remain observable.
+      logger?.warn("commitment evaluation failed for a stop", {
+        driverId,
+        stopId: stop.stop_id,
+        error,
+      });
     }
   }
 }

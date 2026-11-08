@@ -66,9 +66,12 @@ export function registerTrackingRoutes(
         bus.publishTelemetry(tenantId, position);
       }
       // P1 commitment evaluation: best-effort, fire-and-forget. A failed
-      // episode evaluation must never disturb telemetry ingestion.
+      // episode evaluation must never disturb telemetry ingestion, but it is
+      // logged - background failures never disappear silently.
       if (outcome.positions.length > 0) {
-        void evaluateDriverCommitments(handle, tenantId, driverId).catch(() => undefined);
+        void evaluateDriverCommitments(handle, tenantId, driverId, request.log).catch(
+          (err) => request.log.warn({ err }, "commitment evaluation failed"),
+        );
       }
       return outcome.result;
     } catch (err) {
