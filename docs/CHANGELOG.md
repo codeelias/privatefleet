@@ -1,3 +1,7 @@
+### v2.09 - P1 slice 3: response actions + closed contract (2026-11-08)
+- Slice 2 reconciliation COMPLETE: threat_cleared resolves (already shipped v2.05); NEW closeEpisode contract - closed = duplicate/invalidated/superseded only, never implies recovery (tested).
+- Response actions: typed append-only job_events (response.contact_driver/notify_customer/reassign/reschedule/other), actor-attributed, episode-correlated (episode_id column), attempts and confirmed outcomes as SEPARATE events, reassignment references the canonical assignment event, idempotency enforced by a partial unique index (ON CONFLICT DO NOTHING). No separate actions table. Dispatcher-only HTTP endpoints.
+- Gate: API 163/163, web 53/53. Deployed: columns/index verified live; endpoints 401 unauthed / 200 fleet state.
 ### v2.08 - GPS stoppage: architectural permission fix (2026-11-08)
 - Root cause (live-captured): TelemetryService called startForeground(FOREGROUND_SERVICE_TYPE_LOCATION) BEFORE checking ACCESS_FINE_LOCATION; with the permission missing it threw SecurityException and Android restarted it in an endless crash loop - telemetry stopped.
 - Architectural fix: permission verified BEFORE startForeground; startForeground wrapped (clean stopSelf on SecurityException); MainActivity.onResume re-prompts when the permission is missing; the existing grant handler restarts the service automatically.
