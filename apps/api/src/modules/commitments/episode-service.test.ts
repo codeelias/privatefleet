@@ -12,6 +12,7 @@ import {
   activeEpisodes,
   applyAssessment,
   CLEARS_TO_CLOSE,
+  closeEpisode,
   evaluateDriverCommitments,
   evaluateStop,
 } from "./episode-service.js";
@@ -126,6 +127,50 @@ describe("exception episode lifecycle", () => {
     const reopened = await applyAssessment(migrator, tenantId, jobId, stopId, threat, 14);
     expect(reopened?.status).toBe("open");
     expect(reopened?.id).not.toBe(opened?.id);
+  });
+
+  it("closeEpisode records duplicate/invalidated/superseded and never implies recovery", async () => {
+    const register = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        tenantName: "Close Co",
+        email: `close-${randomUUID().slice(0, 8)}@example.test`,
+        password: "correct horse battery staple",
+      },
+    });
+    const tenantId = (register.json() as { tenant: { id: string } }).tenant.id;
+    createdTenants.push(tenantId);
+    const sql = migrator.sql;
+    const jobId = randomUUID();
+    const stopId = randomUUID();
+    await sql`INSERT INTO jobs (id, tenant_id, reference, service_type, priority, status)
+      VALUES (${jobId}, ${tenantId}, 'CLS-1', 'Pickup', 'standard', 'assigned')`;
+    await sql`INSERT INTO job_stops (id, tenant_id, job_id, sequence, stop_type, address, latitude, longitude, window_start, window_end, status)
+      VALUES (${stopId}, ${tenantId}, ${jobId}, 1, 'pickup', '1 Close Way', 51.5, -0.1,
+        now() - interval '30 minutes', now() + interval '45 minutes', 'pending')`;
+    const threat: RiskAssessment = {
+      kind: "threat",
+      scope: "stop",
+      scopeId: stopId,
+      threatClass: "planned_breach",
+      level: "late",
+      reasons: ["planned arrival is after the committed window"],
+      fingerprint: `stop:${stopId}:planned_breach`,
+    };
+    const opened = await applyAssessment(migrator, tenantId, jobId, stopId, threat, 1);
+    expect(opened?.status).toBe("open");
+
+    const closedOk = await closeEpisode(migrator, tenantId, opened!.id, "duplicate");
+    expect(closedOk).toBe(true);
+    const closed = (await sql`
+      SELECT status, close_reason, resolution_note FROM exception_episodes
+      WHERE tenant_id = ${tenantId} AND id = ${opened!.id}
+    `) as unknown as Array<{ status: string; close_reason: string | null; resolution_note: string | null }>;
+    expect(closed[0]?.status).toBe("closed");
+    expect(closed[0]?.close_reason).toBe("duplicate");
+    expect(closed[0]?.resolution_note).toBeNull(); // closed NEVER implies recovery
+    expect(await closeEpisode(migrator, tenantId, opened!.id, "superseded")).toBe(false); // inactive: no-op
   });
 
   it("evaluateStop wires the pure engine to the episode store", async () => {
