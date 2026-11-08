@@ -1,3 +1,7 @@
+### v2.11 - Slice 4 semantic reconciliation (2026-11-08)
+- Timing corroboration: a device timestamp alone can NEVER establish early/late/within_window. Timing is asserted only when the whole interval [device captured_at, server receipt created_at] agrees on the class; any straddle or missing endpoint = timing_unverified. Live result reconciled: completed job timing=late is corroborated by two agreeing clocks (device 06:29:32.365, server 06:29:32.410, both ~18h after window_end).
+- Failed-response dominance corrected: a failed attempt stays historically recorded but a SUBSEQUENT confirmed recovery resolves the episode; the latest confirmed outcome governs (tested: reviewer sequence + failure-after-success).
+- Gate: API 176/176, web 53/53.
 ### v2.10 - P1 slice 4: derived resolution + commitment outcomes (2026-11-08)
 - Pre-check shipped: response idempotency now uses request hashes - same key + same payload = replay (original event id); same key + different payload = 409 IDEMPOTENCY_CONFLICT; nothing is ever written twice (tested).
 - Slice 4: exception resolution DERIVED from episode lifecycle + recorded response evidence. A failed confirmed response pins the state to response_failed - never resolved (failed dominates, tested). closed never implies recovery.
