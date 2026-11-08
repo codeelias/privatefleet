@@ -169,6 +169,31 @@ export async function activeEpisodes(
   });
 }
 
+export type CloseReason = "duplicate" | "invalidated" | "superseded";
+
+/**
+ * Close an ACTIVE episode with an explicitly recorded non-recovery reason
+ * (docs/56: closed = duplicate / invalidated / superseded). Closing NEVER
+ * implies recovery - a resolved episode has resolution_note set; a closed
+ * episode never does.
+ */
+export async function closeEpisode(
+  handle: DbHandle,
+  tenantId: string,
+  episodeId: string,
+  reason: CloseReason,
+): Promise<boolean> {
+  return withTenant(handle, tenantId, async (db) => {
+    const rows = (await db.execute(sql`
+      UPDATE exception_episodes
+      SET status = 'closed', closed_at = now(), close_reason = ${reason}
+      WHERE tenant_id = ${tenantId} AND id = ${episodeId} AND ${ACTIVE}
+      RETURNING id
+    `)) as unknown as Array<{ id: string }>;
+    return rows.length > 0;
+  });
+}
+
 export interface CommitmentLogger {
   warn(msg: string, extra?: unknown): void;
 }
