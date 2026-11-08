@@ -1,3 +1,8 @@
+### v2.07 - P0.1 dense-route tap verification COMPLETE (2026-11-08)
+- Test environment corrected: synthetic tenant stops snapped to real roads via OSRM nearest, route via OSRM (1,143-point road-following), then deleted after the test.
+- Exact-coordinate instrumentation (mapview offset + camera + per-stop pinpos) and a no-blind-taps protocol: 8/8 PASS including neighbouring-pin independence and padded-target consistency; before/after DB 40 pending = zero accidental state changes (docs/58).
+- Phone restored to Tom with precise always-on location; telemetry live-verified (46 s); production counts back to baseline; Tom v125 intact.
+- Separately recorded (no code change): TelemetryService permission-ordering crash - fix proposed, not applied.
 ### v2.06 - Off-site backup replication repaired (2026-11-08)
 - Root cause: the backup task ran as SYSTEM/deploy while GoogleDriveFS mounts G: per interactive user. Task Run As changed to the interactive user (Amela) by the owner.
 - Verified: two consecutive runs logged targets including G:\My Drive\PrivateFleet_Backups with no WARN (the script appends G: only after the copy succeeds; SHA256 checksums recorded). The G: leg had never landed since the log began (29 Oct) - backups were single-site until this fix; D: had succeeded nightly throughout.
