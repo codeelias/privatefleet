@@ -98,15 +98,24 @@ describe("response actions", () => {
     });
     expect(confirmed.eventId).toBeTruthy();
 
-    // 2. Idempotency: the same key twice yields ONE event.
-    const dup = await recordResponseAction(migrator, tenantId, jobId, actorId, {
+    // 2. Idempotency: same key + same payload = replay (ONE event, original id).
+    const replay = await recordResponseAction(migrator, tenantId, jobId, actorId, {
       episodeId, actionType: "contact_driver", stage: "attempt", idempotencyKey: attemptKey,
       payload: { channel: "phone" },
     });
-    expect(dup.duplicate).toBe(true);
-    expect(dup.eventId).toBeNull();
+    expect(replay.replayed).toBe(true);
+    expect(replay.conflict).toBe(false);
+    expect(replay.eventId).toBe(attempt.eventId);
+
+    // 2b. Same key + DIFFERENT payload = conflict, and NO new event is written.
+    const conflict = await recordResponseAction(migrator, tenantId, jobId, actorId, {
+      episodeId, actionType: "contact_driver", stage: "attempt", idempotencyKey: attemptKey,
+      payload: { channel: "phone", different: true },
+    });
+    expect(conflict.conflict).toBe(true);
+    expect(conflict.eventId).toBeNull();
     const events = await responseEvents(migrator, tenantId, episodeId);
-    expect(events).toHaveLength(2);
+    expect(events).toHaveLength(2); // attempt + confirmed only; conflict wrote nothing
     expect(events[0]?.type).toBe("response.contact_driver");
     expect(events[0]?.actorId).toBe(actorId);
     const stages = new Set(
@@ -130,7 +139,7 @@ describe("response actions", () => {
     `) as unknown as Array<{ count: number }>;
     expect(canonicalCount[0]?.count).toBe(1); // referenced, never duplicated
 
-    // 4. HTTP: dispatcher-only, duplicate rejected.
+    // 4. HTTP: dispatcher-only; replay 200; different-payload reuse 409 conflict.
     const viaHttp = await app.inject({
       method: "POST",
       url: `/v1/fleet/jobs/${jobId}/response`,
@@ -142,7 +151,7 @@ describe("response actions", () => {
     });
     expect(viaHttp.statusCode).toBe(200);
 
-    const duplicateHttp = await app.inject({
+    const replayHttp = await app.inject({
       method: "POST",
       url: `/v1/fleet/jobs/${jobId}/response`,
       headers: authed,
@@ -151,7 +160,20 @@ describe("response actions", () => {
         idempotencyKey: attemptKey, payload: { channel: "phone" },
       },
     });
-    expect(duplicateHttp.statusCode).toBe(409);
+    expect(replayHttp.statusCode).toBe(200);
+    expect((replayHttp.json() as { replayed: boolean }).replayed).toBe(true);
+
+    const conflictHttp = await app.inject({
+      method: "POST",
+      url: `/v1/fleet/jobs/${jobId}/response`,
+      headers: authed,
+      payload: {
+        episodeId, actionType: "contact_driver", stage: "attempt",
+        idempotencyKey: attemptKey, payload: { channel: "phone", different: true },
+      },
+    });
+    expect(conflictHttp.statusCode).toBe(409);
+    expect((conflictHttp.json() as { code: string }).code).toBe("IDEMPOTENCY_CONFLICT");
 
     const list = await app.inject({
       method: "GET",
