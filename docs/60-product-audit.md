@@ -54,15 +54,25 @@ an attempt is never shown as an outcome.
   photo + signature + recipient existed, then accepted.
 
 Honest limits: v1 records a reassignment as a response correlated to the
-canonical assignment event; the assign workflow itself only handles initial
-assignment (driver-swap of an assigned job is a v1 gap, recorded, not hidden).
+canonical assignment event. The assign workflow itself only handles initial
+assignment, so **driver reassignment of an already-assigned job is NOT an
+operational capability yet**: a response.reassign event does NOT mean a job
+was successfully transferred. Do not demonstrate reassignment as completed.
+Also, the risk engine covers commitments on active driver plans - it does not
+cover every outstanding job; the defensible claim is "identifies threats to
+eligible, actively planned delivery commitments using fresh operational
+data", not universal commitment monitoring.
 
 ## Question 3: Can the owner independently reconstruct the entire incident
 from the evidence report?
 
 Answer, with evidence: yes, from the record alone - the report is generated
 from the append-only history and re-verifies the evidence files at generation
-time.
+time. Terminology note (review-qualified): this is **integrity-checked
+reconstruction**, not integrity-proven reconstruction - hash verification
+establishes that stored files match their recorded hashes; it does NOT
+independently establish the authenticity of the original handover, the
+recipient's declared identity, or that the original evidence was authentic.
 
 - The PDF contains: job + driver, per-stop windows and derived outcomes
   (operational, timing, evidence completeness, original vs revised), every
@@ -78,12 +88,17 @@ time.
 
 ## Comparison with existing fleet software (docs/54 basis)
 
+This comparison is a **differentiation hypothesis**, scoped to the specific
+products and capabilities examined in docs/54 - NOT an established
+market-wide advantage. It does not claim that existing fleet software in
+general lacks integrity verification or commitment-risk functionality.
+
 | Experience | Generic telematics/stops tools | PrivateFleet v1 |
 |---|---|---|
 | Know which commitment is threatened | List of stops + arrival ETAs; no commitment-scoped threat identity | Per-stop explainable episodes, one active per threat, version-free identity |
 | See what was done | Action logs exist, but attempts vs outcomes and actor/time discipline vary | Typed append-only events; attempt vs confirmed separated; request-hash idempotency |
 | Resolution truth | Status fields, sometimes overwritten | Derived from the threat lifecycle (consecutive clears); actions never fake a resolution |
-| Owner reconstruction | Export CSVs or screenshots; no integrity proof | Printable report with per-file hash re-verification |
+| Owner reconstruction | Export CSVs or screenshots (as examined in docs/54) | Printable report with per-file hash re-verification (integrity-checked) |
 | Timing honesty | ETA vs actual from device timestamps | timing_unverified unless independent handover evidence exists |
 
 Positioning (docs/56, frozen): "Every delivery has a commitment. Every
