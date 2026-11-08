@@ -89,11 +89,16 @@ a backup). Claiming certifications we do not hold is forbidden.
 
 ## 7. Commitment model
 
-- The original customer commitment for v1 is per-job: the committed delivery
-  window, applicable service requirements, required evidence policy, timezone,
-  and the source of the commitment.
-- The committed window already lives on the job's stops; a planned arrival is
+- The customer commitment for v1 is associated with the relevant JOB STOP
+  where that stop carries an independently committed window. A job may
+  therefore contain multiple stop-level commitments (e.g., collection
+  10:00–10:30 and delivery 11:00–11:30 are two promises, not one). No
+  separate commitment entity is introduced: the windows already live on
+  `job_stops`, and the existing proof policy is reused. A planned arrival is
   an ETA and is never the promise.
+- Commitment outcomes and exception episode identity refer to the SAME
+  operational scope: the stop-level commitment. One stop's successful
+  delivery can never conceal another stop's missed commitment.
 - Changing a commitment never silently overwrites the original promise.
   Revisions are append-only records carrying the approved revised window, the
   approval attribution and the approval evidence.
@@ -115,16 +120,19 @@ Completion-time semantics (fixed rule — offline reality makes this critical):
   NOT that the physical handover necessarily happened at any particular time.
 
 Time-verification semantics (fixed): timestamp plausibility is NOT time
-verification. Two timestamps cannot distinguish "handover at 10:55, synced at
-11:20" from "handover at 11:15, device clock set to 10:55, synced at 11:20".
-Therefore:
+verification, and same-device records are NOT independent corroboration.
+GPS telemetry and driver-generated arrival events may corroborate location
+and operational circumstances, but they do NOT establish the physical handover
+time — both the evidence timestamp and the arrival event can originate from
+the same Android device, and independently RECEIVED records are not
+automatically independent EVIDENCE of the physical event. Therefore:
 
-- timing is classified `verified` only when independently corroborated time
-  evidence supports it (for example, live telemetry or an arrival event
-  consistent with the reported time);
-- mere clock-skew plausibility is never sufficient;
-- until such corroboration exists in the implementation, `timing_unverified`
-  is the honest default for offline-synced completions;
+- timing may be classified `early`, `within_window` or `late` ONLY when the
+  available evidence sufficiently supports the actual completion time to the
+  required standard;
+- otherwise timing is `timing_unverified`;
+- "verified" is an evidential PREREQUISITE for those classifications — it is
+  not itself a timing state;
 - the server receipt time is NEVER silently used as delivery time.
 
 Commitment outcome is three ORTHOGONAL dimensions — no value of one dimension
@@ -156,8 +164,12 @@ instant is the truth. Boundary rule: within = start ≤ t ≤ end; early = t <
 start; late = t > end.
 
 Commitment revision chronology (fixed): every revision carries BOTH an
-approval time and an effective time, and they are distinguishable. A revision
-must never retroactively rewrite performance history: the risk engine uses the
+approval time and an effective time, and they are distinguishable. **v1
+invariant: `effective_at >= approval_at`** — an ordinary commitment revision
+can never become effective before its approval, so it can never retroactively
+rewrite performance history. Historical corrections, should one ever be
+needed, are a SEPARATE, explicitly authorised and auditable operation — they
+must never masquerade as an ordinary reschedule. The risk engine uses the
 applicable approved commitment from the moment it becomes effective;
 historical reporting retains every original and revised promise with its
 approval chronology.
