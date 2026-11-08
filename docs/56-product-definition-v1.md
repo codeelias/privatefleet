@@ -1,6 +1,9 @@
 # 56 - Product Definition v1
 
-Drafted: 2026-11-08. Status: DRAFT for review — not yet frozen as product authority.
+Drafted: 2026-11-08.
+Status: FROZEN — PRIVATEFLEET V1 PRODUCT AUTHORITY
+Baseline commit: 5d6846a
+Future changes must be explicit, justified amendments — never silent scope changes.
 This document defines PrivateFleet v1. It is deliberately a PRODUCT definition,
 not an implementation specification: it states behaviour, invariants, scope and
 acceptance criteria, and it does not prescribe migrations or schema.
