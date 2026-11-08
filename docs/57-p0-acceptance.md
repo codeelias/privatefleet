@@ -20,47 +20,53 @@ Status: in progress — recorded evidence per P0 item, never claimed ahead of pr
 
 ## P0.2 Second Android device validation
 
-- NOT DONE. Phone 2 (`R5CWB0BR3BP`) was not connected to adb during this
-  session. Required: install 1.4.6, offline capture + synchronisation test,
-  confirm no duplicated records (server-side idempotency check).
+- DEFERRED BY OWNER (2026-11-08): Phone 2 (`R5CWB0BR3BP`) is not with the
+  owner right now. Status: parked, NOT failed, NOT claimed. Acceptance
+  (install 1.4.6, offline capture + sync, no duplicated records) resumes when
+  the device returns.
 
-## P0.3 Database backup restoration drill
+## P0.3 Backup and restoration — accurate scope, verified
 
-- Executed on the production host: pg_dump (custom format) → restore into a
-  fresh scratch database (`privatefleet_restore_drill`) → row-count integrity
-  check against production frozen at the dump instant → evidence content-hash
-  distinct-count check → scratch database dropped.
-- Result: DRILL PASS.
+Database restoration drill: DRILL PASS (evidence below, table counts frozen at
+the dump instant, scratch database dropped).
 
-```text
-tenants            prod@dump=1        restored=1        OK
-jobs               prod@dump=74       restored=74       OK
-job_stops          prod@dump=146      restored=146      OK
-routes             prod@dump=331      restored=331      OK
-route_stops        prod@dump=3772     restored=3772     OK
-location_points    prod@dump=64095    restored=64095    OK
-stop_evidence      prod@dump=155      restored=155      OK
-tracking_tokens    prod@dump=13       restored=13       OK
-outbox             prod@dump=21892    restored=21892    OK
-notifications      prod@dump=0        restored=0        OK
-job_events         prod@dump=299      restored=299      OK
-geofences          prod@dump=0        restored=0        OK
-proof_policies     prod@dump=1        restored=1        OK
-evidence hashes: prod=155 restored=155
-```
+Evidence-file coverage — verified against the real backup infrastructure on
+the production host (NOT assumed):
 
-Note: the first drill run showed a 2-row `location_points` difference caused
-by live telemetry arriving between dump and count — measurement timing, not a
-restore defect. The corrected run compares production frozen at the dump
-instant and matches exactly.
+- Nightly task `\PrivateFleet Backup` (daily 02:00, Last Result 0) runs
+  `backup.ps1`, which produces BOTH a database dump AND a full evidence-file
+  archive (`tar` of `C:\PrivateFleet\evidence`), each encrypted with age
+  (public key `secrets\age.pub`) and SHA256-checksummed, copied to
+  `D:\PrivateFleet_Backups`. The 2026-11-08 02:00 run exists on disk:
+  `…dump.age` (30.9 MB) and `…evidence.tar.age` (6.0 MB) with checksum files.
+- The evidence archive therefore COVERS the photographic/signature files, not
+  only database records.
+
+Verified facts and the one remaining gap:
+
+| Claim | Status |
+|---|---|
+| DB dump + evidence archive produced nightly | VERIFIED (backup.log OK lines 06/07/08 Nov; files on D:) |
+| Evidence archive contains the live files | VERIFIED (archive size 6,035,592 ≈ live dir 5,845,135 bytes compressed-consistent; nightly regeneration) |
+| DB restore into scratch database | VERIFIED (DRILL PASS, 13/13 tables, 155/155 hashes) |
+| Live evidence files hash-match database records | VERIFIED by existing `restore-drill.ps1` logic (hash per storage_key vs content_hash) |
+| Restoration FROM the encrypted archive (decryption path) | NOT TESTED ON HOST — by design: only `age.pub` exists on the host; the age private key is kept off-host. The decryption drill must run where the private key lives. |
+| Off-host copy (G:\My Drive cloud target) | FAILING nightly ("Access is denied") — backups currently exist only on D: (same machine). Single-site until repaired. |
+
+Conclusion: the reviewer's question is now answered with evidence — the
+evidence FILES are included in the nightly encrypted backup. Full
+application/data recovery remains TWO honest gaps: (1) the age-decryption
+restore path is untested on this host (key intentionally off-host), and (2)
+the off-host cloud copy is failing, leaving a single-site backup.
 
 ## Acceptance gate status
 
 ```text
 P0.1  implemented + deployed + partially verified  (dense-route tap test pending)
-P0.2  blocked on device availability
-P0.3  DRILL PASS
+P0.2  DEFERRED BY OWNER — device not available
+P0.3  DB drill PASS · evidence files covered by nightly encrypted backup ·
+      decryption-path drill pending (key off-host) · cloud copy failing
 ```
 
-P1 (Commitment Recovery v1) is NOT authorised until the three P0 acceptance
-results are recorded and reviewed.
+P1 (Commitment Recovery v1) is NOT authorised until the P0 acceptance results
+are recorded and reviewed.
