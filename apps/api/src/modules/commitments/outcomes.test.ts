@@ -43,7 +43,9 @@ describe("deriveExceptionResolution", () => {
     expect(resolution.state).toBe("response_failed");
   });
 
-  it("a failure occurring AFTER a success governs (latest outcome wins)", () => {
+  it("a later failed action never revokes an established recovery", () => {
+    // Failed customer notification AFTER a successful reassignment: the
+    // resolution stands; the failed action is preserved in the timeline.
     const resolution = deriveExceptionResolution(
       { status: "open" },
       [
@@ -51,7 +53,7 @@ describe("deriveExceptionResolution", () => {
         event({ stage: "confirmed", outcome: "failed" }, "2026-11-08T10:30:00.000Z"),
       ],
     );
-    expect(resolution.state).toBe("response_failed");
+    expect(resolution.state).toBe("resolved");
   });
 
   it("episode-level resolved (threat cleared) dominates; closed never implies recovery", () => {
@@ -72,8 +74,7 @@ describe("deriveCommitmentOutcome", () => {
   const base = {
     status: "completed",
     jobCancelled: false,
-    completedCapturedAt: "2026-11-08T10:00:00.000Z",
-    serverReceivedAt: "2026-11-08T10:00:30.000Z",
+    handoverBracket: { start: "2026-11-08T10:00:00.000Z", end: "2026-11-08T10:00:30.000Z" },
     windowStart: "2026-11-08T09:00:00.000Z",
     windowEnd: "2026-11-08T11:00:00.000Z",
     evidenceKinds: ["photo"],
@@ -89,25 +90,25 @@ describe("deriveCommitmentOutcome", () => {
   });
 
   it("a device timestamp alone can NEVER verify timing - corroboration required", () => {
-    expect(deriveCommitmentOutcome({ ...base, serverReceivedAt: null }).timing).toBe("timing_unverified");
-    expect(deriveCommitmentOutcome({ ...base, completedCapturedAt: null }).timing).toBe("timing_unverified");
+    expect(deriveCommitmentOutcome({ ...base, handoverBracket: null }).timing).toBe("timing_unverified");
+    expect(deriveCommitmentOutcome({ ...base, handoverBracket: null }).timing).toBe("timing_unverified");
   });
 
-  it("early and late require BOTH endpoints outside the window", () => {
+  it("early and late require an independent server-clock bracket outside the window", () => {
     expect(deriveCommitmentOutcome({
-      ...base, completedCapturedAt: "2026-11-08T08:30:00.000Z", serverReceivedAt: "2026-11-08T08:30:30.000Z",
+      ...base, handoverBracket: { start: "2026-11-08T08:30:00.000Z", end: "2026-11-08T08:30:30.000Z" },
     }).timing).toBe("early");
     expect(deriveCommitmentOutcome({
-      ...base, completedCapturedAt: "2026-11-08T12:00:00.000Z", serverReceivedAt: "2026-11-08T12:00:30.000Z",
+      ...base, handoverBracket: { start: "2026-11-08T12:00:00.000Z", end: "2026-11-08T12:00:30.000Z" },
     }).timing).toBe("late");
   });
 
-  it("an interval straddling a window boundary is timing_unverified, never guessed", () => {
+  it("a bracket straddling a window boundary is timing_unverified, never guessed", () => {
     expect(deriveCommitmentOutcome({
-      ...base, completedCapturedAt: "2026-11-08T08:59:00.000Z", serverReceivedAt: "2026-11-08T09:30:00.000Z",
+      ...base, handoverBracket: { start: "2026-11-08T08:59:00.000Z", end: "2026-11-08T09:30:00.000Z" },
     }).timing).toBe("timing_unverified");
     expect(deriveCommitmentOutcome({
-      ...base, completedCapturedAt: "2026-11-08T10:59:00.000Z", serverReceivedAt: "2026-11-08T11:30:00.000Z",
+      ...base, handoverBracket: { start: "2026-11-08T10:59:00.000Z", end: "2026-11-08T11:30:00.000Z" },
     }).timing).toBe("timing_unverified");
   });
 
@@ -126,8 +127,7 @@ describe("deriveCommitmentOutcome", () => {
   it("original and revised results are preserved independently", () => {
     const outcome = deriveCommitmentOutcome({
       ...base,
-      completedCapturedAt: "2026-11-08T11:30:00.000Z", // late against the ORIGINAL window
-      serverReceivedAt: "2026-11-08T11:30:30.000Z",
+      handoverBracket: { start: "2026-11-08T11:30:00.000Z", end: "2026-11-08T11:30:30.000Z" }, // late against the ORIGINAL window
       revisions: [
         {
           windowStart: "2026-11-08T11:00:00.000Z",
@@ -149,4 +149,5 @@ describe("deriveCommitmentOutcome", () => {
     expect(outcome.evidenceCompleteness).toBe("not_applicable");
   });
 });
+
 
