@@ -68,5 +68,9 @@ P0.3  DB drill PASS · evidence files covered by nightly encrypted backup ·
       decryption-path drill pending (key off-host) · cloud copy failing
 ```
 
-P1 (Commitment Recovery v1) is NOT authorised until the P0 acceptance results
-are recorded and reviewed.
+P1 (Commitment Recovery v1): authorised BY OWNER DIRECTIVE (2026-11-08) to
+proceed while the two device-dependent P0 items (P0.1 dense-route tap, P0.2
+second device) and the parked G: item remain open. P0 is NOT complete; the
+directive does not close it. Statuses stay separate: deployment is verified,
+automated episode creation/recurrence are tested, live positive episode
+creation is NOT yet demonstrated.

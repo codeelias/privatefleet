@@ -91,24 +91,36 @@ describe("exception episode lifecycle", () => {
     const actives = await activeEpisodes(migrator, tenantId, jobId);
     expect(actives).toHaveLength(1);
     expect(actives[0]?.planVersion).toBe(13); // provenance refreshed, no duplicate
+    // Opening evidence is preserved: refresh must never erase what opened it.
+    const openedEvidence = (await sql`
+      SELECT opened_reasons, opened_plan_version FROM exception_episodes
+      WHERE tenant_id = ${tenantId} AND fingerprint = ${threat.fingerprint}
+        AND status = 'open'
+      ORDER BY created_at DESC LIMIT 1
+    `) as unknown as Array<{
+      opened_reasons: string[] | null;
+      opened_plan_version: number | null;
+    }>;
+    expect(openedEvidence[0]?.opened_plan_version).toBe(12);
+    expect(openedEvidence[0]?.opened_reasons).toContain("planned arrival is after the committed window");
 
-    // One clear observation is not enough to close.
+    // One clear observation is not enough to resolve.
     await applyAssessment(migrator, tenantId, jobId, stopId, none, null);
     expect(await activeEpisodes(migrator, tenantId, jobId)).toHaveLength(1);
 
-    // Consecutive clears close with an explicitly recorded reason.
+    // Consecutive clears RESOLVE with an explicitly recorded note.
     for (let i = 1; i < CLEARS_TO_CLOSE; i += 1) {
       await applyAssessment(migrator, tenantId, jobId, stopId, none, null);
     }
     expect(await activeEpisodes(migrator, tenantId, jobId)).toHaveLength(0);
-    const closed = (await sql`
-      SELECT status, close_reason, closed_at FROM exception_episodes
+    const resolved = (await sql`
+      SELECT status, resolution_note, resolved_at FROM exception_episodes
       WHERE tenant_id = ${tenantId} AND fingerprint = ${threat.fingerprint}
       ORDER BY created_at DESC LIMIT 1
-    `) as unknown as Array<{ status: string; close_reason: string; closed_at: string | null }>;
-    expect(closed[0]?.status).toBe("closed");
-    expect(closed[0]?.close_reason).toBe("threat_cleared");
-    expect(closed[0]?.closed_at).not.toBeNull();
+    `) as unknown as Array<{ status: string; resolution_note: string | null; resolved_at: string | null }>;
+    expect(resolved[0]?.status).toBe("resolved");
+    expect(resolved[0]?.resolution_note).toBe("threat_cleared");
+    expect(resolved[0]?.resolved_at).not.toBeNull();
 
     // A genuinely new threat after closure creates a NEW episode (recurrence).
     const reopened = await applyAssessment(migrator, tenantId, jobId, stopId, threat, 14);
@@ -205,18 +217,18 @@ describe("exception episode lifecycle", () => {
     expect(episodes[0]?.threatClass).toBe("stationary_diminishing_margin");
     expect(episodes[0]?.reasons.join(" ")).toContain("stationary");
 
-    // Threat clears (healthy margin): closes only after consecutive clears.
+    // Threat clears (healthy margin): RESOLVES only after consecutive clears.
     await sql`UPDATE job_stops SET window_end = now() + interval '2 hours' WHERE id = ${stopId}`;
     await evaluateDriverCommitments(migrator, tenantId, driverId);
     expect(await activeEpisodes(migrator, tenantId, jobId)).toHaveLength(1); // 1 clear: still open
     await evaluateDriverCommitments(migrator, tenantId, driverId);
-    expect(await activeEpisodes(migrator, tenantId, jobId)).toHaveLength(0); // 2 clears: closed
-    const closed = (await sql`
-      SELECT status, close_reason FROM exception_episodes
+    expect(await activeEpisodes(migrator, tenantId, jobId)).toHaveLength(0); // 2 clears: resolved
+    const resolved = (await sql`
+      SELECT status, resolution_note FROM exception_episodes
       WHERE tenant_id = ${tenantId} AND job_id = ${jobId}
       ORDER BY created_at DESC LIMIT 1
-    `) as unknown as Array<{ status: string; close_reason: string }>;
-    expect(closed[0]?.status).toBe("closed");
-    expect(closed[0]?.close_reason).toBe("threat_cleared");
+    `) as unknown as Array<{ status: string; resolution_note: string | null }>;
+    expect(resolved[0]?.status).toBe("resolved");
+    expect(resolved[0]?.resolution_note).toBe("threat_cleared");
   });
 });
