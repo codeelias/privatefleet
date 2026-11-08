@@ -1,3 +1,7 @@
+### v2.08 - GPS stoppage: architectural permission fix (2026-11-08)
+- Root cause (live-captured): TelemetryService called startForeground(FOREGROUND_SERVICE_TYPE_LOCATION) BEFORE checking ACCESS_FINE_LOCATION; with the permission missing it threw SecurityException and Android restarted it in an endless crash loop - telemetry stopped.
+- Architectural fix: permission verified BEFORE startForeground; startForeground wrapped (clean stopSelf on SecurityException); MainActivity.onResume re-prompts when the permission is missing; the existing grant handler restarts the service automatically.
+- Proven by negative test on the device: revoke -> NO crash, clean stop; re-grant -> telemetry resumed within seconds. GPS posting live-verified (server age seconds).
 ### v2.07 - P0.1 dense-route tap verification COMPLETE (2026-11-08)
 - Test environment corrected: synthetic tenant stops snapped to real roads via OSRM nearest, route via OSRM (1,143-point road-following), then deleted after the test.
 - Exact-coordinate instrumentation (mapview offset + camera + per-stop pinpos) and a no-blind-taps protocol: 8/8 PASS including neighbouring-pin independence and padded-target consistency; before/after DB 40 pending = zero accidental state changes (docs/58).
