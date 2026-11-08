@@ -373,8 +373,9 @@ honest evidence of a customer commitment? If not, it does not belong in v1.
 
 ## Decisions We Deliberately Refuse to Make in v1
 
-1. **No contract engine.** Per-job commitments only; contract templates are a
-   later, evidence-based decision.
+1. **No contract engine.** Per-STOP commitments only (reusing existing
+   `job_stops` windows and proof policy); contract templates are a later,
+   evidence-based decision.
 2. **No separate RecoveryAction table.** Response actions are append-only
    events in the existing operational history, correlated to episodes.
 3. **No general-purpose billing or accounting system.** P3 is billing-readiness
