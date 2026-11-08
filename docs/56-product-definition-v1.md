@@ -107,47 +107,71 @@ a backup). Claiming certifications we do not hold is forbidden.
 Completion-time semantics (fixed rule — offline reality makes this critical):
 
 - `device_captured_at`: device-reported occurrence time. Evidence rows already
-  carry it. It is NOT automatically trustworthy.
+  carry it. It is a REPORTED timestamp, not an established fact.
 - `server_received_at`: authoritative server receipt time. It establishes when
   the backend received the record — NOT when the physical handover happened.
-- `completion_accepted_at`: when the server accepted the completion command
-  together with its required evidence. The authoritative operational fact of
-  completion.
+- `completion_accepted_at`: when the server accepted the operational completion
+  record together with its required evidence. It establishes server acceptance,
+  NOT that the physical handover necessarily happened at any particular time.
 
-Classification rule: commitment timing is judged by the device-reported
-capture time when one exists and is PLAUSIBLE (within the configured clock-skew
-tolerance); otherwise the timing is `timing_unverified`. The server receipt
-time is NEVER silently used as delivery time. Neither an offline device clock
-nor the server clock is assumed authoritative for the physical handover.
+Time-verification semantics (fixed): timestamp plausibility is NOT time
+verification. Two timestamps cannot distinguish "handover at 10:55, synced at
+11:20" from "handover at 11:15, device clock set to 10:55, synced at 11:20".
+Therefore:
 
-Commitment outcome is three independent dimensions, never compressed:
+- timing is classified `verified` only when independently corroborated time
+  evidence supports it (for example, live telemetry or an arrival event
+  consistent with the reported time);
+- mere clock-skew plausibility is never sufficient;
+- until such corroboration exists in the implementation, `timing_unverified`
+  is the honest default for offline-synced completions;
+- the server receipt time is NEVER silently used as delivery time.
 
-| Dimension | Values |
-|---|---|
-| Delivery outcome (derived) | fulfilled_within_window · fulfilled_late · early · not_delivered · cancelled · unconfirmed |
-| Evidence completeness (derived from policy vs captured evidence) | complete · incomplete |
-| Timing verification (derived) | verified · timing_unverified |
+Commitment outcome is three ORTHOGONAL dimensions — no value of one dimension
+implies a value of another:
+
+| Dimension | Values | Maps to existing system terms |
+|---|---|---|
+| Operational completion | completed · not_delivered · cancelled · unconfirmed | `completed` = the server-accepted completion record (our job status term — it does NOT certify physical handover); `not_delivered` = confirmed terminal non-delivery with a terminal cause; `cancelled` = explicitly cancelled; `unconfirmed` = no accepted completion and no terminal state |
+| Commitment timing | early · within_window · late · timing_unverified · not_applicable | `not_applicable` when there is no completion to time |
+| Evidence completeness | complete · incomplete | derived from policy vs captured evidence |
 
 Definitions:
 
-- fulfilled_within_window: verified delivery time inside the ORIGINAL window.
-- fulfilled_late: verified delivery time after the ORIGINAL window.
-- early: verified delivery time before the window start — reported separately,
-  never mislabelled on-time.
-- not_delivered: confirmed TERMINAL non-delivery with a terminal cause. A
-  skipped stop is NOT terminal non-delivery: it may be reattempted.
-- cancelled: explicitly cancelled — never silently failed or fulfilled.
-- unconfirmed: no sufficient evidence of completion and no terminal state.
+- A delivery whose completion is accepted but whose timing cannot be verified
+  is reported as `completed` + `timing_unverified` — never mislabelled
+  on-time, late, or unconfirmed.
+- `within_window`: verified delivery time inside the ORIGINAL window.
+- `late`: verified delivery time after the ORIGINAL window.
+- `early`: verified delivery time before the window start — reported
+  separately, never mislabelled on-time.
+- A skipped stop is NOT terminal non-delivery: it may be reattempted.
 - Evidence incompleteness (missing required photo etc.) does NOT establish
-  that the delivery failed; it establishes that evidence requirements were
-  not satisfied. It is reported on the evidence dimension, not the delivery
-  dimension.
+  that the delivery failed; it is reported on the evidence dimension only.
+
+Window-boundary and time semantics (fixed): every window is stored and
+compared as UTC instants (ISO 8601 with offset), never as local wall-clock
+labels. London daylight-saving transitions are therefore unambiguous — the
+instant is the truth. Boundary rule: within = start ≤ t ≤ end; early = t <
+start; late = t > end.
+
+Commitment revision chronology (fixed): every revision carries BOTH an
+approval time and an effective time, and they are distinguishable. A revision
+must never retroactively rewrite performance history: the risk engine uses the
+applicable approved commitment from the moment it becomes effective;
+historical reporting retains every original and revised promise with its
+approval chronology.
+
+Example (the retroactive trap): original deadline 11:00; delivery 11:20;
+customer approval of revised deadline 11:45 recorded at 11:30. The 11:20
+completion is judged against the 11:00 promise for everything before 11:30;
+the 11:45 revision can never make the 11:20 completion appear compliant.
 
 "Saved" is a DERIVED RELATIONSHIP, not an independent outcome: original
 outcome and revised outcome are reported side by side. Example: original
-10:00–11:00, approved revision 10:30–11:30, verified completion 11:20 →
-original `fulfilled_late`, revised `fulfilled_within_window`. Both facts are
-preserved; no single green status may compress them.
+10:00–11:00, approved revision 10:30–11:30 effective before delivery,
+verified completion 11:20 → original `late`, revised `within_window`. Both
+facts are preserved; no single green status may compress them.
 
 ## 8. Recovery (exception response) model
 
@@ -160,14 +184,20 @@ preserved; no single green status may compress them.
   an alert state can NEVER independently resolve, close or invalidate an
   episode.** Reusing the existing alert infrastructure must not create a
   second operational lifecycle.
-- Episode identity and deduplication (fixed): an ACTIVE episode is unique per
-  **(job, threat class)**. Plan version is PROVENANCE and episode context —
-  it is never part of threat identity, so a mid-day re-plan (new plan version
-  under the same threat) must never create a second episode. An approved
-  reschedule changes the effective commitment the threat is evaluated against;
-  it updates the episode context, it does not spawn a duplicate. A NEW episode
-  is permitted only when a previously resolved threat genuinely recurs (a
-  fresh threat condition arising from new data).
+- Episode identity and deduplication (fixed): episode identity is the
+  **affected operational commitment scope + threat class**. A stop-specific
+  threat is keyed by the affected STOP — a threat on another stop of the same
+  job can never be suppressed by it. Genuinely job-wide threats may use
+  job-level identity. Plan version is PROVENANCE and episode context — never
+  part of threat identity, so a mid-day re-plan (new plan version under the
+  same threat) must never create a second episode. An approved reschedule
+  changes the effective commitment the threat is evaluated against; it updates
+  the episode context, it does not spawn a duplicate.
+- Recurrence (fixed): a NEW episode may be created only when ALL of the
+  following hold: (1) the previous threat condition demonstrably clears;
+  (2) the previous episode is resolved or otherwise appropriately closed;
+  (3) a genuinely new threat condition arises from new evidence. Repeated
+  telemetry of an uncleared condition never generates another episode.
 - Episode closure semantics: `resolved` = the threat was addressed and the
   resolution is supported by evidence. `closed` = the episode is no longer
   actionable for an explicitly recorded reason — `duplicate`, `invalidated`
