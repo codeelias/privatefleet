@@ -65,9 +65,9 @@ ACCOUNT     The owner sees promise, threat, action, outcome and proof, per
 
 | Capability | What it means in v1 |
 |---|---|
-| SLA Protection | Explainable, rules-based risk derived from live data only. `Operational Risk = f(Commitment, ETA, Progress, Telemetry, Delay)`. Stale plans and stale fixes are never scored (R10 protections reused, not duplicated). |
-| Exception Response (Recovery Centre) | A detected threat becomes an actionable episode; responses are recorded with outcomes. The system helps operators respond, not merely report. |
-| Verifiable Handover & Evidence | A chain of custody, not a file: capture time vs server receipt time, device location and accuracy, content-integrity verification, recipient-declared information, driver identity, recorded corrections. |
+| Commitment Risk Engine | Explainable, rules-based risk derived from live data only. `Operational Risk = f(Commitment, ETA, Progress, Telemetry, Delay)`. Stale plans and stale fixes are never scored (R10 protections reused, not duplicated). Named "Commitment Risk" deliberately: we do not use "SLA" until contractual SLA rules actually exist — naming something it is not is a false claim. |
+| Exception Response | A detected threat becomes an actionable episode; responses are recorded with outcomes. The system helps operators respond, not merely report. |
+| Verifiable Handover & Evidence | A chain of custody, not a file: capture time vs server receipt time, device location and accuracy, content-integrity verification, recipient-declared information, driver identity, recorded corrections (corrections-as-events: PROPOSED, not yet implemented). |
 | Accountability & Performance | Per-customer on-time performance, failures, reattempts, exception causes, evidence completeness — and later, billing-readiness (billable jobs, charges, unbilled work). Built AFTER the operational loop is proven (P3). |
 
 ## 6. Trust model
@@ -78,8 +78,8 @@ architecture:
 | Guarantee | Meaning | Validation required |
 |---|---|---|
 | Location integrity | Freshness and accuracy are displayed; stale GPS is never presented as live | Containment-invariant position hold (property-tested), lifecycle states, stale-plan guards |
-| Evidence integrity | Original events preserved; corrections recorded as new events; files served only after hash verification | Content-hash check before serving (live-verified); tamper test in suite |
-| Offline reliability | Jobs complete without connectivity; evidence synchronises without duplication | Command queue + idempotent sync; second device validation (P0, not yet done) |
+| Evidence integrity | Original events preserved; corrections recorded as new events (corrections-as-events: PROPOSED, not yet implemented); files served only after hash verification | Content-hash check before serving (live-verified); tamper test in suite |
+| Offline reliability | Drivers can capture and QUEUE completion evidence while offline; the server accepts the completion after successful synchronisation and validation; synchronisation must not duplicate operational records. A queued local action is NOT an accepted server-side completion | Command queue + idempotent sync (implemented, tested, live on Phone 1); second-device validation outstanding — do not claim universal reliability from one device |
 | Data security | Tenant isolation, scoped tokens, least exposure | RLS everywhere; hashed tracking tokens; no personal data on public pages |
 | Operational transparency | Clear status, failure reasons, timestamps, responsibility for every exception | Honest statuses across product; negative acceptance tests |
 
@@ -97,30 +97,57 @@ a backup). Claiming certifications we do not hold is forbidden.
 - Changing a commitment never silently overwrites the original promise.
   Revisions are append-only records carrying the approved revised window, the
   approval attribution and the approval evidence.
+- When several reschedules occur, the RISK ENGINE uses the currently effective
+  approved window (the latest approved revision that is in force); historical
+  reporting retains every previous promise.
 - Commitment OUTCOME is DERIVED from evidence (completion event against the
   original window plus revision events). It is never an independently writable
   field that could drift from the evidence.
 
-Commitment outcome states (derived):
+Completion-time semantics (fixed rule — offline reality makes this critical):
 
-| Outcome | Definition |
+- `device_captured_at`: device-reported occurrence time. Evidence rows already
+  carry it. It is NOT automatically trustworthy.
+- `server_received_at`: authoritative server receipt time. It establishes when
+  the backend received the record — NOT when the physical handover happened.
+- `completion_accepted_at`: when the server accepted the completion command
+  together with its required evidence. The authoritative operational fact of
+  completion.
+
+Classification rule: commitment timing is judged by the device-reported
+capture time when one exists and is PLAUSIBLE (within the configured clock-skew
+tolerance); otherwise the timing is `timing_unverified`. The server receipt
+time is NEVER silently used as delivery time. Neither an offline device clock
+nor the server clock is assumed authoritative for the physical handover.
+
+Commitment outcome is three independent dimensions, never compressed:
+
+| Dimension | Values |
 |---|---|
-| fulfilled_on_time | Completion event within the ORIGINAL committed window |
-| fulfilled_late | Completion event after the ORIGINAL window |
-| saved | A revision exists with recorded approval, and completion is within the REVISED window — while the ORIGINAL outcome is still reported separately as late |
-| failed | A terminal non-delivery (failed/skipped with terminal cause) or completion refused by required-evidence rules |
-| unknown | No completion event and no terminal state — honest absence of knowledge |
+| Delivery outcome (derived) | fulfilled_within_window · fulfilled_late · early · not_delivered · cancelled · unconfirmed |
+| Evidence completeness (derived from policy vs captured evidence) | complete · incomplete |
+| Timing verification (derived) | verified · timing_unverified |
 
-Safeguards, fixed in this definition:
+Definitions:
 
-- Original and revised promises are ALWAYS reported independently. A revised
-  commitment that was met never hides that the original was missed. There is
-  no single green status that compresses both.
-- "Saved" is reported as two facts, never one colour.
-- Early arrival inside the window counts as fulfilment; arrival before the
-  window start is reported separately (early), not mislabelled on-time.
-- Cancelled and unconfirmed deliveries are classified as such — never silently
-  as failed or fulfilled.
+- fulfilled_within_window: verified delivery time inside the ORIGINAL window.
+- fulfilled_late: verified delivery time after the ORIGINAL window.
+- early: verified delivery time before the window start — reported separately,
+  never mislabelled on-time.
+- not_delivered: confirmed TERMINAL non-delivery with a terminal cause. A
+  skipped stop is NOT terminal non-delivery: it may be reattempted.
+- cancelled: explicitly cancelled — never silently failed or fulfilled.
+- unconfirmed: no sufficient evidence of completion and no terminal state.
+- Evidence incompleteness (missing required photo etc.) does NOT establish
+  that the delivery failed; it establishes that evidence requirements were
+  not satisfied. It is reported on the evidence dimension, not the delivery
+  dimension.
+
+"Saved" is a DERIVED RELATIONSHIP, not an independent outcome: original
+outcome and revised outcome are reported side by side. Example: original
+10:00–11:00, approved revision 10:30–11:30, verified completion 11:20 →
+original `fulfilled_late`, revised `fulfilled_within_window`. Both facts are
+preserved; no single green status may compress them.
 
 ## 8. Recovery (exception response) model
 
@@ -128,12 +155,28 @@ Safeguards, fixed in this definition:
   threat: `open → investigating → response_in_progress → resolved | closed`.
 - Alerts are the presentation/notification projection of an episode for the
   existing Heads-Up surface; they do NOT carry a competing lifecycle.
-- Episode creation is IDEMPOTENT: repeated telemetry for the same underlying
-  problem must never create duplicate active episodes (deduplication key =
-  the underlying condition: job + threat type + originating plan version).
+  **Ownership rule (fixed): the episode owns the operational lifecycle. Alert
+  acknowledgement, visibility and delivery are presentation semantics only —
+  an alert state can NEVER independently resolve, close or invalidate an
+  episode.** Reusing the existing alert infrastructure must not create a
+  second operational lifecycle.
+- Episode identity and deduplication (fixed): an ACTIVE episode is unique per
+  **(job, threat class)**. Plan version is PROVENANCE and episode context —
+  it is never part of threat identity, so a mid-day re-plan (new plan version
+  under the same threat) must never create a second episode. An approved
+  reschedule changes the effective commitment the threat is evaluated against;
+  it updates the episode context, it does not spawn a duplicate. A NEW episode
+  is permitted only when a previously resolved threat genuinely recurs (a
+  fresh threat condition arising from new data).
+- Episode closure semantics: `resolved` = the threat was addressed and the
+  resolution is supported by evidence. `closed` = the episode is no longer
+  actionable for an explicitly recorded reason — `duplicate`, `invalidated`
+  (underlying commitment or conditions changed), or `superseded`. Closing an
+  episode NEVER implies successful recovery.
 - Response actions are append-only operational-history events, correlated to
   the episode. They reuse the existing event timeline; there is NO separate
-  parallel actions table.
+  parallel actions table. Actions are reversible where supported; reversals
+  are appended as new events, never edits to history.
 
 Response action types for v1:
 
@@ -152,9 +195,11 @@ Response action types for v1:
 
 ## 9. Existing implementation (status vocabulary)
 
-Statuses are NOT interchangeable: `implemented` = code exists; `tested` = suite
-covers it; `deployed` = on production; `live-verified` = proven on production
-by measurement.
+Statuses are NOT interchangeable. Implementation evidence statuses:
+`implemented` = code exists; `tested` = suite covers it; `deployed` = on
+production; `live-verified` = proven on production by measurement. Plan
+statuses: `proposed` = agreed scope, not built; `not_done` = identified, not
+started; `partial` = part shipped, remainder agreed.
 
 | Capability | Status |
 |---|---|
@@ -175,6 +220,7 @@ by measurement.
 | At-risk scoring (stale plans never flagged) | deployed, live-verified |
 | Analytics pack (newest-plan dedupe) | deployed, live-verified |
 | Geofences: states, overlays, editor | deployed; editor bounds fix live |
+| Corrections-as-events for evidence | PROPOSED — named as a guarantee only after implemented and tested |
 | Map pin tap-target hardening (docs/53 Phase 7) | NOT DONE (P0) |
 | Second Android device validation | NOT DONE (P0) |
 | Backup restoration drill | NOT DONE (P0) |
@@ -264,10 +310,16 @@ Negative (these make the demo honest, not theatre):
 - Problem: commitments fail invisibly; responses are undocumented; evidence is
   scattered; the owner cannot reconstruct what happened without asking people.
 - Proposition: one closed loop — keep, respond to, and prove every commitment.
-- Key unvalidated assumption: an operator will pay for this loop. The
-  commercial test: using the synthetic scenario, demonstrate that PrivateFleet
-  produces owner-level information that is difficult to reconstruct from
-  ordinary tracking software, spreadsheets and delivery records.
+- Three INDEPENDENT evidence categories, never conflated:
+  | Category | What it establishes |
+  |---|---|
+  | Technical evidence | The system behaves correctly |
+  | Product-value evidence | The workflow provides a meaningful advantage over existing methods |
+  | Commercial evidence | A genuine buyer has demonstrated willingness to pay |
+- The synthetic scenario is the **product differentiation demonstration**: it
+  can establish that PrivateFleet reconstructs an operational incident
+  coherently. It CANNOT establish that an operator will pay — those are
+  separate hypotheses.
 - PrivateFleet is NOT yet a proven commercial opportunity. It is a substantially
   developed product with a coherent, testable differentiation hypothesis.
 
@@ -299,6 +351,9 @@ honest evidence of a customer commitment? If not, it does not belong in v1.
    achieved.
 10. **No S3 shift statistics** — remains deferred as decided earlier; not part
     of the v1 loop.
+11. **R15 deferred**: neither a public operational status page nor a
+    security/trust information page ships in v1 — kept distinct from each
+    other when they eventually do.
 
 ## Architectural principles (fixed)
 
@@ -312,6 +367,11 @@ honest evidence of a customer commitment? If not, it does not belong in v1.
 - Never claim an action succeeded without confirmation.
 - Never overwrite the original customer promise.
 - Never present stale or uncertain information as fact.
+
+The implementation discipline in docs/55 remains GOVERNING and is referenced
+here, not duplicated: one module per change; documented module-boundary
+crossings; required verification gate; verify copied files exist remotely
+before restart; wholesale web synchronisation.
 
 ## Status of this document
 
