@@ -1,3 +1,8 @@
+### v2.12 - P1 slice 5: printable per-job evidence report (2026-11-08)
+- GET /v1/fleet/jobs/:id/evidence-report (dispatcher/owner only): PDF with commitment+delivery info, driver, per-stop windows, derived outcomes (original/revised/timing/evidence), evidence items with capture + server-receipt timestamps, sizes, sha256, and exception/response history. No new tables - reuses job/job_stops/stop_evidence/job_events/exception_episodes/drivers.
+- Integrity: every evidence file is re-hashed at report time and compared with its recorded content hash -> verified/mismatch/missing per item. Live-verified on production: stored hash equals re-computed file hash (VERIFIED) and the endpoint serves a valid PDF (200, %PDF-).
+- pdfkit added (free, local; no external services).
+- Gate: API 180/180, web 53/53 (one flaky auth-throttle cross-suite interaction observed once; isolated rerun green - recorded, not a product defect).
 ### v2.11 - Slice 4 semantic reconciliation (2026-11-08)
 - Timing corroboration: a device timestamp alone can NEVER establish early/late/within_window. Timing is asserted only when the whole interval [device captured_at, server receipt created_at] agrees on the class; any straddle or missing endpoint = timing_unverified. Live result reconciled: completed job timing=late is corroborated by two agreeing clocks (device 06:29:32.365, server 06:29:32.410, both ~18h after window_end).
 - Failed-response dominance corrected: a failed attempt stays historically recorded but a SUBSEQUENT confirmed recovery resolves the episode; the latest confirmed outcome governs (tested: reviewer sequence + failure-after-success).
