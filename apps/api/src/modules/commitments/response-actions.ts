@@ -11,6 +11,7 @@
  * Idempotency is enforced by the database (partial unique index on
  * payload->>'idempotencyKey' for response events).
  */
+import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { withTenant, type DbHandle } from "../../db/client.js";
 
@@ -54,10 +55,27 @@ async function canonicalAssignmentEventId(
   return rows[0]?.id ?? null;
 }
 
+export interface ResponseActionResult {
+  eventId: string | null;
+  replayed: boolean;
+  conflict: boolean;
+}
+
+/** Request-hash identity (fleet idempotency discipline): key + exact content. */
+function requestHash(actionType: ResponseActionType, stage: string, payload: Record<string, unknown>): string {
+  return createHash("sha256")
+    .update(JSON.stringify({ actionType, stage, payload }))
+    .digest("hex");
+}
+
 /**
- * Record one response action as an append-only job_events row. Returns the
- * event id; a duplicate idempotency key is refused by the DB constraint and
- * reported as null (callers treat it as "already recorded").
+ * Record one response action as an append-only job_events row. Idempotency
+ * follows the fleet request-hash discipline:
+ *  - new key                 -> event created (eventId, conflict=false)
+ *  - same key, same payload  -> replay: original event returned, nothing written
+ *  - same key, DIFFERENT payload -> conflict=true (409), nothing written
+ * The database unique index remains the arbiter; the stored request hash
+ * makes payload divergence detectable instead of silently first-wins.
  */
 export async function recordResponseAction(
   handle: DbHandle,
@@ -65,7 +83,7 @@ export async function recordResponseAction(
   jobId: string,
   actorId: string,
   input: ResponseActionInput,
-): Promise<{ eventId: string | null; duplicate: boolean }> {
+): Promise<ResponseActionResult> {
   return withTenant(handle, tenantId, async (db) => {
     let payload = input.payload;
     if (input.actionType === "reassign") {
@@ -73,22 +91,37 @@ export async function recordResponseAction(
       const canonical = await canonicalAssignmentEventId(db, tenantId, jobId);
       payload = { ...payload, assignment_event_id: canonical };
     }
+    const hash = requestHash(input.actionType, input.stage, payload);
     const rows = (await db.execute(sql`
       INSERT INTO job_events
         (tenant_id, job_id, type, actor_type, actor_id, payload, episode_id)
       VALUES
         (${tenantId}, ${jobId}, ${`response.${input.actionType}`}, 'user', ${actorId},
-         ${JSON.stringify({ stage: input.stage, idempotencyKey: input.idempotencyKey, ...payload })}::jsonb,
+         ${JSON.stringify({ stage: input.stage, idempotencyKey: input.idempotencyKey, requestHash: hash, ...payload })}::jsonb,
          ${input.episodeId})
       ON CONFLICT (tenant_id, (payload->>'idempotencyKey'))
         WHERE type LIKE 'response.%' AND (payload->>'idempotencyKey') IS NOT NULL
       DO NOTHING
       RETURNING id
     `)) as unknown as Array<{ id: string }>;
-    if (rows.length === 0) {
-      return { eventId: null, duplicate: true };
+    if (rows.length > 0) {
+      return { eventId: rows[0]?.id ?? null, replayed: false, conflict: false };
     }
-    return { eventId: rows[0]?.id ?? null, duplicate: false };
+    // Key already used: compare the stored request hash.
+    const existing = (await db.execute(sql`
+      SELECT id, payload FROM job_events
+      WHERE tenant_id = ${tenantId} AND type LIKE 'response.%'
+        AND payload->>'idempotencyKey' = ${input.idempotencyKey}
+      ORDER BY created_at ASC LIMIT 1
+    `)) as unknown as Array<{ id: string; payload: unknown }>;
+    const storedHash =
+      existing[0]?.payload != null && typeof existing[0].payload === "object"
+        ? (existing[0].payload as { requestHash?: string }).requestHash
+        : undefined;
+    if (storedHash === hash) {
+      return { eventId: existing[0]?.id ?? null, replayed: true, conflict: false };
+    }
+    return { eventId: null, replayed: false, conflict: true };
   });
 }
 
