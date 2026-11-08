@@ -9,6 +9,7 @@ import { makeAuthGuard } from "../auth/guard.js";
 import type { DbHandle } from "../../db/client.js";
 import type { RealtimeBus } from "../../lib/realtime.js";
 import { ingestTelemetry, TrackingError } from "./service.js";
+import { evaluateDriverCommitments } from "../commitments/episode-service.js";
 import { TelemetryRateLimiter } from "./rate-limit.js";
 
 function requireDriver(
@@ -63,6 +64,11 @@ export function registerTrackingRoutes(
       const outcome = await ingestTelemetry(handle, tenantId, driverId, batch);
       for (const position of outcome.positions) {
         bus.publishTelemetry(tenantId, position);
+      }
+      // P1 commitment evaluation: best-effort, fire-and-forget. A failed
+      // episode evaluation must never disturb telemetry ingestion.
+      if (outcome.positions.length > 0) {
+        void evaluateDriverCommitments(handle, tenantId, driverId).catch(() => undefined);
       }
       return outcome.result;
     } catch (err) {
