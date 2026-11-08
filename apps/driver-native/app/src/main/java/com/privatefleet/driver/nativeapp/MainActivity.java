@@ -898,6 +898,20 @@ public class MainActivity extends Activity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Architectural fix (docs/58 defect): if the location permission was
+        // revoked while the app was running, prompt immediately instead of
+        // letting the telemetry service silently stop (or crash-loop). The
+        // grant handler restarts the service automatically.
+        if (session != null
+                && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions();
+        }
+    }
+
     private void requestBackgroundPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             if (checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION)

@@ -92,12 +92,29 @@ public class TelemetryService extends Service implements LocationListener {
             stopSelf();
             return START_NOT_STICKY;
         }
-        Notification notification = buildNotification();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
-        } else {
-            startForeground(NOTIFICATION_ID, notification);
+        // Architectural fix (docs/58 defect): verify the location permission
+        // BEFORE startForeground(FOREGROUND_SERVICE_TYPE_LOCATION). The old
+        // order crashed with SecurityException and Android restarted the
+        // service in an endless crash loop. A missing permission must stop
+        // cleanly, never crash.
+        if (checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.w(TAG, "fine location not granted; stopping cleanly (no FGS start)");
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        try {
+            Notification notification = buildNotification();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+        } catch (SecurityException error) {
+            Log.w(TAG, "startForeground denied; stopping cleanly", error);
+            stopSelf();
+            return START_NOT_STICKY;
         }
         startUpdates();
         return START_STICKY;
