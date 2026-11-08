@@ -1,3 +1,8 @@
+### v2.04 - P1 slice 2: exception episode lifecycle + telemetry runner (2026-11-08)
+- exception_episodes table with a partial unique index: at most one ACTIVE episode per fingerprint (stop + threat class) - idempotency at the DB level; plan version is provenance, never identity.
+- Lifecycle: open, with consecutive-clear closure (close_reason='threat_cleared') and recurrence allowed after closure. Alerts remain a presentation projection (later slice).
+- Runner wired into telemetry ingest (fire-and-forget; evaluation failure can never disturb telemetry). Live-verified: table deployed; 0 episodes - the honest outcome because live plans are stale and the engine refuses to score stale plans.
+- Gate: API 160/160, web 53/53.
 ### v2.03 - P1 begins: Commitment Risk Engine, pure slice (2026-11-08)
 - Owner directive: proceed past the parked G: cloud-copy gap (external-disk D: backup confirmed working). P1 started under docs/55.
 - New pure module commitments/commitment-risk.ts: explainable threat assessment (planned_breach late; window_pressure at_risk; stationary_diminishing_margin at_risk with fresh-fix and thin-margin guards). Stale plans and stale fixes never scored; fingerprints are scope+threat-class only (plan version is provenance, never identity). 11 unit tests.
