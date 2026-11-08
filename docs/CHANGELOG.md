@@ -1,3 +1,8 @@
+### v2.05 - Slice 2 reconciliation (2026-11-08)
+- Lifecycle corrected to the frozen docs/56: a demonstrably cleared threat (2 consecutive clears) now RESOLVES (status resolved, resolved_at, resolution_note 'threat_cleared'); closed is reserved for duplicate/invalidated/superseded.
+- Opening evidence preserved: opened_reasons/opened_plan_version are set once and never overwritten by context refresh (migration 0023).
+- Observability: per-stop evaluation failures are logged via the supplied logger; the telemetry hook logs the fire-and-forget rejection - background failures never disappear silently.
+- Gate: API 160/160, web 53/53. Deployed; live columns verified.
 ### v2.04 - P1 slice 2: exception episode lifecycle + telemetry runner (2026-11-08)
 - exception_episodes table with a partial unique index: at most one ACTIVE episode per fingerprint (stop + threat class) - idempotency at the DB level; plan version is provenance, never identity.
 - Lifecycle: open, with consecutive-clear closure (close_reason='threat_cleared') and recurrence allowed after closure. Alerts remain a presentation projection (later slice).
