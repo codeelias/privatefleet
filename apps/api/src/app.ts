@@ -391,7 +391,7 @@ export function buildApp(config: AppConfig): {
     );
     notifications.start(bus);
     registerNotificationRoutes(app, auth, notifications);
-    registerCommitmentRoutes(app, auth, db);
+    registerCommitmentRoutes(app, auth, db, evidenceStore);
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter, db);
     registerTrackingRoutes(app, auth, bus, db);
     registerPositioningDiagnosticsRoutes(app, auth);

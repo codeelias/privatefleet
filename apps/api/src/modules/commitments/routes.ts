@@ -8,8 +8,10 @@ import { sql } from "drizzle-orm";
 import type { AuthService } from "../auth/service.js";
 import { makeAuthGuard } from "../auth/guard.js";
 import { withTenant, type DbHandle } from "../../db/client.js";
+import type { EvidenceStore } from "../evidence/storage.js";
 import { recordResponseAction, responseEvents, RESPONSE_ACTION_TYPES } from "./response-actions.js";
 import { deriveCommitmentOutcome, deriveExceptionResolution } from "./outcomes.js";
+import { buildEvidenceReportPdf, gatherJobEvidenceReport } from "./evidence-report.js";
 
 const ParamsSchema = z.object({
   jobId: z.string().uuid(),
@@ -29,6 +31,7 @@ export function registerCommitmentRoutes(
   app: FastifyInstance,
   auth: AuthService,
   handle: DbHandle,
+  evidenceStore: EvidenceStore,
 ): void {
   const guard = makeAuthGuard(auth);
 
@@ -226,6 +229,38 @@ export function registerCommitmentRoutes(
           });
         }),
       };
+    },
+  );
+
+  // Printable per-job evidence report (docs/56 section 10): real byte-level
+  // integrity verification of stored evidence against recorded hashes.
+  app.get(
+    "/v1/fleet/jobs/:jobId/evidence-report",
+    { preHandler: guard },
+    async (request, reply) => {
+      if (request.auth?.role === "driver") {
+        return reply.status(403).send({
+          code: "REPORT_DISPATCHER_ONLY",
+          uiMessage: "Ask dispatch for the evidence report.",
+        });
+      }
+      const params = JobParamsSchema.parse(request.params);
+      const report = await gatherJobEvidenceReport(
+        handle,
+        request.auth?.tenantId ?? "",
+        params.jobId,
+        evidenceStore,
+      );
+      if (!report) {
+        return reply.status(404).send({ code: "JOB_NOT_FOUND", uiMessage: "No such job." });
+      }
+      const pdf = await buildEvidenceReportPdf(report);
+      reply.header("Content-Type", "application/pdf");
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="evidence-report-${report.jobReference}.pdf"`,
+      );
+      return reply.send(pdf);
     },
   );
 }
