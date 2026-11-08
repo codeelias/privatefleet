@@ -66,30 +66,18 @@ export function deriveExceptionResolution(
   const confirmed = events.filter(
     (event) => (event.payload as { stage?: string }).stage === "confirmed",
   );
-  const resolvedEvidence = confirmed.filter(
-    (event) => (event.payload as { outcome?: string }).outcome === "resolved",
-  );
   const failedEvidence = confirmed.filter(
     (event) => (event.payload as { outcome?: string }).outcome === "failed",
   );
-  // A confirmed recovery RESOLVES the episode and the resolution stands:
-  // later failed actions (for example a failed customer notification after a
-  // successful reassignment) are preserved in the timeline but never revoke
-  // an established recovery. A failed outcome matters only when there is NO
-  // successful recovery evidence at all.
-  if (resolvedEvidence.length > 0) {
-    const latestResolved = [...resolvedEvidence].sort(
-      (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
-    )[0];
-    return {
-      state: "resolved",
-      resolutionNote:
-        (latestResolved?.payload as { resolutionNote?: string } | undefined)?.resolutionNote ?? undefined,
-      basis: "evidence",
-    };
-  }
+  // Response events NEVER resolve an episode. Resolution requires evidence
+  // that the ACTUAL threat condition cleared - the episode lifecycle's
+  // consecutive-clear rule (status 'resolved'). A confirmed reassignment, or
+  // a response event recorded with outcome=resolved, proves only that an
+  // action was taken: the threat itself must clear before 'resolved' can
+  // ever be derived. Failed evidence merely presents the honest non-resolved
+  // state response_failed.
   if (failedEvidence.length > 0) {
-    return { state: "response_failed", basis: "evidence" };
+    return { state: "response_failed", basis: "none" };
   }
   if (confirmed.length > 0) {
     return { state: "response_in_progress", basis: "none" };
@@ -107,15 +95,15 @@ export interface CommitmentStopFacts {
   status: string;
   jobCancelled: boolean;
   /**
-   * Independent handover evidence (docs/56): a SERVER-clock bracket from
-   * records other than the device-reported timestamp - the receipt time of a
-   * position fix within the completion radius (server clock) and the receipt
-   * time of the completion evidence (server clock). Device and server
-   * timestamps being close together proves only that RECORDS arrived close
-   * together, never when the physical handover occurred - so null (no
-   * independent bracket) always yields timing_unverified.
+   * Independent handover-time evidence (docs/56): a time that attests the
+   * PHYSICAL handover from a source independent of the device clock and of
+   * server receipt. A server-received position fix proves only device
+   * PRESENCE; an evidence receipt proves only server RECEPTION - especially
+   * with offline queues, neither establishes when the handover happened.
+   * v1 has NO such independent source, so callers pass null and timing is
+   * honestly timing_unverified until one is introduced.
    */
-  handoverBracket: { start: string; end: string } | null;
+  independentHandoverTime: string | null;
   windowStart: string;
   windowEnd: string;
   evidenceKinds: string[];
@@ -140,25 +128,24 @@ export interface DerivedCommitmentOutcome {
 }
 
 /**
- * Timing requires an independently corroborated handover bracket: BOTH ends
- * are server-clock records (position-fix receipt + evidence receipt). A
- * timing class is asserted only when the whole bracket agrees; any straddle
- * or a missing bracket returns timing_unverified.
+ * Timing classification requires independently supported handover-time
+ * evidence. Nothing currently recorded (device timestamps, server receipt
+ * times, presence fixes) attests the physical handover time, so a missing
+ * independent time always returns timing_unverified. If such a time is ever
+ * supplied, it is classified against the window directly.
  */
 function timingOf(
-  bracket: { start: string; end: string } | null,
+  independentHandoverTime: string | null,
   windowStart: string,
   windowEnd: string,
 ): TimingOutcome {
-  if (bracket == null) return "timing_unverified";
-  const lower = new Date(bracket.start).getTime();
-  const upper = new Date(bracket.end).getTime();
+  if (independentHandoverTime == null) return "timing_unverified";
+  const t = new Date(independentHandoverTime).getTime();
   const start = new Date(windowStart).getTime();
   const end = new Date(windowEnd).getTime();
-  if (upper < start) return "early";
-  if (lower > end) return "late";
-  if (lower >= start && upper <= end) return "within_window";
-  return "timing_unverified"; // straddles a boundary: not corroborated
+  if (t < start) return "early";
+  if (t > end) return "late";
+  return "within_window";
 }
 
 /**
@@ -178,20 +165,20 @@ export function deriveCommitmentOutcome(stop: CommitmentStopFacts): DerivedCommi
 
   const completed = operational === "completed";
   const originalTiming: TimingOutcome = completed
-    ? timingOf(stop.handoverBracket, stop.windowStart, stop.windowEnd)
+    ? timingOf(stop.independentHandoverTime, stop.windowStart, stop.windowEnd)
     : "not_applicable";
 
   let revisedTiming: TimingOutcome | "not_applicable" = "not_applicable";
-  if (completed && stop.handoverBracket != null && stop.revisions.length > 0) {
-    // Latest revision whose effective time is not after the completion time.
-    const t = new Date(stop.handoverBracket.end).getTime();
+  if (completed && stop.independentHandoverTime != null && stop.revisions.length > 0) {
+    // Latest revision whose effective time is not after the handover time.
+    const t = new Date(stop.independentHandoverTime).getTime();
     const applicable = stop.revisions.filter(
       (revision) => revision.effectiveAt == null || new Date(revision.effectiveAt).getTime() <= t,
     );
     if (applicable.length > 0) {
       const latest = applicable[applicable.length - 1];
       if (latest) {
-        revisedTiming = timingOf(stop.handoverBracket, latest.windowStart, latest.windowEnd);
+        revisedTiming = timingOf(stop.independentHandoverTime, latest.windowStart, latest.windowEnd);
       }
     }
   }

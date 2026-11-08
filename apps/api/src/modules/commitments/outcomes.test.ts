@@ -19,35 +19,37 @@ function event(payload: Record<string, unknown>, occurredAt?: string): ResponseE
 }
 
 describe("deriveExceptionResolution", () => {
-  it("a failed initial attempt never blocks a subsequent successful recovery", () => {
-    // Reviewer sequence: contact failed -> reassign confirmed -> evidence resolved.
+  it("the reviewer sequence resolves ONLY when the threat actually clears", () => {
+    // Contact failed -> reassign confirmed -> threat cleared (consecutive
+    // clears) -> episode status resolved. Resolution comes from the threat
+    // condition, not from the response events.
     const resolution = deriveExceptionResolution(
-      { status: "open" },
+      { status: "resolved", resolutionNote: "threat_cleared" },
       [
         event({ id: "f1", stage: "confirmed", outcome: "failed" }, "2026-11-08T10:00:00.000Z"),
-        event({ id: "r1", stage: "confirmed", outcome: "resolved", resolutionNote: "new driver progressing" }, "2026-11-08T10:30:00.000Z"),
+        event({ id: "r1", stage: "confirmed", outcome: "resolved" }, "2026-11-08T10:30:00.000Z"),
       ],
     );
     expect(resolution.state).toBe("resolved");
-    expect(resolution.basis).toBe("evidence");
-    expect(resolution.resolutionNote).toBe("new driver progressing");
-    // The failed event itself stays in the append-only store (history is
-    // never mutated - the store keeps every event; see response-actions tests).
+    expect(resolution.basis).toBe("episode");
+    // The failed event itself stays in the append-only store (never mutated).
   });
 
-  it("a failed outcome with no later success can never derive resolved", () => {
+  it("a confirmed reassignment NEVER resolves an active threat", () => {
+    // Reassignment confirmed, new driver makes NO progress, original threat
+    // still active (episode open). Resolution must require evidence that the
+    // actual threat cleared - a successful action alone is not it.
     const resolution = deriveExceptionResolution(
       { status: "open" },
-      [event({ stage: "confirmed", outcome: "failed" })],
+      [event({ stage: "confirmed", outcome: "resolved", note: "reassigned" })],
     );
-    expect(resolution.state).toBe("response_failed");
+    expect(resolution.state).not.toBe("resolved");
+    expect(resolution.state).toBe("response_in_progress");
   });
 
-  it("a later failed action never revokes an established recovery", () => {
-    // Failed customer notification AFTER a successful reassignment: the
-    // resolution stands; the failed action is preserved in the timeline.
+  it("a later failed action never revokes an established (threat-cleared) resolution", () => {
     const resolution = deriveExceptionResolution(
-      { status: "open" },
+      { status: "resolved", resolutionNote: "threat_cleared" },
       [
         event({ stage: "confirmed", outcome: "resolved" }, "2026-11-08T10:00:00.000Z"),
         event({ stage: "confirmed", outcome: "failed" }, "2026-11-08T10:30:00.000Z"),
@@ -56,9 +58,19 @@ describe("deriveExceptionResolution", () => {
     expect(resolution.state).toBe("resolved");
   });
 
-  it("episode-level resolved (threat cleared) dominates; closed never implies recovery", () => {
-    expect(deriveExceptionResolution({ status: "resolved", resolutionNote: "threat_cleared" }, []).state).toBe("resolved");
-    const closed = deriveExceptionResolution({ status: "closed", closeReason: "duplicate" }, [event({ stage: "confirmed", outcome: "resolved" })]);
+  it("a failed outcome with the threat still active can never derive resolved", () => {
+    const resolution = deriveExceptionResolution(
+      { status: "open" },
+      [event({ stage: "confirmed", outcome: "failed" })],
+    );
+    expect(resolution.state).toBe("response_failed");
+  });
+
+  it("closed never implies recovery", () => {
+    const closed = deriveExceptionResolution(
+      { status: "closed", closeReason: "duplicate" },
+      [event({ stage: "confirmed", outcome: "resolved" })],
+    );
     expect(closed.state).toBe("closed");
     expect(closed.closedReason).toBe("duplicate");
   });
@@ -74,7 +86,7 @@ describe("deriveCommitmentOutcome", () => {
   const base = {
     status: "completed",
     jobCancelled: false,
-    handoverBracket: { start: "2026-11-08T10:00:00.000Z", end: "2026-11-08T10:00:30.000Z" },
+    independentHandoverTime: "2026-11-08T10:00:00.000Z",
     windowStart: "2026-11-08T09:00:00.000Z",
     windowEnd: "2026-11-08T11:00:00.000Z",
     evidenceKinds: ["photo"],
@@ -89,27 +101,32 @@ describe("deriveCommitmentOutcome", () => {
     expect(outcome.evidenceCompleteness).toBe("complete");
   });
 
-  it("a device timestamp alone can NEVER verify timing - corroboration required", () => {
-    expect(deriveCommitmentOutcome({ ...base, handoverBracket: null }).timing).toBe("timing_unverified");
-    expect(deriveCommitmentOutcome({ ...base, handoverBracket: null }).timing).toBe("timing_unverified");
+  it("without independent handover-time evidence, timing is ALWAYS unverified", () => {
+    expect(deriveCommitmentOutcome({ ...base, independentHandoverTime: null }).timing).toBe("timing_unverified");
   });
 
-  it("early and late require an independent server-clock bracket outside the window", () => {
+  it("an explicitly supplied independent handover time classifies directly", () => {
     expect(deriveCommitmentOutcome({
-      ...base, handoverBracket: { start: "2026-11-08T08:30:00.000Z", end: "2026-11-08T08:30:30.000Z" },
+      ...base, independentHandoverTime: "2026-11-08T08:30:00.000Z",
     }).timing).toBe("early");
     expect(deriveCommitmentOutcome({
-      ...base, handoverBracket: { start: "2026-11-08T12:00:00.000Z", end: "2026-11-08T12:00:30.000Z" },
+      ...base, independentHandoverTime: "2026-11-08T12:00:00.000Z",
     }).timing).toBe("late");
+    expect(deriveCommitmentOutcome({
+      ...base, independentHandoverTime: "2026-11-08T10:00:00.000Z",
+    }).timing).toBe("within_window");
   });
 
-  it("a bracket straddling a window boundary is timing_unverified, never guessed", () => {
-    expect(deriveCommitmentOutcome({
-      ...base, handoverBracket: { start: "2026-11-08T08:59:00.000Z", end: "2026-11-08T09:30:00.000Z" },
-    }).timing).toBe("timing_unverified");
-    expect(deriveCommitmentOutcome({
-      ...base, handoverBracket: { start: "2026-11-08T10:59:00.000Z", end: "2026-11-08T11:30:00.000Z" },
-    }).timing).toBe("timing_unverified");
+  it("offline-queued evidence (captured before the fix, uploaded after) is unverified", () => {
+    // Evidence captured 09:50 on the device, uploaded 10:30; a position fix
+    // was received by the server at 10:25; window 09:00-10:00. A naive
+    // bracket [fix receipt, upload receipt] = [10:25, 10:30] would wrongly
+    // say 'late': the fix proves only PRESENCE and the receipt only
+    // RECEPTION - neither attests the physical handover at 09:50. The
+    // derivation receives no independent handover time and must report
+    // timing_unverified.
+    const outcome = deriveCommitmentOutcome({ ...base, independentHandoverTime: null });
+    expect(outcome.timing).toBe("timing_unverified");
   });
 
   it("skipped is unconfirmed, not terminal not_delivered; failed is not_delivered; cancelled is cancelled", () => {
@@ -127,7 +144,7 @@ describe("deriveCommitmentOutcome", () => {
   it("original and revised results are preserved independently", () => {
     const outcome = deriveCommitmentOutcome({
       ...base,
-      handoverBracket: { start: "2026-11-08T11:30:00.000Z", end: "2026-11-08T11:30:30.000Z" }, // late against the ORIGINAL window
+      independentHandoverTime: "2026-11-08T11:30:00.000Z", // late against the ORIGINAL window
       revisions: [
         {
           windowStart: "2026-11-08T11:00:00.000Z",
@@ -141,13 +158,18 @@ describe("deriveCommitmentOutcome", () => {
   });
 
   it("exception resolution and delivery outcome are independent", () => {
-    // A resolved exception changes NOTHING about a failed stop.
-    const resolution = deriveExceptionResolution({ status: "open" }, [event({ stage: "confirmed", outcome: "resolved" })]);
+    // A resolved exception (threat actually cleared) changes NOTHING about a
+    // failed stop's operational outcome.
+    const resolution = deriveExceptionResolution(
+      { status: "resolved", resolutionNote: "threat_cleared" },
+      [event({ stage: "confirmed", outcome: "resolved" })],
+    );
     const outcome = deriveCommitmentOutcome({ ...base, status: "failed", evidenceKinds: [] });
     expect(resolution.state).toBe("resolved");
     expect(outcome.operational).toBe("not_delivered");
     expect(outcome.evidenceCompleteness).toBe("not_applicable");
   });
 });
+
 
 
