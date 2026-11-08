@@ -1,3 +1,9 @@
+### v2.10 - P1 slice 4: derived resolution + commitment outcomes (2026-11-08)
+- Pre-check shipped: response idempotency now uses request hashes - same key + same payload = replay (original event id); same key + different payload = 409 IDEMPOTENCY_CONFLICT; nothing is ever written twice (tested).
+- Slice 4: exception resolution DERIVED from episode lifecycle + recorded response evidence. A failed confirmed response pins the state to response_failed - never resolved (failed dominates, tested). closed never implies recovery.
+- Commitment outcomes: three orthogonal dimensions (operational completion / timing / evidence completeness), timing from device-captured evidence time only (timing_unverified otherwise - server receipt never used), original vs revised windows preserved independently, skipped = unconfirmed (not terminal), failed = not_delivered. NO new entity, NO writable outcome fields - pure derivation at read time.
+- Read endpoints: /v1/fleet/jobs/:id/episodes/:eid/resolution and /v1/fleet/jobs/:id/commitment-outcomes. Live-verified: completed job surfaces timing=late + evidence=incomplete (honest), non-completed job unconfirmed/not_applicable.
+- Gate: API 174/174, web 53/53.
 ### v2.09 - P1 slice 3: response actions + closed contract (2026-11-08)
 - Slice 2 reconciliation COMPLETE: threat_cleared resolves (already shipped v2.05); NEW closeEpisode contract - closed = duplicate/invalidated/superseded only, never implies recovery (tested).
 - Response actions: typed append-only job_events (response.contact_driver/notify_customer/reassign/reschedule/other), actor-attributed, episode-correlated (episode_id column), attempts and confirmed outcomes as SEPARATE events, reassignment references the canonical assignment event, idempotency enforced by a partial unique index (ON CONFLICT DO NOTHING). No separate actions table. Dispatcher-only HTTP endpoints.
