@@ -187,8 +187,12 @@ public class RouteMapActivity extends Activity {
                     if (stop != null) {
                         Log.i(TAG, "pin tapped seq=" + stop.sequence + " type=" + stop.type
                                 + " status=" + stop.status + " ref=" + stop.reference);
+                        String shortAddress = stop.address.length() > 42
+                                ? stop.address.substring(0, 42) + "..."
+                                : stop.address;
                         toast("Stop " + stop.sequence + " " + ("pickup".equals(stop.type) ? "P" : "D")
-                                + " \u00b7 " + stop.reference + " \u00b7 " + stop.status);
+                                + " \u00b7 " + stop.reference + " \u00b7 " + shortAddress
+                                + " \u00b7 " + stop.status);
                         showStopSheet(stop);
                     }
                     return true;
@@ -589,6 +593,23 @@ public class RouteMapActivity extends Activity {
     }
 
     private Bitmap pinBitmap(RouteGeometry.Stop stop) {
+        // The VISIBLE pin is rendered exactly as before (36dp, identical
+        // geometry and colours). P0.1 only wraps it: the 36dp bitmap is
+        // composited at the exact CENTRE of a 72dp transparent canvas. Because
+        // the pin occupies the same position relative to the canvas centre as
+        // the original 36dp bitmap, its screen position is identical under any
+        // SDK anchor semantics - while the touchable area grows by 18dp of
+        // transparent padding on every side, where mis-taps happen on dense
+        // routes.
+        Bitmap pin = pinVisual(stop);
+        int padded = dp(72);
+        Bitmap bitmap = Bitmap.createBitmap(padded, padded, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawBitmap(pin, (padded - pin.getWidth()) / 2f, (padded - pin.getHeight()) / 2f, null);
+        return bitmap;
+    }
+
+    private Bitmap pinVisual(RouteGeometry.Stop stop) {
         int size = dp(36);
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
