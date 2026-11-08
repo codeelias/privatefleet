@@ -12,7 +12,6 @@ import type { EvidenceStore } from "../evidence/storage.js";
 import { recordResponseAction, responseEvents, RESPONSE_ACTION_TYPES } from "./response-actions.js";
 import { deriveCommitmentOutcome, deriveExceptionResolution } from "./outcomes.js";
 import { buildEvidenceReportPdf, gatherJobEvidenceReport } from "./evidence-report.js";
-import { DEFAULT_HANDOVER_RADIUS_M, independentHandoverBracket } from "./handover.js";
 
 const ParamsSchema = z.object({
   jobId: z.string().uuid(),
@@ -135,14 +134,14 @@ export function registerCommitmentRoutes(
       return {
         stops: await withTenant(handle, tenantId, async (db) => {
           const job = (await db.execute(sql`
-            SELECT id, status, service_type, assigned_vehicle_id FROM jobs
+            SELECT id, status, service_type FROM jobs
             WHERE tenant_id = ${tenantId} AND id = ${params.jobId}
-          `)) as unknown as Array<{ id: string; status: string; service_type: string; assigned_vehicle_id: string | null }>;
+          `)) as unknown as Array<{ id: string; status: string; service_type: string }>;
           const jobRow = job[0];
           if (!jobRow) return [];
           const cancelled = jobRow.status === "cancelled";
           const stops = (await db.execute(sql`
-            SELECT s.id, s.status, s.window_start, s.window_end, s.latitude, s.longitude
+            SELECT s.id, s.status, s.window_start, s.window_end
             FROM job_stops s
             WHERE s.tenant_id = ${tenantId} AND s.job_id = ${params.jobId}
             ORDER BY s.sequence
@@ -151,8 +150,6 @@ export function registerCommitmentRoutes(
             status: string;
             window_start: Date | string;
             window_end: Date | string;
-            latitude: number;
-            longitude: number;
           }>;
           const stopIds = stops.map((stop) => stop.id);
           const evidence = stopIds.length === 0
@@ -167,7 +164,7 @@ export function registerCommitmentRoutes(
                 created_at: Date | string;
               }>);
           const policy = (await db.execute(sql`
-            SELECT service_type, require_recipient, require_signature, require_photo, require_failure_photo, completion_radius_m
+            SELECT service_type, require_recipient, require_signature, require_photo, require_failure_photo
             FROM proof_policies
             WHERE tenant_id = ${tenantId} AND service_type IN (${jobRow.service_type}, '*')
           `)) as unknown as Array<{
@@ -176,10 +173,8 @@ export function registerCommitmentRoutes(
             require_signature: boolean;
             require_photo: boolean;
             require_failure_photo: boolean;
-            completion_radius_m: number | null;
           }>;
           const chosenPolicy = policy.find((p) => p.service_type === jobRow.service_type) ?? policy[0];
-          const radiusM = chosenPolicy?.completion_radius_m ?? DEFAULT_HANDOVER_RADIUS_M;
           const requiredKinds = [
             ...(chosenPolicy?.require_recipient ? ["recipient"] : []),
             ...(chosenPolicy?.require_signature ? ["signature"] : []),
@@ -197,19 +192,11 @@ export function registerCommitmentRoutes(
           const result = [];
           for (const stop of stops) {
             const stopEvidence = evidence.filter((row) => row.stop_id === stop.id);
-            const receiptTime = stopEvidence
-              .map((row) => new Date(row.created_at).getTime())
-              .reduce<number | null>((max, t) => (max === null || t > max ? t : max), null);
-            // Independent handover evidence ONLY: server-clock presence fix +
-            // server-clock evidence receipt. The device clock is ignored.
-            const handoverBracket = await independentHandoverBracket(
-              db,
-              tenantId,
-              { latitude: stop.latitude, longitude: stop.longitude },
-              jobRow.assigned_vehicle_id,
-              radiusM,
-              receiptTime === null ? null : new Date(receiptTime),
-            );
+            // v1 has NO independent handover-time source: presence fixes and
+            // evidence receipts prove presence and reception, not the moment
+            // of physical handover. Pass null - timing is timing_unverified
+            // until an independent source is introduced (docs/56).
+            const independentHandoverTime: string | null = null;
             const stopRevisions = revisions
               .filter((revision) => revision.stop_id === stop.id)
               .map((revision) => {
@@ -230,7 +217,7 @@ export function registerCommitmentRoutes(
               outcome: deriveCommitmentOutcome({
                 status: stop.status,
                 jobCancelled: cancelled,
-                handoverBracket,
+                independentHandoverTime,
                 windowStart: new Date(stop.window_start).toISOString(),
                 windowEnd: new Date(stop.window_end).toISOString(),
                 evidenceKinds: stopEvidence.map((row) => row.kind),
