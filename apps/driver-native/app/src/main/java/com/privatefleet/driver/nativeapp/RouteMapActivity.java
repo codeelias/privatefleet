@@ -237,6 +237,23 @@ public class RouteMapActivity extends Activity {
             if (tickCounter % 6 == 0) {
                 loadRoute();
             }
+            // P0.1 test instrumentation: log the camera and every stop's
+            // exact projected screen position so the tap test can aim
+            // precisely - no blind taps, no accidental button presses.
+            if (map != null && geometry != null) {
+                int[] offset = new int[2];
+                mapView.getLocationOnScreen(offset);
+                Log.i(TAG, "mapview offset x=" + offset[0] + " y=" + offset[1]
+                        + " w=" + mapView.getWidth() + " h=" + mapView.getHeight());
+                org.maplibre.android.camera.CameraPosition cam = map.getCameraPosition();
+                Log.i(TAG, "campos zoom=" + cam.zoom + " center=" + cam.target.getLatitude() + "," + cam.target.getLongitude());
+                for (RouteGeometry.Stop stop : geometry.stops) {
+                    android.graphics.PointF sp = map.getProjection().toScreenLocation(
+                            new LatLng(stop.latitude, stop.longitude));
+                    Log.i(TAG, "pinpos seq=" + stop.sequence + " type=" + stop.type
+                            + " ref=" + stop.reference + " x=" + Math.round(sp.x) + " y=" + Math.round(sp.y));
+                }
+            }
             handler.postDelayed(this, 10_000);
         }
     };
