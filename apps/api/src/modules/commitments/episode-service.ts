@@ -255,7 +255,7 @@ export async function evaluateDriverCommitments(
         LIMIT 1
       ) plan ON true
       WHERE j.assigned_driver_id = ${driverId}
-        AND s.status IN ('pending', 'arrived')
+        AND s.status IN ('pending', 'arrived', 'completed', 'skipped', 'failed')
     `)) as unknown as Array<{
       stop_id: string;
       job_id: string;
