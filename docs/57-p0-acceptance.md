@@ -51,7 +51,7 @@ Verified facts and the one remaining gap:
 | DB restore into scratch database | VERIFIED (DRILL PASS, 13/13 tables, 155/155 hashes) |
 | Live evidence files hash-match database records | VERIFIED by existing `restore-drill.ps1` logic (hash per storage_key vs content_hash) |
 | Restoration FROM the encrypted archive (decryption path) | NOT TESTED ON HOST — by design: only `age.pub` exists on the host; the age private key is kept off-host. The decryption drill must run where the private key lives. |
-| Off-host copy (G:\My Drive cloud target) | FAILING nightly ("Access is denied") — backups currently exist only on D: (same machine). Single-site until repaired. |
+| Off-host copy (G:\My Drive cloud target) | FAILING nightly ("Access is denied") — backups currently exist only on D: (same machine). Single-site until repaired. Diagnosed 2026-11-08: the G: drive exists (Fixed Drive) and GoogleDriveFS processes are running, but every access returns Access is denied and the volume reports no capacity — the Google Drive for Desktop mount is disconnected/unauthenticated. The backup script behaves correctly (tries, warns, continues to D:). Repair requires signing in to Google Drive for Desktop on the production host — a human action, not a code change. Encryption and key placement are NOT weakened and the private key is NOT moved on-host. |
 
 Conclusion: the reviewer's question is now answered with evidence — the
 evidence FILES are included in the nightly encrypted backup. Full
