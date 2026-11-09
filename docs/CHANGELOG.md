@@ -1,3 +1,8 @@
+### v2.16 - R6: SMTP transport configuration (2026-11-09)
+- notifications module gains a real SMTP transport (nodemailer): SMTP_HOST/PORT/SECURE/USER/PASS/FROM from the environment; absent host keeps the honest UnconfiguredTransport. 'sent' is written ONLY when the SMTP server ACCEPTS the message (acceptance is not proof of recipient delivery, and the detail says so).
+- GET /v1/notifications/transport-status reports {configured, host, port, from} - never the password.
+- start-api.ps1 passes an optional smtp block from secrets.json; production currently reports configured=false (honest until the owner supplies credentials).
+- Gate: API 201/201, web 53/53. Deployed; live status verified.
 ### v2.15 - P1 slice 6: synthetic 120-second demonstration + negative acceptance (2026-11-08)
 - Deterministic, labelled, RLS-isolated DEMO tenant with seed/reset mechanism; demo driver script (scripts/p1-demo-120s.ts) with phase timestamps, report download, isolation verification, reset.
 - All docs/56 acceptance criteria executed: positive 1-5 (commitment visible, ONE explainable episode, real assign workflow + canonical correlation, completion refused without evidence then accepted with photo+signature+recipient, append-only report) and negative 1-7 (stale GPS no episode; stale plan no episode; no duplicate active episodes; failed response never resolved; repeat completion no duplicates; resolved exception never hides the original commitment with honest timing_unverified; attempted contact never shown as successful).
