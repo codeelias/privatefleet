@@ -35,6 +35,7 @@ import { registerPositioningDiagnosticsRoutes } from "./modules/positioning/rout
 import { registerDiagnosticsRoutes } from "./modules/diagnostics/routes.js";
 import { registerPublicTrackingRoutes } from "./modules/tracking/public-tracking-routes.js";
 import { NotificationService, UnconfiguredTransport } from "./modules/notifications/service.js";
+import { SmtpTransport, smtpConfigFromEnv } from "./modules/notifications/smtp.js";
 import { registerNotificationRoutes } from "./modules/notifications/routes.js";
 import { registerCommitmentRoutes } from "./modules/commitments/routes.js";
 import { DemoStore } from "./modules/demo/store.js";
@@ -385,12 +386,16 @@ export function buildApp(config: AppConfig): {
     registerReportRoutes(app, auth, db);
     registerGeofenceRoutes(app, auth, db);
     registerPublicTrackingRoutes(app, auth, db, evidenceStore);
-    const notifications = new NotificationService(
-      db,
-      new UnconfiguredTransport(), // SMTP lands with the first real mail server
-    );
+    // R6: real SMTP when configured (host from environment); otherwise the
+    // honest unconfigured transport - 'sent' is only ever written on SMTP
+    // acceptance, never fabricated.
+    const smtpConfig = smtpConfigFromEnv(process.env);
+    const transport = smtpConfig
+      ? new SmtpTransport(smtpConfig)
+      : new UnconfiguredTransport();
+    const notifications = new NotificationService(db, transport);
     notifications.start(bus);
-    registerNotificationRoutes(app, auth, notifications);
+    registerNotificationRoutes(app, auth, notifications, transport);
     registerCommitmentRoutes(app, auth, db, evidenceStore);
     registerDriverDeviceRoutes(app, auth, fleet, authAttemptLimiter, db);
     registerTrackingRoutes(app, auth, bus, db);
