@@ -35,3 +35,12 @@ apps/driver-native/keystore.properties
 
 field/
 
+
+# Research/build/runtime artifacts (never commit)
+*.zip
+rinex/
+maplibre-research/
+logs/
+apps/driver-native/app/.cxx/
+# One-off diagnostic scripts (kept locally, not part of the product)
+scripts/check-*.ps1

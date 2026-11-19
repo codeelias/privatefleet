@@ -1,0 +1,61 @@
+job_ref,service_type,priority,stop_type,address,latitude,longitude,window_start,window_end
+G01-001,Delivery,urgent,pickup,"Wightman Road, London",51.5775,-0.1003,2026-11-05T09:35:00Z,2026-11-05T11:35:00Z
+G01-001,Delivery,urgent,dropoff,"Mount View Road, London",51.5720,-0.1240,2026-11-05T10:35:00Z,2026-11-05T13:35:00Z
+G01-002,Delivery,standard,pickup,"Hornsey Rise, London",51.5687,-0.1245,2026-11-05T10:20:00Z,2026-11-05T12:20:00Z
+G01-002,Delivery,standard,dropoff,"Harringay Road, London",51.5780,-0.1035,2026-11-05T11:20:00Z,2026-11-05T14:20:00Z
+G01-003,Delivery,stat,pickup,"Tollington Park, London",51.5650,-0.1170,2026-11-05T11:05:00Z,2026-11-05T13:05:00Z
+G01-003,Delivery,stat,dropoff,"Mattison Road, London",51.5750,-0.0960,2026-11-05T12:05:00Z,2026-11-05T15:05:00Z
+G01-004,Delivery,standard,pickup,"Beresford Road, London",51.5708,-0.1025,2026-11-05T11:50:00Z,2026-11-05T13:50:00Z
+G01-004,Delivery,standard,dropoff,"Drayton Park, London",51.5547,-0.1056,2026-11-05T12:50:00Z,2026-11-05T15:50:00Z
+G01-005,Delivery,urgent,pickup,"Mount View Road, London",51.5720,-0.1240,2026-11-05T12:35:00Z,2026-11-05T14:35:00Z
+G01-005,Delivery,urgent,dropoff,"Newington Green, London",51.5516,-0.0865,2026-11-05T13:35:00Z,2026-11-05T16:35:00Z
+G02-001,Delivery,standard,pickup,"Dartmouth Park Hill, London",51.5609,-0.1304,2026-11-05T10:25:00Z,2026-11-05T12:25:00Z
+G02-001,Delivery,standard,dropoff,"Myddleton Road, London",51.5840,-0.1160,2026-11-05T11:25:00Z,2026-11-05T14:25:00Z
+G02-002,Delivery,urgent,pickup,"Hanley Road, London",51.5700,-0.1150,2026-11-05T11:10:00Z,2026-11-05T13:10:00Z
+G02-002,Delivery,urgent,dropoff,"Kenwood Road, London",51.5720,-0.0890,2026-11-05T12:10:00Z,2026-11-05T15:10:00Z
+G02-003,Delivery,urgent,pickup,"Umfreville Road, London",51.5740,-0.1125,2026-11-05T11:55:00Z,2026-11-05T13:55:00Z
+G02-003,Delivery,urgent,dropoff,"Blackstock Road, London",51.5608,-0.1018,2026-11-05T12:55:00Z,2026-11-05T15:55:00Z
+G02-004,Delivery,standard,pickup,"Shepherd's Hill, London",51.5805,-0.1260,2026-11-05T12:40:00Z,2026-11-05T14:40:00Z
+G02-004,Delivery,standard,dropoff,"Green Lanes, London",51.5730,-0.0950,2026-11-05T13:40:00Z,2026-11-05T16:40:00Z
+G02-005,Delivery,stat,pickup,"Myddleton Road, London",51.5840,-0.1160,2026-11-05T13:25:00Z,2026-11-05T15:25:00Z
+G02-005,Delivery,stat,dropoff,"Hornsey Rise, London",51.5687,-0.1245,2026-11-05T14:25:00Z,2026-11-05T17:25:00Z
+G03-001,Delivery,standard,pickup,"Florence Road, London",51.5728,-0.1045,2026-11-05T11:15:00Z,2026-11-05T13:15:00Z
+G03-001,Delivery,standard,dropoff,"Gillespie Road, London",51.5586,-0.1060,2026-11-05T12:15:00Z,2026-11-05T15:15:00Z
+G03-002,Delivery,stat,pickup,"Quernmore Road, London",51.5705,-0.1320,2026-11-05T12:00:00Z,2026-11-05T14:00:00Z
+G03-002,Delivery,stat,dropoff,"Brownswood Road, London",51.5662,-0.0984,2026-11-05T13:00:00Z,2026-11-05T16:00:00Z
+G03-003,Delivery,standard,pickup,"Harringay Road, London",51.5780,-0.1035,2026-11-05T12:45:00Z,2026-11-05T14:45:00Z
+G03-003,Delivery,standard,dropoff,"Wightman Road, London",51.5775,-0.1003,2026-11-05T13:45:00Z,2026-11-05T16:45:00Z
+G03-004,Delivery,urgent,pickup,"Middle Lane, London",51.5788,-0.0910,2026-11-05T13:30:00Z,2026-11-05T15:30:00Z
+G03-004,Delivery,urgent,dropoff,"Junction Road, London",51.5628,-0.1334,2026-11-05T14:30:00Z,2026-11-05T17:30:00Z
+G03-005,Delivery,urgent,pickup,"Gillespie Road, London",51.5586,-0.1060,2026-11-05T08:15:00Z,2026-11-05T10:15:00Z
+G03-005,Delivery,urgent,dropoff,"Hanley Road, London",51.5700,-0.1150,2026-11-05T09:15:00Z,2026-11-05T12:15:00Z
+G04-001,Delivery,urgent,pickup,"Oakfield Road, London",51.5758,-0.1085,2026-11-05T12:05:00Z,2026-11-05T14:05:00Z
+G04-001,Delivery,urgent,dropoff,"Clissold Park, London",51.5628,-0.0896,2026-11-05T13:05:00Z,2026-11-05T16:05:00Z
+G04-002,Delivery,urgent,pickup,"Langham Road, London",51.5858,-0.1275,2026-11-05T12:50:00Z,2026-11-05T14:50:00Z
+G04-002,Delivery,urgent,dropoff,"Endymion Road, London",51.5689,-0.1110,2026-11-05T13:50:00Z,2026-11-05T16:50:00Z
+G04-003,Delivery,standard,pickup,"Kenwood Road, London",51.5720,-0.0890,2026-11-05T13:35:00Z,2026-11-05T15:35:00Z
+G04-003,Delivery,standard,dropoff,"Dartmouth Park Hill, London",51.5609,-0.1304,2026-11-05T14:35:00Z,2026-11-05T17:35:00Z
+G04-004,Delivery,stat,pickup,"Drayton Park, London",51.5547,-0.1056,2026-11-05T08:20:00Z,2026-11-05T10:20:00Z
+G04-004,Delivery,stat,dropoff,"Beresford Road, London",51.5708,-0.1025,2026-11-05T09:20:00Z,2026-11-05T12:20:00Z
+G04-005,Delivery,standard,pickup,"Clissold Park, London",51.5628,-0.0896,2026-11-05T09:05:00Z,2026-11-05T11:05:00Z
+G04-005,Delivery,standard,dropoff,"Quernmore Road, London",51.5705,-0.1320,2026-11-05T10:05:00Z,2026-11-05T13:05:00Z
+G05-001,Delivery,stat,pickup,"Mattison Road, London",51.5750,-0.0960,2026-11-05T12:55:00Z,2026-11-05T14:55:00Z
+G05-001,Delivery,stat,dropoff,"Crouch Hill, London",51.5723,-0.1177,2026-11-05T13:55:00Z,2026-11-05T16:55:00Z
+G05-002,Delivery,standard,pickup,"Avenell Road, London",51.5562,-0.1081,2026-11-05T13:40:00Z,2026-11-05T15:40:00Z
+G05-002,Delivery,standard,dropoff,"Tollington Park, London",51.5650,-0.1170,2026-11-05T14:40:00Z,2026-11-05T17:40:00Z
+G05-003,Delivery,urgent,pickup,"Brownswood Road, London",51.5662,-0.0984,2026-11-05T08:25:00Z,2026-11-05T10:25:00Z
+G05-003,Delivery,urgent,dropoff,"Florence Road, London",51.5728,-0.1045,2026-11-05T09:25:00Z,2026-11-05T12:25:00Z
+G05-004,Delivery,urgent,pickup,"Green Lanes, London",51.5730,-0.0950,2026-11-05T09:10:00Z,2026-11-05T11:10:00Z
+G05-004,Delivery,urgent,dropoff,"Shepherd's Hill, London",51.5805,-0.1260,2026-11-05T10:10:00Z,2026-11-05T13:10:00Z
+G05-005,Delivery,standard,pickup,"Crouch Hill, London",51.5723,-0.1177,2026-11-05T09:55:00Z,2026-11-05T11:55:00Z
+G05-005,Delivery,standard,dropoff,"Langham Road, London",51.5858,-0.1275,2026-11-05T10:55:00Z,2026-11-05T13:55:00Z
+G06-001,Delivery,urgent,pickup,"Blackstock Road, London",51.5608,-0.1018,2026-11-05T13:45:00Z,2026-11-05T15:45:00Z
+G06-001,Delivery,urgent,dropoff,"Corbyn Street, London",51.5660,-0.1130,2026-11-05T14:45:00Z,2026-11-05T17:45:00Z
+G06-002,Delivery,standard,pickup,"Newington Green, London",51.5516,-0.0865,2026-11-05T08:30:00Z,2026-11-05T10:30:00Z
+G06-002,Delivery,standard,dropoff,"Umfreville Road, London",51.5740,-0.1125,2026-11-05T09:30:00Z,2026-11-05T12:30:00Z
+G06-003,Delivery,stat,pickup,"Endymion Road, London",51.5689,-0.1110,2026-11-05T09:15:00Z,2026-11-05T11:15:00Z
+G06-003,Delivery,stat,dropoff,"Oakfield Road, London",51.5758,-0.1085,2026-11-05T10:15:00Z,2026-11-05T13:15:00Z
+G06-004,Delivery,standard,pickup,"Junction Road, London",51.5628,-0.1334,2026-11-05T10:00:00Z,2026-11-05T12:00:00Z
+G06-004,Delivery,standard,dropoff,"Middle Lane, London",51.5788,-0.0910,2026-11-05T11:00:00Z,2026-11-05T14:00:00Z
+G06-005,Delivery,urgent,pickup,"Corbyn Street, London",51.5660,-0.1130,2026-11-05T10:45:00Z,2026-11-05T12:45:00Z
+G06-005,Delivery,urgent,dropoff,"Avenell Road, London",51.5562,-0.1081,2026-11-05T11:45:00Z,2026-11-05T14:45:00Z

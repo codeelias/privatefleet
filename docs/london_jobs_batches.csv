@@ -1,0 +1,61 @@
+job_ref,service_type,priority,stop_type,address,latitude,longitude,window_start,window_end
+B01-001,Delivery,stat,pickup,"Buckingham Palace, London",51.5014,-0.1419,2026-11-02T09:20:00Z,2026-11-02T11:20:00Z
+B01-001,Delivery,stat,dropoff,"Greenwich Market, London",51.4816,-0.0096,2026-11-02T10:20:00Z,2026-11-02T13:20:00Z
+B01-002,Delivery,standard,pickup,"Tate Modern, London",51.5076,-0.0994,2026-11-02T09:55:00Z,2026-11-02T11:55:00Z
+B01-002,Delivery,standard,dropoff,"Brixton Village, London",51.4613,-0.1156,2026-11-02T10:55:00Z,2026-11-02T13:55:00Z
+B01-003,Delivery,urgent,pickup,"Tower of London, London",51.5081,-0.0759,2026-11-02T10:30:00Z,2026-11-02T12:30:00Z
+B01-003,Delivery,urgent,dropoff,"Richmond Riverside, London",51.4613,-0.3037,2026-11-02T11:30:00Z,2026-11-02T14:30:00Z
+B01-004,Delivery,stat,pickup,"Covent Garden Piazza, London",51.5117,-0.1240,2026-11-02T11:05:00Z,2026-11-02T13:05:00Z
+B01-004,Delivery,stat,dropoff,"10 Downing Street, London",51.5034,-0.1276,2026-11-02T12:05:00Z,2026-11-02T15:05:00Z
+B01-005,Delivery,standard,pickup,"Camden Market, London",51.5416,-0.1465,2026-11-02T11:40:00Z,2026-11-02T13:40:00Z
+B01-005,Delivery,standard,dropoff,"King's Cross Station, London",51.5308,-0.1238,2026-11-02T12:40:00Z,2026-11-02T15:40:00Z
+B02-001,Delivery,standard,pickup,"Covent Garden Piazza, London",51.5117,-0.1240,2026-11-02T10:05:00Z,2026-11-02T12:05:00Z
+B02-001,Delivery,standard,dropoff,"Hampstead High Street, London",51.5567,-0.1780,2026-11-02T11:05:00Z,2026-11-02T14:05:00Z
+B02-002,Delivery,urgent,pickup,"Camden Market, London",51.5416,-0.1465,2026-11-02T10:40:00Z,2026-11-02T12:40:00Z
+B02-002,Delivery,urgent,dropoff,"Wembley Stadium, London",51.5560,-0.2795,2026-11-02T11:40:00Z,2026-11-02T14:40:00Z
+B02-003,Delivery,stat,pickup,"Shoreditch High Street Station, London",51.5236,-0.0753,2026-11-02T11:15:00Z,2026-11-02T13:15:00Z
+B02-003,Delivery,stat,dropoff,"1 Canada Square, London",51.5045,-0.0195,2026-11-02T12:15:00Z,2026-11-02T15:15:00Z
+B02-004,Delivery,standard,pickup,"Paddington Station, London",51.5154,-0.1755,2026-11-02T11:50:00Z,2026-11-02T13:50:00Z
+B02-004,Delivery,standard,dropoff,"London Bridge Station, London",51.5045,-0.0865,2026-11-02T12:50:00Z,2026-11-02T15:50:00Z
+B02-005,Delivery,urgent,pickup,"Canary Wharf, London",51.5036,-0.0187,2026-11-02T12:25:00Z,2026-11-02T14:25:00Z
+B02-005,Delivery,urgent,dropoff,"Tate Modern, London",51.5076,-0.0994,2026-11-02T13:25:00Z,2026-11-02T16:25:00Z
+B03-001,Delivery,urgent,pickup,"Paddington Station, London",51.5154,-0.1755,2026-11-02T10:50:00Z,2026-11-02T12:50:00Z
+B03-001,Delivery,urgent,dropoff,"10 Downing Street, London",51.5034,-0.1276,2026-11-02T11:50:00Z,2026-11-02T14:50:00Z
+B03-002,Delivery,stat,pickup,"Canary Wharf, London",51.5036,-0.0187,2026-11-02T11:25:00Z,2026-11-02T13:25:00Z
+B03-002,Delivery,stat,dropoff,"King's Cross Station, London",51.5308,-0.1238,2026-11-02T12:25:00Z,2026-11-02T15:25:00Z
+B03-003,Delivery,standard,pickup,"Greenwich Market, London",51.4816,-0.0096,2026-11-02T12:00:00Z,2026-11-02T14:00:00Z
+B03-003,Delivery,standard,dropoff,"Buckingham Palace, London",51.5014,-0.1419,2026-11-02T13:00:00Z,2026-11-02T16:00:00Z
+B03-004,Delivery,urgent,pickup,"Westfield Stratford City, London",51.5450,-0.0037,2026-11-02T12:35:00Z,2026-11-02T14:35:00Z
+B03-004,Delivery,urgent,dropoff,"Tower of London, London",51.5081,-0.0759,2026-11-02T13:35:00Z,2026-11-02T16:35:00Z
+B03-005,Delivery,stat,pickup,"Brixton Village, London",51.4613,-0.1156,2026-11-02T13:10:00Z,2026-11-02T15:10:00Z
+B03-005,Delivery,stat,dropoff,"Camden Market, London",51.5416,-0.1465,2026-11-02T14:10:00Z,2026-11-02T17:10:00Z
+B04-001,Delivery,stat,pickup,"Westfield Stratford City, London",51.5450,-0.0037,2026-11-02T11:35:00Z,2026-11-02T13:35:00Z
+B04-001,Delivery,stat,dropoff,"London Bridge Station, London",51.5045,-0.0865,2026-11-02T12:35:00Z,2026-11-02T15:35:00Z
+B04-002,Delivery,standard,pickup,"Brixton Village, London",51.4613,-0.1156,2026-11-02T12:10:00Z,2026-11-02T14:10:00Z
+B04-002,Delivery,standard,dropoff,"Tate Modern, London",51.5076,-0.0994,2026-11-02T13:10:00Z,2026-11-02T16:10:00Z
+B04-003,Delivery,urgent,pickup,"Hampstead High Street, London",51.5567,-0.1780,2026-11-02T12:45:00Z,2026-11-02T14:45:00Z
+B04-003,Delivery,urgent,dropoff,"Covent Garden Piazza, London",51.5117,-0.1240,2026-11-02T13:45:00Z,2026-11-02T16:45:00Z
+B04-004,Delivery,stat,pickup,"Richmond Riverside, London",51.4613,-0.3037,2026-11-02T13:20:00Z,2026-11-02T15:20:00Z
+B04-004,Delivery,stat,dropoff,"Shoreditch High Street Station, London",51.5236,-0.0753,2026-11-02T14:20:00Z,2026-11-02T17:20:00Z
+B04-005,Delivery,standard,pickup,"Wembley Stadium, London",51.5560,-0.2795,2026-11-02T13:55:00Z,2026-11-02T15:55:00Z
+B04-005,Delivery,standard,dropoff,"Canary Wharf, London",51.5036,-0.0187,2026-11-02T14:55:00Z,2026-11-02T17:55:00Z
+B05-001,Delivery,standard,pickup,"Richmond Riverside, London",51.4613,-0.3037,2026-11-02T12:20:00Z,2026-11-02T14:20:00Z
+B05-001,Delivery,standard,dropoff,"Tower of London, London",51.5081,-0.0759,2026-11-02T13:20:00Z,2026-11-02T16:20:00Z
+B05-002,Delivery,urgent,pickup,"Wembley Stadium, London",51.5560,-0.2795,2026-11-02T12:55:00Z,2026-11-02T14:55:00Z
+B05-002,Delivery,urgent,dropoff,"Camden Market, London",51.5416,-0.1465,2026-11-02T13:55:00Z,2026-11-02T16:55:00Z
+B05-003,Delivery,stat,pickup,"10 Downing Street, London",51.5034,-0.1276,2026-11-02T13:30:00Z,2026-11-02T15:30:00Z
+B05-003,Delivery,stat,dropoff,"Paddington Station, London",51.5154,-0.1755,2026-11-02T14:30:00Z,2026-11-02T17:30:00Z
+B05-004,Delivery,standard,pickup,"1 Canada Square, London",51.5045,-0.0195,2026-11-02T08:05:00Z,2026-11-02T10:05:00Z
+B05-004,Delivery,standard,dropoff,"Greenwich Market, London",51.4816,-0.0096,2026-11-02T09:05:00Z,2026-11-02T12:05:00Z
+B05-005,Delivery,urgent,pickup,"King's Cross Station, London",51.5308,-0.1238,2026-11-02T08:40:00Z,2026-11-02T10:40:00Z
+B05-005,Delivery,urgent,dropoff,"Brixton Village, London",51.4613,-0.1156,2026-11-02T09:40:00Z,2026-11-02T12:40:00Z
+B06-001,Delivery,urgent,pickup,"1 Canada Square, London",51.5045,-0.0195,2026-11-02T13:05:00Z,2026-11-02T15:05:00Z
+B06-001,Delivery,urgent,dropoff,"Shoreditch High Street Station, London",51.5236,-0.0753,2026-11-02T14:05:00Z,2026-11-02T17:05:00Z
+B06-002,Delivery,stat,pickup,"King's Cross Station, London",51.5308,-0.1238,2026-11-02T13:40:00Z,2026-11-02T15:40:00Z
+B06-002,Delivery,stat,dropoff,"Canary Wharf, London",51.5036,-0.0187,2026-11-02T14:40:00Z,2026-11-02T17:40:00Z
+B06-003,Delivery,standard,pickup,"London Bridge Station, London",51.5045,-0.0865,2026-11-02T08:15:00Z,2026-11-02T10:15:00Z
+B06-003,Delivery,standard,dropoff,"Westfield Stratford City, London",51.5450,-0.0037,2026-11-02T09:15:00Z,2026-11-02T12:15:00Z
+B06-004,Delivery,urgent,pickup,"Buckingham Palace, London",51.5014,-0.1419,2026-11-02T08:50:00Z,2026-11-02T10:50:00Z
+B06-004,Delivery,urgent,dropoff,"Hampstead High Street, London",51.5567,-0.1780,2026-11-02T09:50:00Z,2026-11-02T12:50:00Z
+B06-005,Delivery,stat,pickup,"Tate Modern, London",51.5076,-0.0994,2026-11-02T09:25:00Z,2026-11-02T11:25:00Z
+B06-005,Delivery,stat,dropoff,"Wembley Stadium, London",51.5560,-0.2795,2026-11-02T10:25:00Z,2026-11-02T13:25:00Z

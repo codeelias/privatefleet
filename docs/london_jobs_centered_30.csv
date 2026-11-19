@@ -1,0 +1,61 @@
+job_ref,service_type,priority,stop_type,address,latitude,longitude,window_start,window_end
+B01-001,Delivery,stat,pickup,"Holloway Road, London",51.5567,-0.1128,2026-11-03T09:20:00Z,2026-11-03T11:20:00Z
+B01-001,Delivery,stat,dropoff,"Stoke Newington High Street, London",51.5615,-0.0834,2026-11-03T10:20:00Z,2026-11-03T13:20:00Z
+B01-002,Delivery,standard,pickup,"Archway Station, London",51.5650,-0.1353,2026-11-03T09:55:00Z,2026-11-03T11:55:00Z
+B01-002,Delivery,standard,dropoff,"Caledonian Road, London",51.5484,-0.1183,2026-11-03T10:55:00Z,2026-11-03T13:55:00Z
+B01-003,Delivery,urgent,pickup,"Tufnell Park, London",51.5566,-0.1380,2026-11-03T10:30:00Z,2026-11-03T12:30:00Z
+B01-003,Delivery,urgent,dropoff,"Seven Sisters Station, London",51.5820,-0.0748,2026-11-03T11:30:00Z,2026-11-03T14:30:00Z
+B01-004,Delivery,stat,pickup,"Kentish Town, London",51.5507,-0.1397,2026-11-03T11:05:00Z,2026-11-03T13:05:00Z
+B01-004,Delivery,stat,dropoff,"Canonbury, London",51.5520,-0.0950,2026-11-03T12:05:00Z,2026-11-03T15:05:00Z
+B01-005,Delivery,standard,pickup,"Crouch End Broadway, London",51.5793,-0.1245,2026-11-03T11:40:00Z,2026-11-03T13:40:00Z
+B01-005,Delivery,standard,dropoff,"Finsbury Park, London",51.5646,-0.1064,2026-11-03T12:40:00Z,2026-11-03T15:40:00Z
+B02-001,Delivery,standard,pickup,"Kentish Town, London",51.5507,-0.1397,2026-11-03T10:05:00Z,2026-11-03T12:05:00Z
+B02-001,Delivery,standard,dropoff,"Camden Road, London",51.5390,-0.1426,2026-11-03T11:05:00Z,2026-11-03T14:05:00Z
+B02-002,Delivery,urgent,pickup,"Crouch End Broadway, London",51.5793,-0.1245,2026-11-03T10:40:00Z,2026-11-03T12:40:00Z
+B02-002,Delivery,urgent,dropoff,"Islington Angel, London",51.5324,-0.1058,2026-11-03T11:40:00Z,2026-11-03T14:40:00Z
+B02-003,Delivery,stat,pickup,"Hornsey High Street, London",51.5880,-0.1204,2026-11-03T11:15:00Z,2026-11-03T13:15:00Z
+B02-003,Delivery,stat,dropoff,"Stroud Green Road, London",51.5720,-0.1120,2026-11-03T12:15:00Z,2026-11-03T15:15:00Z
+B02-004,Delivery,standard,pickup,"Muswell Hill Broadway, London",51.5905,-0.1433,2026-11-03T11:50:00Z,2026-11-03T13:50:00Z
+B02-004,Delivery,standard,dropoff,"Manor House Station, London",51.5715,-0.0964,2026-11-03T12:50:00Z,2026-11-03T15:50:00Z
+B02-005,Delivery,urgent,pickup,"Highgate Village, London",51.5755,-0.1489,2026-11-03T12:25:00Z,2026-11-03T14:25:00Z
+B02-005,Delivery,urgent,dropoff,"Highbury Fields, London",51.5635,-0.0998,2026-11-03T13:25:00Z,2026-11-03T16:25:00Z
+B03-001,Delivery,urgent,pickup,"Muswell Hill Broadway, London",51.5905,-0.1433,2026-11-03T10:50:00Z,2026-11-03T12:50:00Z
+B03-001,Delivery,urgent,dropoff,"Canonbury, London",51.5520,-0.0950,2026-11-03T11:50:00Z,2026-11-03T14:50:00Z
+B03-002,Delivery,stat,pickup,"Highgate Village, London",51.5755,-0.1489,2026-11-03T11:25:00Z,2026-11-03T13:25:00Z
+B03-002,Delivery,stat,dropoff,"Finsbury Park, London",51.5646,-0.1064,2026-11-03T12:25:00Z,2026-11-03T15:25:00Z
+B03-003,Delivery,standard,pickup,"Stoke Newington High Street, London",51.5615,-0.0834,2026-11-03T12:00:00Z,2026-11-03T14:00:00Z
+B03-003,Delivery,standard,dropoff,"Arsenal Station, London",51.5582,-0.1074,2026-11-03T13:00:00Z,2026-11-03T16:00:00Z
+B03-004,Delivery,urgent,pickup,"Dalston Kingsland, London",51.5450,-0.0750,2026-11-03T12:35:00Z,2026-11-03T14:35:00Z
+B03-004,Delivery,urgent,dropoff,"Holloway Road, London",51.5567,-0.1128,2026-11-03T13:35:00Z,2026-11-03T16:35:00Z
+B03-005,Delivery,stat,pickup,"Caledonian Road, London",51.5484,-0.1183,2026-11-03T13:10:00Z,2026-11-03T15:10:00Z
+B03-005,Delivery,stat,dropoff,"Tufnell Park, London",51.5566,-0.1380,2026-11-03T14:10:00Z,2026-11-03T17:10:00Z
+B04-001,Delivery,stat,pickup,"Dalston Kingsland, London",51.5450,-0.0750,2026-11-03T11:35:00Z,2026-11-03T13:35:00Z
+B04-001,Delivery,stat,dropoff,"Manor House Station, London",51.5715,-0.0964,2026-11-03T12:35:00Z,2026-11-03T15:35:00Z
+B04-002,Delivery,standard,pickup,"Caledonian Road, London",51.5484,-0.1183,2026-11-03T12:10:00Z,2026-11-03T14:10:00Z
+B04-002,Delivery,standard,dropoff,"Highbury Fields, London",51.5635,-0.0998,2026-11-03T13:10:00Z,2026-11-03T16:10:00Z
+B04-003,Delivery,urgent,pickup,"Camden Road, London",51.5390,-0.1426,2026-11-03T12:45:00Z,2026-11-03T14:45:00Z
+B04-003,Delivery,urgent,dropoff,"Archway Station, London",51.5650,-0.1353,2026-11-03T13:45:00Z,2026-11-03T16:45:00Z
+B04-004,Delivery,stat,pickup,"Seven Sisters Station, London",51.5820,-0.0748,2026-11-03T13:20:00Z,2026-11-03T15:20:00Z
+B04-004,Delivery,stat,dropoff,"Kentish Town, London",51.5507,-0.1397,2026-11-03T14:20:00Z,2026-11-03T17:20:00Z
+B04-005,Delivery,standard,pickup,"Islington Angel, London",51.5324,-0.1058,2026-11-03T13:55:00Z,2026-11-03T15:55:00Z
+B04-005,Delivery,standard,dropoff,"Hornsey High Street, London",51.5880,-0.1204,2026-11-03T14:55:00Z,2026-11-03T17:55:00Z
+B05-001,Delivery,standard,pickup,"Seven Sisters Station, London",51.5820,-0.0748,2026-11-03T12:20:00Z,2026-11-03T14:20:00Z
+B05-001,Delivery,standard,dropoff,"Holloway Road, London",51.5567,-0.1128,2026-11-03T13:20:00Z,2026-11-03T16:20:00Z
+B05-002,Delivery,urgent,pickup,"Islington Angel, London",51.5324,-0.1058,2026-11-03T12:55:00Z,2026-11-03T14:55:00Z
+B05-002,Delivery,urgent,dropoff,"Tufnell Park, London",51.5566,-0.1380,2026-11-03T13:55:00Z,2026-11-03T16:55:00Z
+B05-003,Delivery,stat,pickup,"Canonbury, London",51.5520,-0.0950,2026-11-03T13:30:00Z,2026-11-03T15:30:00Z
+B05-003,Delivery,stat,dropoff,"Crouch End Broadway, London",51.5793,-0.1245,2026-11-03T14:30:00Z,2026-11-03T17:30:00Z
+B05-004,Delivery,standard,pickup,"Stroud Green Road, London",51.5720,-0.1120,2026-11-03T08:05:00Z,2026-11-03T10:05:00Z
+B05-004,Delivery,standard,dropoff,"Muswell Hill Broadway, London",51.5905,-0.1433,2026-11-03T09:05:00Z,2026-11-03T12:05:00Z
+B05-005,Delivery,urgent,pickup,"Finsbury Park, London",51.5646,-0.1064,2026-11-03T08:40:00Z,2026-11-03T10:40:00Z
+B05-005,Delivery,urgent,dropoff,"Stoke Newington High Street, London",51.5615,-0.0834,2026-11-03T09:40:00Z,2026-11-03T12:40:00Z
+B06-001,Delivery,urgent,pickup,"Stroud Green Road, London",51.5720,-0.1120,2026-11-03T13:05:00Z,2026-11-03T15:05:00Z
+B06-001,Delivery,urgent,dropoff,"Kentish Town, London",51.5507,-0.1397,2026-11-03T14:05:00Z,2026-11-03T17:05:00Z
+B06-002,Delivery,stat,pickup,"Finsbury Park, London",51.5646,-0.1064,2026-11-03T13:40:00Z,2026-11-03T15:40:00Z
+B06-002,Delivery,stat,dropoff,"Hornsey High Street, London",51.5880,-0.1204,2026-11-03T14:40:00Z,2026-11-03T17:40:00Z
+B06-003,Delivery,standard,pickup,"Manor House Station, London",51.5715,-0.0964,2026-11-03T08:15:00Z,2026-11-03T10:15:00Z
+B06-003,Delivery,standard,dropoff,"Highgate Village, London",51.5755,-0.1489,2026-11-03T09:15:00Z,2026-11-03T12:15:00Z
+B06-004,Delivery,urgent,pickup,"Arsenal Station, London",51.5582,-0.1074,2026-11-03T08:50:00Z,2026-11-03T10:50:00Z
+B06-004,Delivery,urgent,dropoff,"Dalston Kingsland, London",51.5450,-0.0750,2026-11-03T09:50:00Z,2026-11-03T12:50:00Z
+B06-005,Delivery,stat,pickup,"Highbury Fields, London",51.5635,-0.0998,2026-11-03T09:25:00Z,2026-11-03T11:25:00Z
+B06-005,Delivery,stat,dropoff,"Camden Road, London",51.5390,-0.1426,2026-11-03T10:25:00Z,2026-11-03T13:25:00Z
