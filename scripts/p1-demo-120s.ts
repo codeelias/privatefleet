@@ -1,9 +1,9 @@
 /**
- * P1 slice 6: LIVE 120-second synthetic demonstration driver (docs/56 §12).
+ * P1 slice 6: LIVE 120-second synthetic demonstration driver (docs/56 Â§12).
  * Seeds the isolated DEMO tenant (direct DB, owner role), then drives the
  * five phases over the production HTTP API with timestamps, downloads the
  * evidence report, verifies production isolation, and resets.
- * Usage: tsx scripts/p1-demo-120s.ts <apiBase> <ownerDbUrl>
+ * Usage: PF_OWNER_DB_URL="postgres://privatefleet:<owner-password>@127.0.0.1:5432/privatefleet" tsx scripts/p1-demo-120s.ts [apiBase]
  */
 import { randomUUID } from "node:crypto";
 import { hash as argonHash } from "@node-rs/argon2";
@@ -21,9 +21,14 @@ import { EvidenceStore } from "../apps/api/src/modules/evidence/storage.js";
 import { gatherJobEvidenceReport } from "../apps/api/src/modules/commitments/evidence-report.js";
 
 const apiBase = process.argv[2] ?? "https://api.privatefleet.home.arpa";
-const ownerDbUrl =
-  process.argv[3] ??
-  "postgres://privatefleet:privatefleet_owner_pw@127.0.0.1:5432/privatefleet";
+// The owner-role connection string is REQUIRED via the environment; it is
+// never stored in the repository. On the host it is composed from
+// C:\PrivateFleet\secrets\secrets.json at run time.
+const ownerDbUrl = process.env.PF_OWNER_DB_URL;
+if (!ownerDbUrl) {
+  console.error("PF_OWNER_DB_URL is required (owner-role connection string)");
+  process.exit(1);
+}
 const evidenceDir = process.env.EVIDENCE_DIR ?? "C:\\PrivateFleet\\evidence";
 const prodTenant = "734c7f72-3164-44f6-84f8-f3b60180be1c";
 
@@ -214,3 +219,4 @@ main().catch((error) => {
   console.error("DEMO FAILED:", error);
   process.exit(1);
 });
+
