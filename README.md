@@ -69,8 +69,9 @@ pnpm --filter @privatefleet/web dev
 
 ## Deployment
 
-The live pilot runs on the Windows host at `192.168.1.128`. Restart and rollback
-procedures are in the status/runbook document.
+The live pilot runs on a dedicated LAN host (address kept out of this public
+README). Restart and rollback procedures live in the internal runbook, which
+is not published here.
 
 
 

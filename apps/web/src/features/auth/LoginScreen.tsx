@@ -107,7 +107,7 @@ export function LoginScreen({ onLogin }: Props) {
         </div>
 
         <div className="relative flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-[#8E877A]">
-          <span>LAN deployment 192.168.1.128</span>
+          <span>LAN deployment · private by design</span>
           <span>Private by design</span>
         </div>
       </section>
