@@ -31,8 +31,13 @@ test("Live map: vehicles follow routes and pins move", async ({ page, isMobile }
   expect(`${a?.latitude},${a?.longitude}`).not.toBe(`${b?.latitude},${b?.longitude}`);
 
   await openDispatcher(page);
-  const polylines = await page.locator("path.leaflet-interactive").count();
-  expect(polylines).toBeGreaterThanOrEqual(2);
+  // Routes paint asynchronously after FleetState arrives: wait for the
+  // first polyline instead of racing the render (the map's own suites
+  // verify the product rendering; this is a regression guard for the
+  // raster engine).
+  const polylines = page.locator("path.leaflet-interactive");
+  await expect(polylines.first()).toBeVisible({ timeout: 15_000 });
+  expect(await polylines.count()).toBeGreaterThanOrEqual(2);
 
   const pin = page.locator('[title*="VAN-02"]').first();
   await expect(pin).toBeVisible();
