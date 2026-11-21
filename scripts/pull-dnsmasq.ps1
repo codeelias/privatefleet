@@ -6,7 +6,7 @@ domain-needed
 bogus-priv
 cache-size=1000
 server=192.168.1.254
-address=/privatefleet.home.arpa/192.168.1.128
+address=/privatefleet.home.arpa/<lan-host>
 '@ | Set-Content C:\PrivateFleet\dns\dnsmasq.conf -Encoding ascii
 $log = "C:\Temp\dns-pull.log"
 schtasks /create /tn "PFDnsPull" /tr "cmd /c docker pull 4km3/dnsmasq:2.90 > $log 2>&1" /sc once /st 23:59 /ru SYSTEM /f | Out-Null

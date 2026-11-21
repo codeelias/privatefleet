@@ -2,7 +2,7 @@
 
 Date: 2026-11-01  
 Audit baseline: `c400476` (native offline evidence queue)  
-Live environment: LAN pilot at 192.168.1.128, synthetic data only.
+Live environment: LAN pilot at <lan-host>, synthetic data only.
 
 This is the consolidated review of the agreed phase plan, the native-client
 pivot, and the commercial gates. It replaces conflicting statements in earlier

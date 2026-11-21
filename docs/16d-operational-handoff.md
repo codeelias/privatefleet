@@ -261,7 +261,7 @@ sign-off.**
 
 ## 8. Executed LAN deployment (2026-10-29)
 
-- Host: `192.168.1.128`; app `https://app.privatefleet.home.arpa`; API
+- Host: `<lan-host>`; app `https://app.privatefleet.home.arpa`; API
   `https://api.privatefleet.home.arpa`.
 - PostgreSQL 16.10 native (`C:\PostgreSQL\16`, service `postgresql-x64-16`),
   PostGIS 3.6, database `privatefleet`, RLS active.

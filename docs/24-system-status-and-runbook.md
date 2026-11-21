@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-01  
 Commit baseline: `c400476` (native offline evidence queue)  
-Environment: LAN pilot at `192.168.1.128`, synthetic data only.
+Environment: LAN pilot at `<lan-host>`, synthetic data only.
 
 This is the authoritative description of what is actually deployed. It separates
 verified capability from pending work so demos and reviews do not confuse the
@@ -17,7 +17,7 @@ Android driver app (Galaxy S22)
   â”œâ”€â”€ LAN:   https://api.privatefleet.home.arpa
   â””â”€â”€ WAN:   https://pf-node.tail060a86.ts.net  (Tailscale Serve)
                     â”‚
-Windows host 192.168.1.128
+Windows host <lan-host>
   â”œâ”€â”€ Caddy :443  app.privatefleet.home.arpa / api.privatefleet.home.arpa
   â”œâ”€â”€ API Fastify 127.0.0.1:4000
   â”œâ”€â”€ PostgreSQL/PostGIS 127.0.0.1:5432  (never exposed)
@@ -62,7 +62,7 @@ Dispatcher web: `https://app.privatefleet.home.arpa`.
 | Dispatcher map HUD/dock | Deployed | inset vehicle HUD, centred 46 px taskbar icon, 3-up pager, 440 px popover, bounded assignment sheet |
 | POD evidence + durable queue | Deployed | duplicate upload treated as success `69ee6eb` |
 | External access via Tailscale Serve | Deployed | `{"status":"ok"}` from mobile data |
-| Local DNS via dnsmasq | Deployed | app/api resolve to 192.168.1.128 |
+| Local DNS via dnsmasq | Deployed | app/api resolve to <lan-host> |
 | Customer tracking, alerts, reports | Existing modules | earlier phases |
 | Cost-aware assignment recommendations (fuel, running cost, wage, detour) | Deployed, advisory only | `/v1/dispatch/recommendations`, `f0a44f4`+ |
 
@@ -114,7 +114,7 @@ Phone:           g (100.124.180.48), galaxy-s22 (100.123.137.123)
 
 ```text
 Container: privatefleet-dns (dnsmasq), port 53 UDP/TCP
-Records:   *.privatefleet.home.arpa â†’ 192.168.1.128
+Records:   *.privatefleet.home.arpa â†’ <lan-host>
 Upstream:  192.168.1.254 (BT Hub)
 ```
 
@@ -171,7 +171,7 @@ See `docs/23-vroom-115-deployment.md`.
 docker ps --filter name=privatefleet-dns
 docker restart privatefleet-dns
 # host check
-nslookup app.privatefleet.home.arpa 192.168.1.128
+nslookup app.privatefleet.home.arpa <lan-host>
 ```
 
 If DNS stops after a host reboot, confirm Docker Desktop starts the container.

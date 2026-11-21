@@ -20,7 +20,7 @@ path is:
 ```text
 app  http://127.0.0.1:4000
   -> adb reverse tcp:4000 tcp:4010  (device -> PC)
-  -> ssh -L 4010:127.0.0.1:4000 deploy@192.168.1.128  (PC -> host)
+  -> ssh -L 4010:127.0.0.1:4000 deploy@<lan-host>  (PC -> host)
   -> API 127.0.0.1:4000 on the host
 ```
 
@@ -29,7 +29,7 @@ Setup (run on the Windows PC):
 ```powershell
 adb -s <serial> reverse tcp:4000 tcp:4010
 adb -s <serial> reverse tcp:8081 tcp:8081
-ssh -p 22 -N -L 4010:127.0.0.1:4000 -i "$HOME\.ssh\deploy_auto_ed25519" deploy@192.168.1.128
+ssh -p 22 -N -L 4010:127.0.0.1:4000 -i "$HOME\.ssh\deploy_auto_ed25519" deploy@<lan-host>
 ```
 
 Metro (bundle with tethered API base, offline doctor):

@@ -305,7 +305,7 @@ Records what changed in the documentation package and the automated checks that 
 - Conclusion: snapshot read payload/latency is the next scalability work; routing limits stay unchanged.
 
 ### v1.51 - LAN deployment execution: Caddy/PG/PostGIS, backup/restore, load and API soak (2026-10-29)
-- Native Windows pilot deployment on `192.168.1.128`: Caddy 2.11.7 internal TLS at `https://app.privatefleet.home.arpa`; PostgreSQL 16.10 + PostGIS 3.6; API on loopback behind Caddy; OSRM/VROOM rebound to `127.0.0.1` on an internal Docker network. Firewall verified from a LAN client: only 443/80 reachable; 4000/5432/5000/3000 closed.
+- Native Windows pilot deployment on `<lan-host>`: Caddy 2.11.7 internal TLS at `https://app.privatefleet.home.arpa`; PostgreSQL 16.10 + PostGIS 3.6; API on loopback behind Caddy; OSRM/VROOM rebound to `127.0.0.1` on an internal Docker network. Firewall verified from a LAN client: only 443/80 reachable; 4000/5432/5000/3000 closed.
 - HTTP proposal/approval: 26 stops, 2 service identities, version 2; identity gate assignments/stop IDs verified. Deployed UI verified in a browser (3 routes, 2 SINGLE JOB labels).
 - Encrypted daily age backup scheduled (SYSTEM, 02:00) to `D:\PrivateFleet_Backups`; restore drill 1.0-1.2 s with 14 jobs/3 routes/26 stops, RLS 16/16, foreign rows 0. `G:\My Drive` is inaccessible to the service account: off-host copy remains **NOT VERIFIED**; USB local backup passed.
 - 100/850 deployed load: 5.29 s (matrix 205 ms, solve 1.96 s, geometry 1.73 s, 90 routes, 0 unassigned). 30-minute API soak: 36,000 reads/0 errors, read p95 198 ms, optimisation p95 207 ms, 11 DB sessions; run on 3-vehicle tenant, no telemetry load -> PARTIAL for specified workload.
@@ -382,7 +382,7 @@ Records what changed in the documentation package and the automated checks that 
 - Demo boot verified from a clean start: `pnpm dev` -> demo API on 4000 (`readyz`: demoMode=true, repositoryMode=demo), dispatcher `http://localhost:5173`, driver `http://localhost:5174` (Vite binds localhost; `127.0.0.1` is not served by plain `pnpm dev`). Fleet state: 3 vehicles, 12 jobs, 3 routes, demoMode=true.
 - Full regression at freeze: API 40/40; demo E2E 13 passed/13 skipped; auth + driver + live-routing acceptance 10/10; web 21/21; driver 6/6; Expo 3/3; typecheck 6/6; lint 6/6; build 5/5; encoding clean.
 - New [16b - Production deployment runbook](16-production-deployment-runbook.md): pinned OSRM v5.25.0 and VROOM v1.13.0, Geofabrik Greater London extract with SHA-256, extract/partition/customize commands, service health checks, Postgres/API env, real-service acceptance gate, rollback and known limitations.
-- Docker deployment attempt recorded honestly: the host at 192.168.1.128 is reachable over SSH (Docker Desktop 4.95.0, engine 29.8.2), but image pulls from that SSH session are blocked by Docker Desktop's credential helper; no containers were installed, no production services were started, and the host configuration was restored exactly as found. The container-backed gate remains the first post-signature task.
+- Docker deployment attempt recorded honestly: the host at <lan-host> is reachable over SSH (Docker Desktop 4.95.0, engine 29.8.2), but image pulls from that SSH session are blocked by Docker Desktop's credential helper; no containers were installed, no production services were started, and the host configuration was restored exactly as found. The container-backed gate remains the first post-signature task.
 - Frozen baseline unchanged: demo remains default and internet-independent for boot (public map tiles are the only online dependency; routes and markers still render without them).
 - Pushes remain paused (owner directive); local commit only. Next action is commercial, not engineering.
 ### v1.41 - Phase 5: dispatcher live-proposal UI and end-to-end publish acceptance (2026-10-28)
@@ -650,7 +650,7 @@ Records what changed in the documentation package and the automated checks that 
 
 ### v1.8 - Phase 0 parked; orchestration target decided; Phase 1 begins (2026-10-27)
 - Owner directive: Phase 0 (design-partner gate) is parked as a parallel commercial track and no longer blocks implementation; Phase 1 proceeds ([14.1b](14-roadmap-and-gates.md)).
-- Orchestration target: the Windows 11 host `Alemnesh` (192.168.1.128, SSH alias `privatefleet`) with Docker Desktop (verified: Docker Desktop 4.95.0, engine 29.8.2, WSL2 backend); all containers and demo deployments orchestrate there over SSH ([15.3](15-infrastructure-and-deployment.md)).
+- Orchestration target: the Windows 11 host `Alemnesh` (<lan-host>, SSH alias `privatefleet`) with Docker Desktop (verified: Docker Desktop 4.95.0, engine 29.8.2, WSL2 backend); all containers and demo deployments orchestrate there over SSH ([15.3](15-infrastructure-and-deployment.md)).
 - Phase 1 implementation begins from baseline `26f34b3`.
 
 ### v1.7 - environment baseline & quirks (2026-10-27)
@@ -661,7 +661,7 @@ Records what changed in the documentation package and the automated checks that 
   - Remote: https://github.com/codeelias/privatefleet (private)
 - pnpm **12.15.0**: verified to exist on the npm registry (`npm view pnpm@12.15.0 version` -> `12.15.0`); pinned in `package.json` `packageManager`. CI installs from the pin.
 - **Corepack fallback (this Windows host):** `corepack enable` fails with EPERM writing shims into `C:\Program Files\nodejs` without admin elevation. Fallback: `npm install -g pnpm@12.15.0`. pnpm lives in `%APPDATA%\npm`, which is on the user PATH registry entry; if a shell does not resolve `pnpm`, append that directory to PATH. CI is unaffected.
-- **SSH deployment target discovery:** the host at `192.168.1.128` is a **Windows** machine (hostname `Alemnesh`, user `deploy`, port 22) - not the Linux VPS assumed by [15.3](15-infrastructure-and-deployment.md). The authorized key is `~/.ssh/deploy_auto_ed25519` (automation key; the interactive `id_ed25519`/`id_rsa` are not authorized). A `Host privatefleet` alias was added to `~/.ssh/config`; the stale Host blocks mapping ports 2222/4096 remain there for the owner to remove. **Retarget-to-Linux vs Windows-deploy-variant is an OPEN roadmap decision deferred to Phase 1 - not resolved here.**
+- **SSH deployment target discovery:** the host at `<lan-host>` is a **Windows** machine (hostname `Alemnesh`, user `deploy`, port 22) - not the Linux VPS assumed by [15.3](15-infrastructure-and-deployment.md). The authorized key is `~/.ssh/deploy_auto_ed25519` (automation key; the interactive `id_ed25519`/`id_rsa` are not authorized). A `Host privatefleet` alias was added to `~/.ssh/config`; the stale Host blocks mapping ports 2222/4096 remain there for the owner to remove. **Retarget-to-Linux vs Windows-deploy-variant is an OPEN roadmap decision deferred to Phase 1 - not resolved here.**
 
 ### v1.5 - formally approved & frozen (2026-10-27)
 - Formal sign-off recorded: all 11 ADRs flipped to `accepted`; all 21 open decisions approved ([open-decisions.md](open-decisions.md) approval record).

@@ -4,7 +4,7 @@
 # a .js request -> MIME error). Use this instead of per-file scp.
 param(
   [string]$KeyPath = "$HOME\.ssh\deploy_auto_ed25519",
-  [string]$Target = "deploy@192.168.1.128"
+  [string]$Target = "deploy@<lan-host>"
 )
 $ErrorActionPreference = "Stop"
 $local = "C:\privatefleet\apps\web\dist"

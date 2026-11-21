@@ -3,7 +3,7 @@
 Date: 2026-10-28
 Baseline: `7b5112e` (fleet dispatcher UI)
 Environment: local API + PostgreSQL 16/PostGIS 3.4.2; OSRM 5.25.0 and VROOM
-1.13.0 on Docker host `192.168.1.128` (ports 5000/3000, LAN-only); synthetic
+1.13.0 on Docker host `<lan-host>` (ports 5000/3000, LAN-only); synthetic
 tenants only.
 
 This report separates **code-level evidence** from **operational facts** that
@@ -197,7 +197,7 @@ checked.
 
 ## 6. LAN deployment execution (2026-10-29)
 
-A native Windows deployment was completed on `192.168.1.128` (see
+A native Windows deployment was completed on `<lan-host>` (see
 `docs/16e-lan-deployment.md` for the full record).
 
 | Gate | Status | Evidence |

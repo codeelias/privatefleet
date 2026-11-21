@@ -1,7 +1,7 @@
 # 31 - Current-build verification and recovery
 
 Date: 2026-11-02  
-Environment: LAN pilot host `192.168.1.128`, synthetic data.  
+Environment: LAN pilot host `<lan-host>`, synthetic data.  
 Purpose: Stage A evidence on the current schema and UI.
 
 ---

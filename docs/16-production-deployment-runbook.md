@@ -28,7 +28,7 @@ Activated by this runbook (post-signature):
 ## 2. Host prerequisites
 
 - Docker Desktop with Linux containers. Verified host: Docker Desktop 4.95.0,
-  engine 29.8.2 at `192.168.1.128` (Windows 11), accessed over SSH.
+  engine 29.8.2 at `<lan-host>` (Windows 11), accessed over SSH.
 - Postgres 16 with PostGIS 3.4. Local dev uses WSL Ubuntu; production uses a
   managed instance or VM with backups.
 - Node 22 + pnpm 12 on the API/web host.
@@ -169,7 +169,7 @@ real containers for the container-backed version of this gate.
 ## 9. Container-backed gate: PASSED 2026-10-28
 
 Environment: Windows 11 Docker Desktop 4.95.0, engine 29.8.2 (linux/amd64)
-at `192.168.1.128`; images loaded offline from the registry (Docker's SSH
+at `<lan-host>`; images loaded offline from the registry (Docker's SSH
 credential helper is unusable in that session) and pinned by local image id:
 
 | Component | Tag | Image id |
@@ -180,7 +180,7 @@ credential helper is unusable in that session) and pinned by local image id:
 
 Services: OSRM `osrm-routed --algorithm mld` on 5000; VROOM on 3000 with
 `OSRM_URL=http://host.docker.internal:5000`. The Docker host firewall now
-permits LAN access to `192.168.1.128:5000` and `:3000` (opened and verified
+permits LAN access to `<lan-host>:5000` and `:3000` (opened and verified
 2026-10-28: OSRM route 200, VROOM health 200, mixed job solve `code: 0`, and
 the full fleet gate passed over the direct URLs). The API host uses the direct
 URLs below; the SSH tunnel remains an optional fallback, not a requirement.
@@ -188,7 +188,7 @@ URLs below; the SSH tunnel remains an optional fallback, not a requirement.
 Gate command (real services, production HTTP path):
 
 ```
-OSRM_BASE_URL=http://192.168.1.128:5000 VROOM_BASE_URL=http://192.168.1.128:3000 \
+OSRM_BASE_URL=http://<lan-host>:5000 VROOM_BASE_URL=http://<lan-host>:3000 \
 DATABASE_URL=<app role> MIGRATION_DATABASE_URL=<owner> AUTH_JWT_SECRET=<secret> \
 ROUTING_DATASET_ID=greater-london-2026-10-28 \
 pnpm --filter @privatefleet/api exec tsx src/db/fleet-live-gate.ts

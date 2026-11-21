@@ -24,7 +24,7 @@ be overridden at build time with:
 $env:EXPO_PUBLIC_API_URL = "https://api.privatefleet.home.arpa"
 ```
 
-The native app must never use the driver HTTP test origin `http://192.168.1.128:8080`.
+The native app must never use the driver HTTP test origin `http://<lan-host>:8080`.
 
 ## Android CA / DNS
 

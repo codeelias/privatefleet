@@ -2,7 +2,7 @@
 
 Date: 2026-11-01  
 Baseline: `af5549e` + release signing changes  
-Environment: production host `192.168.1.128`, synthetic data.
+Environment: production host `<lan-host>`, synthetic data.
 
 ---
 

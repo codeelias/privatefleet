@@ -2,7 +2,7 @@
 
 Date: 2026-11-01  
 Live commit: `09cd6df` + assignment invariant (this change)  
-Environment: LAN pilot, Windows host `192.168.1.128`, synthetic data only.
+Environment: LAN pilot, Windows host `<lan-host>`, synthetic data only.
 
 This audit maps the original phased plan to what is actually deployed and
 tested. “PASS” means evidence exists in the repository and/or the live system.

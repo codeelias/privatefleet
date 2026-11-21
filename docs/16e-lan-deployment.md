@@ -1,7 +1,7 @@
 # LAN Deployment Evidence - PrivateFleet Pilot Lab
 
 Date: 2026-10-29
-Host: `192.168.1.128` (Windows 11, native deployment)
+Host: `<lan-host>` (Windows 11, native deployment)
 Operator: deploy (Administrator)
 Data: synthetic only
 
